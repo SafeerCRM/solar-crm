@@ -98,6 +98,15 @@ private isFranchiseHead(
   );
 }
 
+private hasFullSolarMitraVisibility(
+  user: any,
+): boolean {
+  return (
+    this.isOwner(user) ||
+    this.isFranchiseHead(user)
+  );
+}
+
   private assertSolarMitraAccess(
   user: any,
 ) {
@@ -163,28 +172,35 @@ return this.service.createSolarMitra(
   }
 
   @Get()
-  list(
-    @Req() req: any,
-    @Query() query: any,
-  ) {
-    this.assertManagementAccess(req.user);
-
-    const scopedQuery = {
-  ...query,
-};
-
-if (
-  this.isFranchiseManager(req.user) &&
-  !this.isOwner(req.user)
+list(
+  @Req() req: any,
+  @Query() query: any,
 ) {
-  scopedQuery.franchiseManagerId =
-    Number(req.user.id);
-}
+  this.assertManagementAccess(req.user);
 
-return this.service.listSolarMitras(
-  scopedQuery,
-);
+  const scopedQuery = {
+    ...query,
+  };
+
+  if (
+    this.isFranchiseManager(req.user) &&
+    !this.isOwner(req.user)
+  ) {
+    scopedQuery.franchiseManagerId =
+      Number(req.user.id);
+  } else if (
+    !this.hasFullSolarMitraVisibility(
+      req.user,
+    )
+  ) {
+    scopedQuery.createdBy =
+      Number(req.user.id);
   }
+
+  return this.service.listSolarMitras(
+    scopedQuery,
+  );
+}
 
   @Get('referrals/list')
 async listReferrals(
@@ -194,44 +210,51 @@ async listReferrals(
   this.assertManagementAccess(req.user);
 
   if (
-    this.isFranchiseManager(req.user) &&
-    !this.isOwner(req.user)
+    this.hasFullSolarMitraVisibility(
+      req.user,
+    )
   ) {
-    const mitras =
-      await this.service.listSolarMitras({
-        franchiseManagerId:
-          Number(req.user.id),
-      });
-
-    const allowedMitraIds =
-      new Set(
-        mitras.map((item) =>
-          Number(item.id),
-        ),
-      );
-
-    const referrals =
-      await this.service.listReferrals(
-        query,
-      );
-
-    return referrals.filter(
-      (item: any) =>
-        allowedMitraIds.has(
-          Number(item.solarMitraId),
-        ),
+    return this.service.listReferrals(
+      query,
     );
   }
 
-  return this.service.listReferrals(
-    query,
+  const mitras =
+    await this.service.listSolarMitras(
+      this.isFranchiseManager(req.user)
+        ? {
+            franchiseManagerId:
+              Number(req.user.id),
+          }
+        : {
+            createdBy:
+              Number(req.user.id),
+          },
+    );
+
+  const allowedMitraIds =
+    new Set(
+      mitras.map((item) =>
+        Number(item.id),
+      ),
+    );
+
+  const referrals =
+    await this.service.listReferrals(
+      query,
+    );
+
+  return referrals.filter(
+    (item: any) =>
+      allowedMitraIds.has(
+        Number(item.solarMitraId),
+      ),
   );
 }
 
 @Get('referrals/:id')
 async referralDetail(
   @Req() req: any,
-
   @Param(
     'id',
     ParseIntPipe,
@@ -244,8 +267,9 @@ async referralDetail(
     await this.service.getReferral(id);
 
   if (
-    this.isFranchiseManager(req.user) &&
-    !this.isOwner(req.user)
+    !this.hasFullSolarMitraVisibility(
+      req.user,
+    )
   ) {
     const mitra =
       await this.service.getSolarMitra(
@@ -254,13 +278,17 @@ async referralDetail(
         ),
       );
 
-    if (
-      Number(
-        mitra.franchiseManagerId,
-      ) !== Number(req.user.id)
-    ) {
+    const allowed =
+      this.isFranchiseManager(req.user)
+        ? Number(
+            mitra.franchiseManagerId,
+          ) === Number(req.user.id)
+        : Number(mitra.createdBy) ===
+          Number(req.user.id);
+
+    if (!allowed) {
       throw new ForbiddenException(
-        'You can only access referrals from your assigned Solar Mitras',
+        'You can only access referrals from your Solar Mitras',
       );
     }
   }
@@ -300,44 +328,51 @@ async listPayouts(
   );
 
   if (
-    this.isFranchiseManager(req.user) &&
-    !this.isOwner(req.user)
+    this.hasFullSolarMitraVisibility(
+      req.user,
+    )
   ) {
-    const mitras =
-      await this.service.listSolarMitras({
-        franchiseManagerId:
-          Number(req.user.id),
-      });
-
-    const allowedMitraIds =
-      new Set(
-        mitras.map((item) =>
-          Number(item.id),
-        ),
-      );
-
-    const payouts =
-      await this.service.listPayouts(
-        query,
-      );
-
-    return payouts.filter(
-      (item: any) =>
-        allowedMitraIds.has(
-          Number(item.solarMitraId),
-        ),
+    return this.service.listPayouts(
+      query,
     );
   }
 
-  return this.service.listPayouts(
-    query,
+  const mitras =
+    await this.service.listSolarMitras(
+      this.isFranchiseManager(req.user)
+        ? {
+            franchiseManagerId:
+              Number(req.user.id),
+          }
+        : {
+            createdBy:
+              Number(req.user.id),
+          },
+    );
+
+  const allowedMitraIds =
+    new Set(
+      mitras.map((item) =>
+        Number(item.id),
+      ),
+    );
+
+  const payouts =
+    await this.service.listPayouts(
+      query,
+    );
+
+  return payouts.filter(
+    (item: any) =>
+      allowedMitraIds.has(
+        Number(item.solarMitraId),
+      ),
   );
 }
 
 @Get('payouts/:id')
 async payoutDetail(
   @Req() req: any,
-
   @Param(
     'id',
     ParseIntPipe,
@@ -354,8 +389,9 @@ async payoutDetail(
     );
 
   if (
-    this.isFranchiseManager(req.user) &&
-    !this.isOwner(req.user)
+    !this.hasFullSolarMitraVisibility(
+      req.user,
+    )
   ) {
     const mitra =
       await this.service.getSolarMitra(
@@ -364,13 +400,17 @@ async payoutDetail(
         ),
       );
 
-    if (
-      Number(
-        mitra.franchiseManagerId,
-      ) !== Number(req.user.id)
-    ) {
+    const allowed =
+      this.isFranchiseManager(req.user)
+        ? Number(
+            mitra.franchiseManagerId,
+          ) === Number(req.user.id)
+        : Number(mitra.createdBy) ===
+          Number(req.user.id);
+
+    if (!allowed) {
       throw new ForbiddenException(
-        'You can only access payouts from your assigned Solar Mitras',
+        'You can only access payouts from your Solar Mitras',
       );
     }
   }
@@ -449,17 +489,33 @@ listMeetings(
     req.user,
   );
 
-  const managerId =
+  let managerId:
+    number | undefined;
+
+  let createdBy:
+    number | undefined;
+
+  if (
     this.isFranchiseManager(
       req.user,
     ) &&
     !this.isOwner(req.user)
-      ? Number(req.user.id)
-      : undefined;
+  ) {
+    managerId =
+      Number(req.user.id);
+  } else if (
+    !this.hasFullSolarMitraVisibility(
+      req.user,
+    )
+  ) {
+    createdBy =
+      Number(req.user.id);
+  }
 
   return this.service.listMeetings(
     query,
     managerId,
+    createdBy,
   );
 }
 
@@ -484,17 +540,24 @@ async meetingDetail(
     );
 
   if (
-    this.isFranchiseManager(
+    !this.hasFullSolarMitraVisibility(
       req.user,
-    ) &&
-    !this.isOwner(req.user) &&
-    Number(
-      meeting.franchiseManagerId,
-    ) !== Number(req.user.id)
+    )
   ) {
-    throw new ForbiddenException(
-      'You can only access your own Solar Mitra meetings',
-    );
+    const allowed =
+      this.isFranchiseManager(req.user)
+        ? Number(
+            meeting.franchiseManagerId,
+          ) === Number(req.user.id)
+        : Number(
+            meeting.createdBy,
+          ) === Number(req.user.id);
+
+    if (!allowed) {
+      throw new ForbiddenException(
+        'You can only access your own Solar Mitra meetings',
+      );
+    }
   }
 
   return meeting;
@@ -524,17 +587,24 @@ async updateMeeting(
     );
 
   if (
-    this.isFranchiseManager(
+    !this.hasFullSolarMitraVisibility(
       req.user,
-    ) &&
-    !this.isOwner(req.user) &&
-    Number(
-      meeting.franchiseManagerId,
-    ) !== Number(req.user.id)
+    )
   ) {
-    throw new ForbiddenException(
-      'You can only update your own Solar Mitra meetings',
-    );
+    const allowed =
+      this.isFranchiseManager(req.user)
+        ? Number(
+            meeting.franchiseManagerId,
+          ) === Number(req.user.id)
+        : Number(
+            meeting.createdBy,
+          ) === Number(req.user.id);
+
+    if (!allowed) {
+      throw new ForbiddenException(
+        'You can only update your own Solar Mitra meetings',
+      );
+    }
   }
 
   return this.service.updateMeeting(
@@ -569,17 +639,24 @@ async convertMeetingToSolarMitra(
     );
 
   if (
-    this.isFranchiseManager(
+    !this.hasFullSolarMitraVisibility(
       req.user,
-    ) &&
-    !this.isOwner(req.user) &&
-    Number(
-      meeting.franchiseManagerId,
-    ) !== Number(req.user.id)
+    )
   ) {
-    throw new ForbiddenException(
-      'You can only convert your own Solar Mitra meetings',
-    );
+    const allowed =
+      this.isFranchiseManager(req.user)
+        ? Number(
+            meeting.franchiseManagerId,
+          ) === Number(req.user.id)
+        : Number(
+            meeting.createdBy,
+          ) === Number(req.user.id);
+
+    if (!allowed) {
+      throw new ForbiddenException(
+        'You can only convert your own Solar Mitra meetings',
+      );
+    }
   }
 
   return this.service
@@ -693,17 +770,24 @@ async uploadMeetingDocument(
     );
 
   if (
-    this.isFranchiseManager(
+    !this.hasFullSolarMitraVisibility(
       req.user,
-    ) &&
-    !this.isOwner(req.user) &&
-    Number(
-      meeting.franchiseManagerId,
-    ) !== Number(req.user.id)
+    )
   ) {
-    throw new ForbiddenException(
-      'You can only upload documents to your own Solar Mitra meetings',
-    );
+    const allowed =
+      this.isFranchiseManager(req.user)
+        ? Number(
+            meeting.franchiseManagerId,
+          ) === Number(req.user.id)
+        : Number(
+            meeting.createdBy,
+          ) === Number(req.user.id);
+
+    if (!allowed) {
+      throw new ForbiddenException(
+        'You can only upload documents to your own Solar Mitra meetings',
+      );
+    }
   }
 
   return this.service
@@ -738,33 +822,45 @@ async update(
     );
 
   if (
-    this.isFranchiseManager(req.user) &&
-    !this.isOwner(req.user)
+    !this.hasFullSolarMitraVisibility(
+      req.user,
+    )
   ) {
     if (
-      Number(
-        mitra.franchiseManagerId,
-      ) !== Number(req.user.id)
+      this.isFranchiseManager(req.user)
+    ) {
+      if (
+        Number(
+          mitra.franchiseManagerId,
+        ) !== Number(req.user.id)
+      ) {
+        throw new ForbiddenException(
+          'You can only update your assigned Solar Mitras',
+        );
+      }
+
+      /*
+       * Franchise Manager may update the
+       * Solar Mitra, but cannot transfer
+       * ownership to another manager.
+       */
+      body = {
+        ...body,
+        franchiseManagerId:
+          Number(req.user.id),
+        franchiseManagerName:
+          String(
+            req.user.name || '',
+          ).trim(),
+      };
+    } else if (
+      Number(mitra.createdBy) !==
+      Number(req.user.id)
     ) {
       throw new ForbiddenException(
-        'You can only update your assigned Solar Mitras',
+        'You can only update Solar Mitras created by you',
       );
     }
-
-    /*
-     * Franchise Manager may update the
-     * Solar Mitra, but cannot transfer
-     * ownership to another manager.
-     */
-    body = {
-      ...body,
-      franchiseManagerId:
-        Number(req.user.id),
-      franchiseManagerName:
-        String(
-          req.user.name || '',
-        ).trim(),
-    };
   }
 
   return this.service.updateSolarMitra(
@@ -892,24 +988,29 @@ async createReferralByStaff(
   this.assertManagementAccess(req.user);
 
   if (
-  this.isFranchiseManager(req.user) &&
-  !this.isOwner(req.user)
-) {
-  const mitra =
-    await this.service.getSolarMitra(
-      solarMitraId,
-    );
-
-  if (
-    Number(
-      mitra.franchiseManagerId,
-    ) !== Number(req.user.id)
+    !this.hasFullSolarMitraVisibility(
+      req.user,
+    )
   ) {
-    throw new ForbiddenException(
-      'You can only create referrals for your assigned Solar Mitras',
-    );
+    const mitra =
+      await this.service.getSolarMitra(
+        solarMitraId,
+      );
+
+    const allowed =
+      this.isFranchiseManager(req.user)
+        ? Number(
+            mitra.franchiseManagerId,
+          ) === Number(req.user.id)
+        : Number(mitra.createdBy) ===
+          Number(req.user.id);
+
+    if (!allowed) {
+      throw new ForbiddenException(
+        'You can only create referrals for your Solar Mitras',
+      );
+    }
   }
-}
 
   return this.service.createReferralForMitra(
     solarMitraId,
@@ -935,14 +1036,23 @@ async detail(
     await this.service.getSolarMitra(id);
 
   if (
-    this.isFranchiseManager(req.user) &&
-    !this.isOwner(req.user) &&
-    Number(mitra.franchiseManagerId) !==
-      Number(req.user.id)
+    !this.hasFullSolarMitraVisibility(
+      req.user,
+    )
   ) {
-    throw new ForbiddenException(
-      'You can only access your assigned Solar Mitras',
-    );
+    const allowed =
+      this.isFranchiseManager(req.user)
+        ? Number(
+            mitra.franchiseManagerId,
+          ) === Number(req.user.id)
+        : Number(mitra.createdBy) ===
+          Number(req.user.id);
+
+    if (!allowed) {
+      throw new ForbiddenException(
+        'You can only access your Solar Mitras',
+      );
+    }
   }
 
   return mitra;

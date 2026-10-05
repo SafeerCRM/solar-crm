@@ -1070,6 +1070,17 @@ updatedBy:
       );
     }
 
+    if (query?.createdBy) {
+  qb.andWhere(
+    'mitra."createdBy" = :createdBy',
+    {
+      createdBy: Number(
+        query.createdBy,
+      ),
+    },
+  );
+}
+
     qb.orderBy(
       'mitra."createdAt"',
       'DESC',
@@ -2695,6 +2706,7 @@ async createMeeting(
 async listMeetings(
   query: any,
   franchiseManagerId?: number,
+  createdBy?: number,
 ) {
   const qb =
     this.meetingRepository
@@ -2712,6 +2724,16 @@ async listMeetings(
       },
     );
   }
+
+  if (createdBy) {
+  qb.andWhere(
+    'meeting."createdBy" = :createdBy',
+    {
+      createdBy:
+        Number(createdBy),
+    },
+  );
+}
 
   const search =
     String(query?.search || '').trim();
