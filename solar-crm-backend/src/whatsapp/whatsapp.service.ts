@@ -27,6 +27,12 @@ export class WhatsappService {
   private readonly phoneNumberId =
     process.env.WHATSAPP_PHONE_NUMBER_ID;
 
+    private readonly testAccessToken =
+  process.env.WHATSAPP_TEST_ACCESS_TOKEN;
+
+private readonly testPhoneNumberId =
+  process.env.WHATSAPP_TEST_PHONE_NUMBER_ID;
+
   private readonly graphApiVersion =
     process.env.WHATSAPP_GRAPH_API_VERSION || 'v23.0';
 
@@ -94,6 +100,42 @@ export class WhatsappService {
       data,
     };
   }
+
+  private async callTestMessagesApi(
+  payload: Record<string, unknown>,
+) {
+  if (!this.testAccessToken) {
+    throw new Error(
+      'WHATSAPP_TEST_ACCESS_TOKEN is not configured',
+    );
+  }
+
+  if (!this.testPhoneNumberId) {
+    throw new Error(
+      'WHATSAPP_TEST_PHONE_NUMBER_ID is not configured',
+    );
+  }
+
+  const response = await fetch(
+    `https://graph.facebook.com/${this.graphApiVersion}/${this.testPhoneNumberId}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.testAccessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  const data = await response.json();
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    data,
+  };
+}
 
   async sendTextMessage(
     to: string,
@@ -337,6 +379,63 @@ export class WhatsappService {
       throw error;
     }
   }
+
+
+async sendTestTemplateMessage(to: string) {
+  const recipientPhone = this.normalizePhone(to);
+
+  if (!recipientPhone) {
+    throw new Error(
+      'WhatsApp recipient phone is required',
+    );
+  }
+
+  const result = await this.callTestMessagesApi({
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: recipientPhone,
+    type: 'template',
+    template: {
+      name: 'jaspers_market_order_confirmation_v1',
+      language: {
+        code: 'en_US',
+      },
+      components: [
+        {
+          type: 'body',
+          parameters: [
+            {
+              type: 'text',
+              text: 'John Doe',
+            },
+            {
+              type: 'text',
+              text: '123456',
+            },
+            {
+              type: 'text',
+              text: 'Oct 5, 2026',
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  if (!result.ok) {
+    console.error(
+      'WhatsApp TEST template send failed:',
+      result.data,
+    );
+
+    throw new Error(
+      result.data?.error?.message ||
+        `WhatsApp TEST API request failed with status ${result.status}`,
+    );
+  }
+
+  return result.data;
+}
 
     async recordIncomingMessage(params: {
     from: string;

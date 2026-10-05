@@ -39,6 +39,18 @@ export class WhatsappController {
     );
   }
 
+  @Post('test-meta-template')
+async testMetaTemplate(
+  @Body()
+  body: {
+    to: string;
+  },
+) {
+  return this.whatsappService.sendTestTemplateMessage(
+    body.to,
+  );
+}
+
   @Post('test-template')
 async testTemplate(
   @Body()
