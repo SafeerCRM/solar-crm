@@ -334,6 +334,8 @@ import {
   SolarMitraPayoutStatus,
 } from '../solar-mitra/solar-mitra-payout.entity';
 
+import { WhatsappService } from '../whatsapp/whatsapp.service';
+
 @Injectable()
 export class ProjectService {
 
@@ -2626,7 +2628,87 @@ private readonly projectStaffNotificationService: ProjectStaffNotificationServic
 
 private readonly calculatorService: CalculatorService,
 
-  ) {}
+private readonly whatsappService: WhatsappService,
+
+) {}
+
+private async sendCustomerProjectUpdateWhatsapp(
+  project: Project,
+  updateText: string,
+  occurrenceKey: string,
+): Promise<void> {
+  try {
+    const customerPhone = String(
+      project?.customerPhone || '',
+    ).trim();
+
+    if (!customerPhone) {
+      return;
+    }
+
+    const customerName =
+      String(project?.customerName || '').trim() ||
+      'Customer';
+
+    const updateDate =
+      new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      }).format(new Date());
+
+    const result =
+      await this.whatsappService.executeAutomation({
+        automationKey: 'CUSTOMER_PROJECT_UPDATE',
+
+        recipientPhone: customerPhone,
+
+        recipientName: customerName,
+
+        referenceType: 'PROJECT',
+
+        referenceId: project.id,
+
+        occurrenceKey,
+
+        components: [
+          {
+            type: 'body',
+            parameters: [
+              {
+                type: 'text',
+                text: customerName,
+              },
+              {
+                type: 'text',
+                text: updateText,
+              },
+              {
+                type: 'text',
+                text: updateDate,
+              },
+            ],
+          },
+        ],
+      });
+
+    if (!result.sent) {
+      console.log(
+        `[WhatsApp] CUSTOMER_PROJECT_UPDATE skipped for project ${project.id}: ${result.reason}`,
+      );
+    }
+  } catch (error) {
+    /*
+     * WhatsApp must never make the underlying
+     * project operation fail.
+     */
+    console.error(
+      `[WhatsApp] CUSTOMER_PROJECT_UPDATE failed for project ${project?.id}:`,
+      error,
+    );
+  }
+}
 
   private async buildProjectJourneySnapshot(
   data: any,
@@ -21600,6 +21682,23 @@ async moveProjectStatus(
   await this.projectRepository.save(
     project,
   );
+
+  const customerUpdateText =
+  nextStatus === ProjectStatus.PROJECT_MANAGEMENT
+    ? 'Your solar project has moved to Project Management.'
+    : nextStatus === ProjectStatus.SUBSIDY_PROCESS
+      ? 'Your solar project has moved to the Subsidy Process.'
+      : nextStatus === ProjectStatus.ELECTRICITY_PROCESS
+        ? 'Your solar project has moved to the Electricity Process.'
+        : '';
+
+if (customerUpdateText) {
+  await this.sendCustomerProjectUpdateWhatsapp(
+    savedProject,
+    customerUpdateText,
+    `status-${nextStatus}`,
+  );
+}
 
 if (note) {
   try {
