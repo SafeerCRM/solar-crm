@@ -18236,17 +18236,6 @@ async processCustomerPaymentDueWhatsapp() {
       },
     );
 
-  /*
-   * We intentionally fetch:
-   *
-   * 1. installments due exactly on the configured
-   *    upcoming reminder date;
-   * 2. installments due today;
-   * 3. overdue installments.
-   *
-   * executeAutomation() provides the final
-   * deduplication protection.
-   */
   const rows =
     await this
       .projectPaymentInstallmentRepository
@@ -18303,6 +18292,20 @@ async processCustomerPaymentDueWhatsapp() {
             upcomingDateIndia,
         },
       )
+
+      /*
+       * TEMPORARY TEST ISOLATION.
+       *
+       * Remove this condition after installment
+       * 1970 has passed the controlled test.
+       */
+      .andWhere(
+        'payment.id = :testInstallmentId',
+        {
+          testInstallmentId: 1970,
+        },
+      )
+
       .orderBy(
         'payment.dueDate',
         'ASC',
@@ -18314,10 +18317,10 @@ async processCustomerPaymentDueWhatsapp() {
       .getRawMany();
 
   let sent = 0;
-let skipped = 0;
-let failed = 0;
+  let skipped = 0;
+  let failed = 0;
 
-const details: any[] = [];
+  const details: any[] = [];
 
   for (const row of rows) {
     try {
@@ -18327,19 +18330,19 @@ const details: any[] = [];
         ).trim();
 
       if (!customerPhone) {
-  skipped++;
+        skipped++;
 
-  details.push({
-    installmentId:
-      Number(row.id),
-    result: 'SKIPPED',
-    reason:
-      'CUSTOMER_PHONE_MISSING',
-    rawRow: row,
-  });
+        details.push({
+          installmentId:
+            Number(row.id),
+          result: 'SKIPPED',
+          reason:
+            'CUSTOMER_PHONE_MISSING',
+          rawRow: row,
+        });
 
-  continue;
-}
+        continue;
+      }
 
       const customerName =
         String(
@@ -18347,39 +18350,57 @@ const details: any[] = [];
         ).trim() ||
         'Customer';
 
+      /*
+       * TypeORM returns the PostgreSQL DATE
+       * value as a JavaScript Date in this
+       * raw query.
+       *
+       * Convert it back to YYYY-MM-DD in IST
+       * before comparing it with our reminder
+       * dates.
+       */
+      const dueDateValue =
+        row.dueDate
+          ? new Date(row.dueDate)
+          : null;
+
+      if (
+        !dueDateValue ||
+        Number.isNaN(
+          dueDateValue.getTime(),
+        )
+      ) {
+        skipped++;
+
+        details.push({
+          installmentId:
+            Number(row.id),
+          result: 'SKIPPED',
+          reason:
+            'DUE_DATE_MISSING',
+          rawRow: row,
+        });
+
+        continue;
+      }
+
       const dueDate =
-        String(
-          row.dueDate || '',
-        ).slice(0, 10);
-
-      if (!dueDate) {
-  skipped++;
-
-  details.push({
-    installmentId:
-      Number(row.id),
-    result: 'SKIPPED',
-    reason:
-      'DUE_DATE_MISSING',
-    rawRow: row,
-  });
-
-  continue;
-}
+        dueDateValue.toLocaleDateString(
+          'en-CA',
+          {
+            timeZone:
+              'Asia/Kolkata',
+          },
+        );
 
       let reminderStage:
         | 'UPCOMING'
         | 'DUE_TODAY'
         | 'OVERDUE';
 
-      /*
-       * Upcoming is sent ONLY on the configured
-       * offset date — not on every day between
-       * that date and the due date.
-       */
       if (
         dueDate ===
-        upcomingDateIndia &&
+          upcomingDateIndia &&
         dueDate !== todayIndia
       ) {
         reminderStage =
@@ -18395,22 +18416,22 @@ const details: any[] = [];
         reminderStage =
           'OVERDUE';
       } else {
-  skipped++;
+        skipped++;
 
-  details.push({
-    installmentId:
-      Number(row.id),
-    result: 'SKIPPED',
-    reason:
-      'DATE_NOT_ELIGIBLE',
-    dueDate,
-    todayIndia,
-    upcomingDateIndia,
-    rawRow: row,
-  });
+        details.push({
+          installmentId:
+            Number(row.id),
+          result: 'SKIPPED',
+          reason:
+            'DATE_NOT_ELIGIBLE',
+          dueDate,
+          todayIndia,
+          upcomingDateIndia,
+          rawRow: row,
+        });
 
-  continue;
-}
+        continue;
+      }
 
       const pendingAmount =
         Number(
@@ -18418,25 +18439,25 @@ const details: any[] = [];
         );
 
       if (
-  !Number.isFinite(
-    pendingAmount,
-  ) ||
-  pendingAmount <= 0
-) {
-  skipped++;
+        !Number.isFinite(
+          pendingAmount,
+        ) ||
+        pendingAmount <= 0
+      ) {
+        skipped++;
 
-  details.push({
-    installmentId:
-      Number(row.id),
-    result: 'SKIPPED',
-    reason:
-      'INVALID_PENDING_AMOUNT',
-    pendingAmount,
-    rawRow: row,
-  });
+        details.push({
+          installmentId:
+            Number(row.id),
+          result: 'SKIPPED',
+          reason:
+            'INVALID_PENDING_AMOUNT',
+          pendingAmount,
+          rawRow: row,
+        });
 
-  continue;
-}
+        continue;
+      }
 
       const formattedAmount =
         pendingAmount.toLocaleString(
@@ -18509,25 +18530,32 @@ const details: any[] = [];
           });
 
       if (result.sent) {
-  sent++;
+        sent++;
 
-  details.push({
-    installmentId: Number(row.id),
-    stage: reminderStage,
-    dueDate,
-    result: 'SENT',
-  });
-} else {
-  skipped++;
+        details.push({
+          installmentId:
+            Number(row.id),
+          stage:
+            reminderStage,
+          dueDate,
+          result:
+            'SENT',
+        });
+      } else {
+        skipped++;
 
-  details.push({
-    installmentId: Number(row.id),
-    stage: reminderStage,
-    dueDate,
-    result: 'SKIPPED',
-    reason: result.reason,
-  });
-}
+        details.push({
+          installmentId:
+            Number(row.id),
+          stage:
+            reminderStage,
+          dueDate,
+          result:
+            'SKIPPED',
+          reason:
+            result.reason,
+        });
+      }
     } catch (error: any) {
       failed++;
 
