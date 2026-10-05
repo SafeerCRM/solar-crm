@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -10,6 +13,11 @@ import {
   WhatsappRecipientType,
 } from './whatsapp-message.entity';
 
+import {
+  WhatsappAutomation,
+  WhatsappAutomationTriggerType,
+} from './whatsapp-automation.entity';
+
 export interface WhatsappSendContext {
   recipientType?: WhatsappRecipientType;
   recipientName?: string;
@@ -19,8 +27,66 @@ export interface WhatsappSendContext {
   deduplicationKey?: string;
 }
 
+interface WhatsappAutomationDefinition {
+  automationKey: string;
+  name: string;
+  triggerType: WhatsappAutomationTriggerType;
+  recipientType: WhatsappRecipientType;
+  templateName: string;
+  templateLanguage: string;
+  triggerOffsetMinutes?: number | null;
+  repeatAfterMinutes?: number | null;
+  maxRepeatCount?: number | null;
+  description: string;
+}
+
 @Injectable()
-export class WhatsappService {
+export class WhatsappService
+  implements OnModuleInit
+{
+
+  private readonly defaultAutomations: WhatsappAutomationDefinition[] = [
+  {
+    automationKey: 'CUSTOMER_PAYMENT_DUE',
+    name: 'Customer Payment Due',
+    triggerType: WhatsappAutomationTriggerType.UPCOMING,
+    recipientType: WhatsappRecipientType.CUSTOMER,
+    templateName: 'customer_payment_due',
+    templateLanguage: 'en',
+    triggerOffsetMinutes: null,
+    repeatAfterMinutes: null,
+    maxRepeatCount: null,
+    description:
+      'Send a WhatsApp reminder when a customer project payment is due.',
+  },
+  {
+    automationKey: 'CUSTOMER_PROJECT_UPDATE',
+    name: 'Customer Project Update',
+    triggerType: WhatsappAutomationTriggerType.EVENT,
+    recipientType: WhatsappRecipientType.CUSTOMER,
+    templateName: 'customer_project_update',
+    templateLanguage: 'en',
+    triggerOffsetMinutes: null,
+    repeatAfterMinutes: null,
+    maxRepeatCount: null,
+    description:
+      'Notify the customer when an important project stage changes.',
+  },
+  {
+    automationKey: 'CUSTOMER_APPOINTMENT_REMINDER',
+    name: 'Customer Appointment Reminder',
+    triggerType: WhatsappAutomationTriggerType.UPCOMING,
+    recipientType: WhatsappRecipientType.CUSTOMER,
+    templateName: 'customer_appointment_reminder',
+    templateLanguage: 'en',
+    triggerOffsetMinutes: 1440,
+    repeatAfterMinutes: null,
+    maxRepeatCount: null,
+    description:
+      'Remind the customer before a scheduled meeting or site visit.',
+  },
+];
+
   private readonly accessToken =
     process.env.WHATSAPP_ACCESS_TOKEN;
 
@@ -42,9 +108,81 @@ private readonly testPhoneNumberId =
     process.env.WHATSAPP_GRAPH_API_VERSION || 'v23.0';
 
   constructor(
-    @InjectRepository(WhatsappMessage)
-    private readonly messageRepository: Repository<WhatsappMessage>,
-  ) {}
+  @InjectRepository(WhatsappMessage)
+  private readonly messageRepository: Repository<WhatsappMessage>,
+
+  @InjectRepository(WhatsappAutomation)
+  private readonly automationRepository: Repository<WhatsappAutomation>,
+) {}
+
+async onModuleInit() {
+  await this.ensureDefaultAutomations();
+}
+
+async getAutomation(
+  automationKey: string,
+): Promise<WhatsappAutomation | null> {
+  if (!automationKey?.trim()) {
+    return null;
+  }
+
+  return this.automationRepository.findOne({
+    where: {
+      automationKey: automationKey.trim(),
+    },
+  });
+}
+
+async isAutomationEnabled(
+  automationKey: string,
+): Promise<boolean> {
+  const automation =
+    await this.getAutomation(automationKey);
+
+  return Boolean(
+    automation &&
+      automation.isEnabled,
+  );
+}
+
+async ensureDefaultAutomations() {
+  for (const definition of this.defaultAutomations) {
+    const existing =
+      await this.automationRepository.findOne({
+        where: {
+          automationKey: definition.automationKey,
+        },
+      });
+
+    if (existing) {
+      continue;
+    }
+
+    const automation =
+      this.automationRepository.create({
+        automationKey: definition.automationKey,
+        name: definition.name,
+        triggerType: definition.triggerType,
+        recipientType: definition.recipientType,
+        isEnabled: true,
+        templateName: definition.templateName,
+        templateLanguage:
+          definition.templateLanguage,
+        triggerOffsetMinutes:
+          definition.triggerOffsetMinutes ?? null,
+        repeatAfterMinutes:
+          definition.repeatAfterMinutes ?? null,
+        maxRepeatCount:
+          definition.maxRepeatCount ?? null,
+        configuration: null,
+        description: definition.description,
+      });
+
+    await this.automationRepository.save(
+      automation,
+    );
+  }
+}
 
   private validateConfig() {
     if (!this.accessToken) {
