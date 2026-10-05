@@ -18327,9 +18327,19 @@ const details: any[] = [];
         ).trim();
 
       if (!customerPhone) {
-        skipped++;
-        continue;
-      }
+  skipped++;
+
+  details.push({
+    installmentId:
+      Number(row.id),
+    result: 'SKIPPED',
+    reason:
+      'CUSTOMER_PHONE_MISSING',
+    rawRow: row,
+  });
+
+  continue;
+}
 
       const customerName =
         String(
@@ -18343,9 +18353,19 @@ const details: any[] = [];
         ).slice(0, 10);
 
       if (!dueDate) {
-        skipped++;
-        continue;
-      }
+  skipped++;
+
+  details.push({
+    installmentId:
+      Number(row.id),
+    result: 'SKIPPED',
+    reason:
+      'DUE_DATE_MISSING',
+    rawRow: row,
+  });
+
+  continue;
+}
 
       let reminderStage:
         | 'UPCOMING'
@@ -18375,9 +18395,22 @@ const details: any[] = [];
         reminderStage =
           'OVERDUE';
       } else {
-        skipped++;
-        continue;
-      }
+  skipped++;
+
+  details.push({
+    installmentId:
+      Number(row.id),
+    result: 'SKIPPED',
+    reason:
+      'DATE_NOT_ELIGIBLE',
+    dueDate,
+    todayIndia,
+    upcomingDateIndia,
+    rawRow: row,
+  });
+
+  continue;
+}
 
       const pendingAmount =
         Number(
@@ -18385,14 +18418,25 @@ const details: any[] = [];
         );
 
       if (
-        !Number.isFinite(
-          pendingAmount,
-        ) ||
-        pendingAmount <= 0
-      ) {
-        skipped++;
-        continue;
-      }
+  !Number.isFinite(
+    pendingAmount,
+  ) ||
+  pendingAmount <= 0
+) {
+  skipped++;
+
+  details.push({
+    installmentId:
+      Number(row.id),
+    result: 'SKIPPED',
+    reason:
+      'INVALID_PENDING_AMOUNT',
+    pendingAmount,
+    rawRow: row,
+  });
+
+  continue;
+}
 
       const formattedAmount =
         pendingAmount.toLocaleString(
