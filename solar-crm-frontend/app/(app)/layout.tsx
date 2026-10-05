@@ -225,11 +225,6 @@ const navItems = [
 {
   name: 'Solar Mitra',
   href: '/solar-mitra',
-  roles: [
-    'OWNER',
-    'FRANCHISE_MANAGER',
-    'FRANCHISE_HEAD',
-  ],
 },
 
 {
