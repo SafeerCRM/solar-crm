@@ -18314,8 +18314,10 @@ async processCustomerPaymentDueWhatsapp() {
       .getRawMany();
 
   let sent = 0;
-  let skipped = 0;
-  let failed = 0;
+let skipped = 0;
+let failed = 0;
+
+const details: any[] = [];
 
   for (const row of rows) {
     try {
@@ -18463,10 +18465,25 @@ async processCustomerPaymentDueWhatsapp() {
           });
 
       if (result.sent) {
-        sent++;
-      } else {
-        skipped++;
-      }
+  sent++;
+
+  details.push({
+    installmentId: Number(row.id),
+    stage: reminderStage,
+    dueDate,
+    result: 'SENT',
+  });
+} else {
+  skipped++;
+
+  details.push({
+    installmentId: Number(row.id),
+    stage: reminderStage,
+    dueDate,
+    result: 'SKIPPED',
+    reason: result.reason,
+  });
+}
     } catch (error: any) {
       failed++;
 
@@ -18491,6 +18508,7 @@ async processCustomerPaymentDueWhatsapp() {
       upcomingDateIndia,
     triggerOffsetMinutes,
     triggerOffsetDays,
+    details,
   };
 }
 
