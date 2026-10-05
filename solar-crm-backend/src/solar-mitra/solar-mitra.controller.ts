@@ -34,26 +34,32 @@ export class SolarMitraController {
   ) {}
 
   private assertManagementAccess(user: any) {
-    const roles: string[] =
-      Array.isArray(user?.roles)
-        ? user.roles
-        : [];
+  const roles: string[] =
+    Array.isArray(user?.roles)
+      ? user.roles
+      : [];
 
-    const allowed =
-  roles.includes(UserRole.OWNER) ||
-  roles.includes(
-    UserRole.FRANCHISE_HEAD,
-  ) ||
-  roles.includes(
-    UserRole.FRANCHISE_MANAGER,
-  );
-
-    if (!allowed) {
-      throw new ForbiddenException(
-  'Solar Mitra management access denied',
-);
-    }
+  if (roles.length === 0) {
+    throw new ForbiddenException(
+      'Solar Mitra management access denied',
+    );
   }
+}
+
+  private assertSolarMitraCreateAccess(
+  user: any,
+) {
+  const roles: string[] =
+    Array.isArray(user?.roles)
+      ? user.roles
+      : [];
+
+  if (roles.length === 0) {
+    throw new ForbiddenException(
+      'Solar Mitra creation access denied',
+    );
+  }
+}
 
   private isOwner(user: any): boolean {
   const roles: string[] =
@@ -129,7 +135,9 @@ private isFranchiseHead(
     @Req() req: any,
     @Body() body: any,
   ) {
-    this.assertManagementAccess(req.user);
+    this.assertSolarMitraCreateAccess(
+  req.user,
+);
 
     const createBody = {
   ...body,
@@ -406,7 +414,9 @@ uploadShopPhoto(
   @Req() req: any,
   @UploadedFile() file: any,
 ) {
-  this.assertManagementAccess(req.user);
+  this.assertSolarMitraCreateAccess(
+  req.user,
+);
 
   return this.service.uploadShopPhoto(
     file,

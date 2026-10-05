@@ -974,16 +974,22 @@ async getSolarMitraPortalReferral(
             ).trim() || null,
 
           createdBy:
-            user?.id
-              ? Number(user.id)
-              : null,
+  user?.id
+    ? Number(user.id)
+    : null,
 
-          createdByName:
-            String(
-              user?.name || '',
-            ).trim() || null,
+createdByName:
+  String(
+    user?.name || '',
+  ).trim() || null,
 
-          updatedBy:
+createdByRole:
+  Array.isArray(user?.roles) &&
+  user.roles.length > 0
+    ? String(user.roles[0])
+    : null,
+
+updatedBy:
             user?.id
               ? Number(user.id)
               : null,

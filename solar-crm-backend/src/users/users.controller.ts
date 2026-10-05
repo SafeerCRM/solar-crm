@@ -146,12 +146,7 @@ findCustomers() {
   return this.usersService.findCustomers();
 }
 
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(
-  'OWNER',
-  'FRANCHISE_MANAGER',
-  'FRANCHISE_HEAD',
-)
+@UseGuards(JwtAuthGuard)
 @Get('franchise-managers')
 findFranchiseManagers() {
   return this.usersService.findFranchiseManagers();

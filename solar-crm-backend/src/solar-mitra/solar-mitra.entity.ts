@@ -167,6 +167,9 @@ portalPassword: string;
   @Column({ type: 'text', nullable: true })
   createdByName: string;
 
+  @Column({ type: 'text', nullable: true })
+createdByRole: string;
+
   @Column({ nullable: true })
   updatedBy: number;
 
