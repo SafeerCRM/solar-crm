@@ -4138,13 +4138,6 @@ updatePaymentEntry(
   );
 }
 
-@Roles('OWNER')
-@Post('test-customer-payment-whatsapp')
-testCustomerPaymentWhatsapp() {
-  return this.projectService
-    .processCustomerPaymentDueWhatsapp();
-}
-
 @Get('approval-reminders')
 async getApprovalReminderList(
   @Req() req: any,

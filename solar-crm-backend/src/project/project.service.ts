@@ -18180,6 +18180,7 @@ async processCustomerPaymentDueWhatsapp() {
       processed: 0,
       sent: 0,
       skipped: 0,
+      failed: 0,
       reason: 'AUTOMATION_NOT_FOUND',
     };
   }
@@ -18189,6 +18190,7 @@ async processCustomerPaymentDueWhatsapp() {
       processed: 0,
       sent: 0,
       skipped: 0,
+      failed: 0,
       reason: 'AUTOMATION_DISABLED',
     };
   }
@@ -18207,6 +18209,11 @@ async processCustomerPaymentDueWhatsapp() {
       ),
     );
 
+  /*
+   * Payment installments use DATE values.
+   * Keep all reminder-date calculations aligned
+   * with the CRM's Asia/Kolkata business date.
+   */
   const todayIndia =
     new Date().toLocaleDateString(
       'en-CA',
@@ -18236,6 +18243,27 @@ async processCustomerPaymentDueWhatsapp() {
       },
     );
 
+  /*
+   * Production launch policy:
+   *
+   * 1. Send UPCOMING reminder exactly on the
+   *    configured offset date (currently 3 days).
+   *
+   * 2. Send DUE_TODAY reminder on the due date.
+   *
+   * 3. Do NOT automatically send historical
+   *    OVERDUE reminders.
+   *
+   * Existing overdue installments remain available
+   * in the CRM Reminder Center.
+   */
+  const eligibleDates = Array.from(
+    new Set([
+      todayIndia,
+      upcomingDateIndia,
+    ]),
+  );
+
   const rows =
     await this
       .projectPaymentInstallmentRepository
@@ -18251,7 +18279,6 @@ async processCustomerPaymentDueWhatsapp() {
         'payment.pendingAmount AS "pendingAmount"',
         'payment.dueDate AS "dueDate"',
         'payment.status AS "status"',
-
         'project.customerName AS "customerName"',
         'project.customerPhone AS "customerPhone"',
       ])
@@ -18286,26 +18313,11 @@ async processCustomerPaymentDueWhatsapp() {
         'payment.dueDate IS NOT NULL',
       )
       .andWhere(
-        'payment.dueDate <= :upcomingDate',
+        'payment.dueDate IN (:...eligibleDates)',
         {
-          upcomingDate:
-            upcomingDateIndia,
+          eligibleDates,
         },
       )
-
-      /*
-       * TEMPORARY TEST ISOLATION.
-       *
-       * Remove this condition after installment
-       * 1970 has passed the controlled test.
-       */
-      .andWhere(
-        'payment.id = :testInstallmentId',
-        {
-          testInstallmentId: 1970,
-        },
-      )
-
       .orderBy(
         'payment.dueDate',
         'ASC',
@@ -18320,8 +18332,6 @@ async processCustomerPaymentDueWhatsapp() {
   let skipped = 0;
   let failed = 0;
 
-  const details: any[] = [];
-
   for (const row of rows) {
     try {
       const customerPhone =
@@ -18331,16 +18341,6 @@ async processCustomerPaymentDueWhatsapp() {
 
       if (!customerPhone) {
         skipped++;
-
-        details.push({
-          installmentId:
-            Number(row.id),
-          result: 'SKIPPED',
-          reason:
-            'CUSTOMER_PHONE_MISSING',
-          rawRow: row,
-        });
-
         continue;
       }
 
@@ -18351,13 +18351,10 @@ async processCustomerPaymentDueWhatsapp() {
         'Customer';
 
       /*
-       * TypeORM returns the PostgreSQL DATE
-       * value as a JavaScript Date in this
-       * raw query.
-       *
-       * Convert it back to YYYY-MM-DD in IST
-       * before comparing it with our reminder
-       * dates.
+       * PostgreSQL DATE may be returned by
+       * TypeORM as a JavaScript Date.
+       * Convert it back to the CRM business
+       * date before comparing.
        */
       const dueDateValue =
         row.dueDate
@@ -18371,16 +18368,6 @@ async processCustomerPaymentDueWhatsapp() {
         )
       ) {
         skipped++;
-
-        details.push({
-          installmentId:
-            Number(row.id),
-          result: 'SKIPPED',
-          reason:
-            'DUE_DATE_MISSING',
-          rawRow: row,
-        });
-
         continue;
       }
 
@@ -18395,41 +18382,26 @@ async processCustomerPaymentDueWhatsapp() {
 
       let reminderStage:
         | 'UPCOMING'
-        | 'DUE_TODAY'
-        | 'OVERDUE';
+        | 'DUE_TODAY';
 
       if (
-        dueDate ===
-          upcomingDateIndia &&
-        dueDate !== todayIndia
-      ) {
-        reminderStage =
-          'UPCOMING';
-      } else if (
         dueDate === todayIndia
       ) {
         reminderStage =
           'DUE_TODAY';
       } else if (
-        dueDate < todayIndia
+        triggerOffsetDays > 0 &&
+        dueDate ===
+          upcomingDateIndia
       ) {
         reminderStage =
-          'OVERDUE';
+          'UPCOMING';
       } else {
+        /*
+         * Defensive guard. The SQL query should
+         * already prevent any other date.
+         */
         skipped++;
-
-        details.push({
-          installmentId:
-            Number(row.id),
-          result: 'SKIPPED',
-          reason:
-            'DATE_NOT_ELIGIBLE',
-          dueDate,
-          todayIndia,
-          upcomingDateIndia,
-          rawRow: row,
-        });
-
         continue;
       }
 
@@ -18445,17 +18417,6 @@ async processCustomerPaymentDueWhatsapp() {
         pendingAmount <= 0
       ) {
         skipped++;
-
-        details.push({
-          installmentId:
-            Number(row.id),
-          result: 'SKIPPED',
-          reason:
-            'INVALID_PENDING_AMOUNT',
-          pendingAmount,
-          rawRow: row,
-        });
-
         continue;
       }
 
@@ -18531,30 +18492,8 @@ async processCustomerPaymentDueWhatsapp() {
 
       if (result.sent) {
         sent++;
-
-        details.push({
-          installmentId:
-            Number(row.id),
-          stage:
-            reminderStage,
-          dueDate,
-          result:
-            'SENT',
-        });
       } else {
         skipped++;
-
-        details.push({
-          installmentId:
-            Number(row.id),
-          stage:
-            reminderStage,
-          dueDate,
-          result:
-            'SKIPPED',
-          reason:
-            result.reason,
-        });
       }
     } catch (error: any) {
       failed++;
@@ -18580,11 +18519,10 @@ async processCustomerPaymentDueWhatsapp() {
       upcomingDateIndia,
     triggerOffsetMinutes,
     triggerOffsetDays,
-    details,
   };
 }
 
-/*
+
 @Cron(
   '0 10 9 * * *',
   {
@@ -18596,7 +18534,7 @@ async processCustomerPaymentDueWhatsapp() {
       true,
   },
 )
-*/
+
 async handleCustomerPaymentDueWhatsappCron() {
   try {
     const result =
