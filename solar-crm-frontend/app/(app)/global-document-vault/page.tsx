@@ -26,6 +26,19 @@ import type {
   Dayjs,
 } from 'dayjs';
 
+import {
+  Capacitor,
+} from '@capacitor/core';
+
+import {
+  Filesystem,
+  Directory,
+} from '@capacitor/filesystem';
+
+import {
+  Share,
+} from '@capacitor/share';
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -1421,6 +1434,168 @@ const saveDocumentEdit =
     }
   };
 
+  const shareDocument =
+  async (
+    documentItem: VaultDocument,
+  ) => {
+    try {
+      // ============================
+      // ANDROID / CAPACITOR APK
+      // ============================
+
+      if (
+        Capacitor.isNativePlatform()
+      ) {
+        const response =
+          await fetch(
+            documentItem.fileUrl,
+          );
+
+        if (!response.ok) {
+          throw new Error(
+            'Unable to download file for sharing',
+          );
+        }
+
+        const blob =
+          await response.blob();
+
+        const reader =
+          new FileReader();
+
+        const base64Data =
+          await new Promise<string>(
+            (
+              resolve,
+              reject,
+            ) => {
+              reader.onloadend =
+                () => {
+                  const result =
+                    String(
+                      reader.result ||
+                        '',
+                    );
+
+                  const base64 =
+                    result.includes(
+                      ',',
+                    )
+                      ? result.split(
+                          ',',
+                        )[1]
+                      : result;
+
+                  resolve(
+                    base64,
+                  );
+                };
+
+              reader.onerror =
+                () =>
+                  reject(
+                    new Error(
+                      'Failed to prepare file for sharing',
+                    ),
+                  );
+
+              reader.readAsDataURL(
+                blob,
+              );
+            },
+          );
+
+        const safeFileName =
+          documentItem.fileName ||
+          `document-${documentItem.id}`;
+
+        const savedFile =
+          await Filesystem.writeFile({
+            path:
+              `shared/${Date.now()}-${safeFileName}`,
+
+            data:
+              base64Data,
+
+            directory:
+              Directory.Cache,
+
+            recursive:
+              true,
+          });
+
+        await Share.share({
+          title:
+            documentItem.title,
+
+          text:
+            documentItem.title,
+
+          url:
+            savedFile.uri,
+
+          dialogTitle:
+            'Share Document',
+        });
+
+        return;
+      }
+
+      // ============================
+      // WEB BROWSER
+      // ============================
+
+      if (
+        navigator.share
+      ) {
+        await navigator.share({
+          title:
+            documentItem.title,
+
+          text:
+            documentItem.title,
+
+          url:
+            documentItem.fileUrl,
+        });
+
+        return;
+      }
+
+      // Browser fallback
+      await navigator.clipboard.writeText(
+        documentItem.fileUrl,
+      );
+
+      alert(
+        'Document link copied to clipboard',
+      );
+    } catch (
+      error: any
+    ) {
+      /*
+       * Closing the native/browser share sheet
+       * should not show a scary failure message.
+       */
+      if (
+        error?.name ===
+        'AbortError'
+      ) {
+        return;
+      }
+
+      console.error(
+        'Document share failed:',
+        error,
+      );
+
+      alert(
+        error?.message ||
+          'Failed to share document',
+      );
+    }
+  };
+
   const hideDocument =
     async (
       documentItem: VaultDocument,
@@ -2215,6 +2390,18 @@ file(s) selected. Images larger than 1 MB and videos larger than 25 MB will be a
             >
               Download
             </a>
+
+            <button
+  type="button"
+  onClick={() =>
+    shareDocument(
+      documentItem,
+    )
+  }
+  className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+>
+  Share
+</button>
 
             {canEditDocument &&
               !documentItem.isHidden && (
