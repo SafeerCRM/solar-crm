@@ -3246,6 +3246,23 @@ listProjectStockMovements(
   );
 }
 
+@Get(':id/stock-movements')
+getProjectStockMovements(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService.getProjectStockMovements(
+    id,
+    user,
+  );
+}
+
 @Roles(
   'OWNER',
   'PROJECT_MANAGER',

@@ -10927,6 +10927,144 @@ if (projectSearch?.trim()) {
   };
 }
 
+async getProjectStockMovements(
+  projectId: number,
+  user: any,
+) {
+  /*
+   * Reuse the exact same project-access rules
+   * as the Project Detail page.
+   *
+   * This prevents a user from accessing another
+   * project's stock ledger simply by changing
+   * the project ID in the URL.
+   */
+  await this.findOne(
+    projectId,
+    user,
+  );
+
+  const movements =
+    await this.projectStockMovementRepository
+      .createQueryBuilder('movement')
+      .leftJoin(
+        ProjectStockItem,
+        'stock',
+        'stock.id = movement.stockItemId',
+      )
+      .where(
+        'movement.projectId = :projectId',
+        {
+          projectId,
+        },
+      )
+      .andWhere(
+        'COALESCE(movement.isHidden, false) = false',
+      )
+      .select([
+        'movement.id AS "id"',
+        'movement.projectId AS "projectId"',
+        'movement.stockItemId AS "stockItemId"',
+        'movement.materialId AS "materialId"',
+        'movement.materialName AS "materialName"',
+        'movement.branchId AS "branchId"',
+        'movement.branchName AS "branchName"',
+        'movement.movementType AS "movementType"',
+        'movement.quantity AS "quantity"',
+        'movement.sourceType AS "sourceType"',
+        'movement.sourceId AS "sourceId"',
+        'movement.remarks AS "remarks"',
+        'movement.createdBy AS "createdBy"',
+        'movement.createdByName AS "createdByName"',
+        'movement.createdAt AS "createdAt"',
+        'stock.category AS "category"',
+        'stock.brand AS "brand"',
+      ])
+      .orderBy(
+        'movement.createdAt',
+        'DESC',
+      )
+      .addOrderBy(
+        'movement.id',
+        'DESC',
+      )
+      .getRawMany();
+
+  return movements.map(
+    (movement) => ({
+      id: Number(movement.id),
+
+      projectId:
+        movement.projectId !== null &&
+        movement.projectId !== undefined
+          ? Number(movement.projectId)
+          : null,
+
+      stockItemId:
+        movement.stockItemId !== null &&
+        movement.stockItemId !== undefined
+          ? Number(movement.stockItemId)
+          : null,
+
+      materialId:
+        movement.materialId !== null &&
+        movement.materialId !== undefined
+          ? Number(movement.materialId)
+          : null,
+
+      materialName:
+        movement.materialName || '',
+
+      category:
+        movement.category || '',
+
+      brand:
+        movement.brand || '',
+
+      branchId:
+        movement.branchId !== null &&
+        movement.branchId !== undefined
+          ? Number(movement.branchId)
+          : null,
+
+      branchName:
+        movement.branchName || '',
+
+      movementType:
+        movement.movementType || '',
+
+      quantity:
+        Number(
+          movement.quantity || 0,
+        ),
+
+      sourceType:
+        movement.sourceType || '',
+
+      sourceId:
+        movement.sourceId !== null &&
+        movement.sourceId !== undefined
+          ? Number(movement.sourceId)
+          : null,
+
+      remarks:
+        movement.remarks || '',
+
+      createdBy:
+        movement.createdBy !== null &&
+        movement.createdBy !== undefined
+          ? Number(movement.createdBy)
+          : null,
+
+      createdByName:
+        movement.createdByName || '',
+
+      createdAt:
+        movement.createdAt,
+    }),
+  );
+}
+
 async hideProjectStockMovement(
   movementId: number,
   body: any,
