@@ -224,7 +224,63 @@ if (filters?.status) {
   });
 }
 
-    query.orderBy('customer.createdAt', 'DESC');
+/*
+ * Project-based customer filters.
+ *
+ * Both filters are applied to the SAME linked project.
+ */
+if (
+  filters?.projectWorkState ||
+  filters?.projectStage
+) {
+  const projectConditions = [
+    `project_filter."customerId" = customer.id`,
+    `project_filter."isHidden" = false`,
+  ];
+
+  const projectParams: Record<string, any> = {};
+
+  if (
+    filters?.projectWorkState === 'IN_PROCESS' ||
+    filters?.projectWorkState === 'RUNNING'
+  ) {
+    projectConditions.push(
+      `project_filter."projectWorkState" = :projectWorkState`,
+    );
+
+    projectParams.projectWorkState =
+      filters.projectWorkState;
+  }
+
+  if (filters?.projectStage === 'COMPLETED') {
+    projectConditions.push(
+      `project_filter."status" = 'COMPLETED'`,
+    );
+  }
+
+  if (filters?.projectStage === 'ACTIVE') {
+    projectConditions.push(
+      `project_filter."status" NOT IN (
+        'COMPLETED',
+        'CANCELLED',
+        'REJECTED'
+      )`,
+    );
+  }
+
+  query.andWhere(
+    `
+    EXISTS (
+      SELECT 1
+      FROM "project" project_filter
+      WHERE ${projectConditions.join('\n AND ')}
+    )
+    `,
+    projectParams,
+  );
+}
+
+query.orderBy('customer.createdAt', 'DESC');
     query.skip(skip).take(limit);
 
     const [data, total] = await query.getManyAndCount();
@@ -324,18 +380,74 @@ if (filters?.status) {
   }
 
   if (filters?.status) {
-    query.andWhere(
-      'customer.customerStatus = :status',
-      {
-        status: filters.status,
-      },
+  query.andWhere(
+    'customer.customerStatus = :status',
+    {
+      status: filters.status,
+    },
+  );
+}
+
+/*
+ * Project-based customer filters.
+ *
+ * Both filters are applied to the SAME linked project.
+ */
+if (
+  filters?.projectWorkState ||
+  filters?.projectStage
+) {
+  const projectConditions = [
+    `project_filter."customerId" = customer.id`,
+    `project_filter."isHidden" = false`,
+  ];
+
+  const projectParams: Record<string, any> = {};
+
+  if (
+    filters?.projectWorkState === 'IN_PROCESS' ||
+    filters?.projectWorkState === 'RUNNING'
+  ) {
+    projectConditions.push(
+      `project_filter."projectWorkState" = :projectWorkState`,
+    );
+
+    projectParams.projectWorkState =
+      filters.projectWorkState;
+  }
+
+  if (filters?.projectStage === 'COMPLETED') {
+    projectConditions.push(
+      `project_filter."status" = 'COMPLETED'`,
     );
   }
 
-  query.orderBy(
-    'customer.createdAt',
-    'DESC',
+  if (filters?.projectStage === 'ACTIVE') {
+    projectConditions.push(
+      `project_filter."status" NOT IN (
+        'COMPLETED',
+        'CANCELLED',
+        'REJECTED'
+      )`,
+    );
+  }
+
+  query.andWhere(
+    `
+    EXISTS (
+      SELECT 1
+      FROM "project" project_filter
+      WHERE ${projectConditions.join('\n AND ')}
+    )
+    `,
+    projectParams,
   );
+}
+
+query.orderBy(
+  'customer.createdAt',
+  'DESC',
+);
 
   const customers = await query.getMany();
 

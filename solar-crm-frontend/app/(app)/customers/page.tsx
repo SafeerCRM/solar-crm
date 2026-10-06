@@ -193,6 +193,8 @@ const [announcementForm, setAnnouncementForm] = useState({
   const [status, setStatus] = useState('');
 const [customerSource, setCustomerSource] = useState('');
 const [appUsage, setAppUsage] = useState('');
+const [projectWorkState, setProjectWorkState] = useState('');
+const [projectStage, setProjectStage] = useState('');
 const [showHidden, setShowHidden] = useState(false);
 
   const [appliedFilters, setAppliedFilters] = useState({
@@ -203,6 +205,8 @@ const [showHidden, setShowHidden] = useState(false);
   status: '',
   customerSource: '',
   appUsage: '',
+  projectWorkState: '',
+  projectStage: '',
   showHidden: false,
 });
 
@@ -241,8 +245,10 @@ const [showHidden, setShowHidden] = useState(false);
   branch: appliedFilters.branch,
   status: appliedFilters.status,
   customerSource: appliedFilters.customerSource,
-  appUsage: appliedFilters.appUsage,
-  showHidden: appliedFilters.showHidden ? 'true' : 'false',
+appUsage: appliedFilters.appUsage,
+projectWorkState: appliedFilters.projectWorkState,
+projectStage: appliedFilters.projectStage,
+showHidden: appliedFilters.showHidden ? 'true' : 'false',
 },
         headers: getAuthHeaders(),
       });
@@ -1164,15 +1170,17 @@ const resetPortalPassword = async () => {
 
   const applyFilters = () => {
   setAppliedFilters({
-    search,
-    city,
-    zone,
-    branch,
-    status,
-    customerSource,
-    appUsage,
-    showHidden,
-  });
+  search,
+  city,
+  zone,
+  branch,
+  status,
+  customerSource,
+  appUsage,
+  projectWorkState,
+  projectStage,
+  showHidden,
+});
 
   setPage(1);
 };
@@ -1185,6 +1193,8 @@ const resetPortalPassword = async () => {
     setStatus('');
 setCustomerSource('');
 setAppUsage('');
+setProjectWorkState('');
+setProjectStage('');
 setShowHidden(false);
 
     setAppliedFilters({
@@ -1195,6 +1205,8 @@ setShowHidden(false);
   status: '',
   customerSource: '',
   appUsage: '',
+  projectWorkState: '',
+  projectStage: '',
   showHidden: false,
 });
 
@@ -1220,12 +1232,13 @@ const exportCustomersCsv = async () => {
           zone: appliedFilters.zone,
           branch: appliedFilters.branch,
           status: appliedFilters.status,
-          customerSource:
-            appliedFilters.customerSource,
-          showHidden:
-            appliedFilters.showHidden
-              ? 'true'
-              : 'false',
+          customerSource: appliedFilters.customerSource,
+projectWorkState: appliedFilters.projectWorkState,
+projectStage: appliedFilters.projectStage,
+showHidden:
+  appliedFilters.showHidden
+    ? 'true'
+    : 'false',
         },
         headers: getAuthHeaders(),
       },
@@ -1625,6 +1638,26 @@ URL.revokeObjectURL(url);
             <option value="INACTIVE">Inactive</option>
             <option value="BLACKLISTED">Blacklisted</option>
           </select>
+
+          <select
+  value={projectWorkState}
+  onChange={(e) => setProjectWorkState(e.target.value)}
+  className="rounded-xl border border-gray-300 px-3 py-2"
+>
+  <option value="">All Project Work States</option>
+  <option value="RUNNING">Running</option>
+  <option value="IN_PROCESS">In Process</option>
+</select>
+
+<select
+  value={projectStage}
+  onChange={(e) => setProjectStage(e.target.value)}
+  className="rounded-xl border border-gray-300 px-3 py-2"
+>
+  <option value="">All Project Stages</option>
+  <option value="ACTIVE">Active / Running Projects</option>
+  <option value="COMPLETED">Completed Projects</option>
+</select>
 
           <input
             placeholder="City"

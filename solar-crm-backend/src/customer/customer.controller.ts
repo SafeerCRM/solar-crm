@@ -47,6 +47,8 @@ export class CustomerController {
     @Query('status') status?: string,
 @Query('customerSource') customerSource?: string,
 @Query('appUsage') appUsage?: string,
+@Query('projectWorkState') projectWorkState?: string,
+@Query('projectStage') projectStage?: string,
 @Query('showHidden') showHidden?: string,
 @CurrentUser() user?: any,
   ) {
@@ -61,6 +63,8 @@ export class CustomerController {
         status: status || '',
 customerSource: customerSource || '',
 appUsage: appUsage || '',
+projectWorkState: projectWorkState || '',
+projectStage: projectStage || '',
 showHidden: showHidden || 'false',
       },
       user,
@@ -115,9 +119,13 @@ exportCustomers(
   @Query('branch') branch?: string,
   @Query('status') status?: string,
   @Query('customerSource')
-  customerSource?: string,
-  @Query('showHidden')
-  showHidden?: string,
+customerSource?: string,
+@Query('projectWorkState')
+projectWorkState?: string,
+@Query('projectStage')
+projectStage?: string,
+@Query('showHidden')
+showHidden?: string,
 ) {
   return this.customerService.exportCustomers({
     search: search || '',
@@ -127,6 +135,10 @@ exportCustomers(
     status: status || '',
     customerSource:
       customerSource || '',
+    projectWorkState:
+      projectWorkState || '',
+    projectStage:
+      projectStage || '',
     showHidden:
       showHidden || 'false',
   });
