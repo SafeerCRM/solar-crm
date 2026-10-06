@@ -1696,6 +1696,7 @@ onWheel={preventNumberWheelChange}
           <h2 className="text-lg font-semibold">Financial Summary</h2>
 
           <div className="rounded-2xl bg-green-100 px-5 py-4 space-y-3">
+    {/*      
   <div>
     <p className="text-sm font-medium text-green-800">
       Laagat 
@@ -1704,6 +1705,7 @@ onWheel={preventNumberWheelChange}
       ₹ {formatCurrency(baseCostBeforeMargin)}
     </p>
   </div>
+  */}
 
   <div>
     <p className="text-sm font-medium text-green-800">
