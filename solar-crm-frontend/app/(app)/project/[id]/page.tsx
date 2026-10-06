@@ -210,6 +210,34 @@ type MaterialRequest = {
   items?: MaterialRequestRow[];
 };
 
+type ProjectStockMovement = {
+  id: number;
+
+  projectId?: number | null;
+  stockItemId?: number | null;
+  materialId?: number | null;
+
+  materialName?: string;
+  category?: string;
+  brand?: string;
+
+  branchId?: number | null;
+  branchName?: string;
+
+  movementType?: string;
+  quantity?: number;
+
+  sourceType?: string;
+  sourceId?: number | null;
+
+  remarks?: string;
+
+  createdBy?: number | null;
+  createdByName?: string;
+
+  createdAt?: string;
+};
+
 type ProjectComment = {
   id: number;
   projectId: number;
@@ -848,6 +876,15 @@ const [approvalLoading, setApprovalLoading] = useState(false);
 
   const [materials, setMaterials] = useState<MaterialMaster[]>([]);
 const [materialRequests, setMaterialRequests] = useState<MaterialRequest[]>([]);
+const [
+  projectStockMovements,
+  setProjectStockMovements,
+] = useState<ProjectStockMovement[]>([]);
+
+const [
+  projectStockMovementsLoading,
+  setProjectStockMovementsLoading,
+] = useState(false);
 const [materialRequestTitle, setMaterialRequestTitle] = useState('');
 const [materialRequestRemarks, setMaterialRequestRemarks] = useState('');
 const [materialRows, setMaterialRows] = useState<MaterialRequestRow[]>([]);
@@ -1821,6 +1858,47 @@ const fetchMaterialRequests = async () => {
     console.error('Failed to load material requests:', error);
   }
 };
+
+const fetchProjectStockMovements =
+  async () => {
+    try {
+      setProjectStockMovementsLoading(
+        true,
+      );
+
+      const token =
+        localStorage.getItem('token');
+
+      const res = await axios.get(
+        `${API_BASE_URL}/project/${projectId}/stock-movements`,
+        {
+          headers: token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+
+      setProjectStockMovements(
+        Array.isArray(res.data)
+          ? res.data
+          : [],
+      );
+    } catch (error) {
+      console.error(
+        'Failed to load project stock movements:',
+        error,
+      );
+
+      setProjectStockMovements([]);
+    } finally {
+      setProjectStockMovementsLoading(
+        false,
+      );
+    }
+  };
 
 const addMaterialRow = () => {
   setMaterialRows([
@@ -4762,18 +4840,19 @@ useEffect(() => {
   }
 
   const validTabs = [
-    'PROJECT_CREATION',
-    'LOAN_DEPARTMENT',
-    'PROJECT_MANAGEMENT',
-    'PROJECT_EXECUTION',
-    'CONTRACTOR_WORK',
-    'SUBSIDY_DEPARTMENT',
-    'ELECTRICITY_DEPARTMENT',
-    'PAYMENT_COLLECTION',
-    'CUSTOMER_UPDATES',
-    'DOCUMENTS',
-    'PROJECT_HISTORY',
-  ];
+  'PROJECT_CREATION',
+  'LOAN_DEPARTMENT',
+  'PROJECT_MANAGEMENT',
+  'STOCK_MATERIAL_LEDGER',
+  'PROJECT_EXECUTION',
+  'CONTRACTOR_WORK',
+  'SUBSIDY_DEPARTMENT',
+  'ELECTRICITY_DEPARTMENT',
+  'PAYMENT_COLLECTION',
+  'CUSTOMER_UPDATES',
+  'DOCUMENTS',
+  'PROJECT_HISTORY',
+];
 
   if (
     validTabs.includes(
@@ -4803,6 +4882,13 @@ useEffect(() => {
     fetchMaterials();
     fetchMaterialRequests();
   }
+
+  if (
+  activeTab ===
+  'STOCK_MATERIAL_LEDGER'
+) {
+  fetchProjectStockMovements();
+}
 
   if (activeTab === 'SUBSIDY_DEPARTMENT') {
     fetchSubsidyDetail();
@@ -6872,13 +6958,17 @@ const isLoanProcessCompleted =
       label: 'Loan Department',
     },
     {
-      key: 'PROJECT_MANAGEMENT',
-      label: 'Material Requirement',
-    },
-    {
-      key: 'PROJECT_EXECUTION',
-      label: 'Project Execution',
-    },
+  key: 'PROJECT_MANAGEMENT',
+  label: 'Material Requirement',
+},
+{
+  key: 'STOCK_MATERIAL_LEDGER',
+  label: 'Stock / Material Ledger',
+},
+{
+  key: 'PROJECT_EXECUTION',
+  label: 'Project Execution',
+},
     {
   key: 'CONTRACTOR_WORK',
   label: 'Contractor Work',
@@ -6988,6 +7078,7 @@ if (
     [
       'PROJECT_CREATION',
       'PROJECT_MANAGEMENT',
+      'STOCK_MATERIAL_LEDGER',
       'PROJECT_EXECUTION',
       'DOCUMENTS',
       'PROJECT_HISTORY',
@@ -8011,6 +8102,383 @@ if (
         <p className="text-sm text-gray-700">{project.remarks || 'No remarks'}</p>
       </div>
         </>
+)}
+
+{activeTab ===
+  'STOCK_MATERIAL_LEDGER' && (
+  <div className="space-y-5">
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">
+            Stock / Material Ledger
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Materials recorded in Stock
+            Movement History against this
+            project.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={
+            fetchProjectStockMovements
+          }
+          disabled={
+            projectStockMovementsLoading
+          }
+          className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {projectStockMovementsLoading
+            ? 'Refreshing...'
+            : 'Refresh'}
+        </button>
+      </div>
+    </div>
+
+    {!projectStockMovementsLoading &&
+      projectStockMovements.length >
+        0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded-2xl bg-white p-5 shadow">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Total Movements
+            </p>
+
+            <p className="mt-2 text-2xl font-bold text-gray-900">
+              {
+                projectStockMovements.length
+              }
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+  Materials
+</p>
+
+<p className="mt-2 text-2xl font-bold text-gray-900">
+  {
+    new Set(
+      projectStockMovements.map(
+        (movement) =>
+          movement.stockItemId ||
+          movement.materialId ||
+          movement.materialName,
+      ),
+    ).size
+  }
+</p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Latest Movement
+            </p>
+
+            <p className="mt-2 text-sm font-bold text-gray-900">
+              {projectStockMovements[0]
+                ?.createdAt
+                ? new Date(
+                    projectStockMovements[0]
+                      .createdAt!,
+                  ).toLocaleString(
+                    'en-IN',
+                  )
+                : '-'}
+            </p>
+          </div>
+        </div>
+      )}
+
+    <div className="rounded-2xl bg-white p-5 shadow">
+      {projectStockMovementsLoading ? (
+        <div className="py-10 text-center text-sm text-gray-500">
+          Loading material
+          movements...
+        </div>
+      ) : projectStockMovements.length ===
+        0 ? (
+        <div className="py-10 text-center">
+          <p className="font-semibold text-gray-700">
+            No stock movements found
+          </p>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Materials issued from Stock
+            Management against this
+            project will automatically
+            appear here.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Desktop / tablet table */}
+          <div className="hidden overflow-x-auto md:block">
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className="border-b bg-gray-50 text-xs uppercase text-gray-500">
+                  <th className="px-4 py-3">
+                    Material
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Qty
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Movement
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Branch
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Source
+                  </th>
+
+                  <th className="px-4 py-3">
+                    By
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Date
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Remarks
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {projectStockMovements.map(
+                  (movement) => (
+                    <tr
+                      key={movement.id}
+                      className="border-b last:border-b-0"
+                    >
+                      <td className="px-4 py-4 align-top">
+                        <p className="font-semibold text-gray-900">
+                          {movement.materialName ||
+                            '-'}
+                        </p>
+
+                        {(movement.brand ||
+                          movement.category) && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            {[
+                              movement.brand,
+                              movement.category,
+                            ]
+                              .filter(
+                                Boolean,
+                              )
+                              .join(
+                                ' • ',
+                              )}
+                          </p>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-4 align-top font-semibold text-gray-900">
+                        {Number(
+                          movement.quantity ||
+                            0,
+                        ).toLocaleString(
+                          'en-IN',
+                        )}
+                      </td>
+
+                      <td className="px-4 py-4 align-top">
+                        <span className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                          {(
+                            movement.movementType ||
+                            '-'
+                          ).replaceAll(
+                            '_',
+                            ' ',
+                          )}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-4 align-top text-gray-700">
+                        {movement.branchName ||
+                          '-'}
+                      </td>
+
+                      <td className="px-4 py-4 align-top text-gray-700">
+                        {(
+                          movement.sourceType ||
+                          '-'
+                        ).replaceAll(
+                          '_',
+                          ' ',
+                        )}
+                      </td>
+
+                      <td className="px-4 py-4 align-top text-gray-700">
+                        {movement.createdByName ||
+                          '-'}
+                      </td>
+
+                      <td className="whitespace-nowrap px-4 py-4 align-top text-gray-700">
+                        {movement.createdAt
+                          ? new Date(
+                              movement.createdAt,
+                            ).toLocaleString(
+                              'en-IN',
+                            )
+                          : '-'}
+                      </td>
+
+                      <td className="max-w-xs px-4 py-4 align-top text-gray-700">
+                        {movement.remarks ||
+                          '-'}
+                      </td>
+                    </tr>
+                  ),
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile / APK */}
+          <div className="space-y-3 md:hidden">
+            {projectStockMovements.map(
+              (movement) => (
+                <div
+                  key={movement.id}
+                  className="rounded-2xl border border-gray-200 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold text-gray-900">
+                        {movement.materialName ||
+                          '-'}
+                      </p>
+
+                      {(movement.brand ||
+                        movement.category) && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          {[
+                            movement.brand,
+                            movement.category,
+                          ]
+                            .filter(
+                              Boolean,
+                            )
+                            .join(
+                              ' • ',
+                            )}
+                        </p>
+                      )}
+                    </div>
+
+                    <span className="shrink-0 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                      {(
+                        movement.movementType ||
+                        '-'
+                      ).replaceAll(
+                        '_',
+                        ' ',
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs text-gray-500">
+                        Quantity
+                      </p>
+
+                      <p className="mt-1 font-semibold text-gray-900">
+                        {Number(
+                          movement.quantity ||
+                            0,
+                        ).toLocaleString(
+                          'en-IN',
+                        )}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-gray-500">
+                        Branch
+                      </p>
+
+                      <p className="mt-1 font-semibold text-gray-900">
+                        {movement.branchName ||
+                          '-'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-gray-500">
+                        Source
+                      </p>
+
+                      <p className="mt-1 font-semibold text-gray-900">
+                        {(
+                          movement.sourceType ||
+                          '-'
+                        ).replaceAll(
+                          '_',
+                          ' ',
+                        )}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-gray-500">
+                        Moved By
+                      </p>
+
+                      <p className="mt-1 font-semibold text-gray-900">
+                        {movement.createdByName ||
+                          '-'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 border-t pt-3">
+                    <p className="text-xs text-gray-500">
+                      Date & Time
+                    </p>
+
+                    <p className="mt-1 text-sm font-medium text-gray-800">
+                      {movement.createdAt
+                        ? new Date(
+                            movement.createdAt,
+                          ).toLocaleString(
+                            'en-IN',
+                          )
+                        : '-'}
+                    </p>
+                  </div>
+
+                  {movement.remarks && (
+                    <div className="mt-3 rounded-xl bg-gray-50 p-3">
+                      <p className="text-xs text-gray-500">
+                        Remarks
+                      </p>
+
+                      <p className="mt-1 text-sm text-gray-700">
+                        {movement.remarks}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ),
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  </div>
 )}
 
 {activeTab === 'PROJECT_MANAGEMENT' && (
