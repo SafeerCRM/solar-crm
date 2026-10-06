@@ -118,6 +118,11 @@ private readonly testPhoneNumberId =
     .trim()
     .toUpperCase();
 
+    private readonly automationsEnabled =
+  (process.env.WHATSAPP_AUTOMATIONS_ENABLED || 'false')
+    .trim()
+    .toLowerCase() === 'true';
+
   private readonly graphApiVersion =
     process.env.WHATSAPP_GRAPH_API_VERSION || 'v23.0';
 
@@ -201,6 +206,14 @@ async ensureDefaultAutomations() {
 async executeAutomation(
   input: WhatsappAutomationExecution,
 ) {
+
+  if (!this.automationsEnabled) {
+  return {
+    sent: false,
+    reason: 'AUTOMATIONS_DISABLED',
+  };
+}
+
   const automation =
     await this.getAutomation(input.automationKey);
 

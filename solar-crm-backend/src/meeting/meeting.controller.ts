@@ -83,11 +83,6 @@ async exportCsv(
   return res.send(csv);
 }
 
-@Roles('OWNER')
-@Post('test-customer-appointment-whatsapp')
-testCustomerAppointmentWhatsapp() {
-  return this.meetingService.processCustomerAppointmentReminderWhatsapp();
-}
 
   @Get(':id/detail')
   getDetail(
