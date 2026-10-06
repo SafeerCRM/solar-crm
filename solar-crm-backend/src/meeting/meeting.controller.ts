@@ -83,6 +83,12 @@ async exportCsv(
   return res.send(csv);
 }
 
+@Roles('OWNER')
+@Post('test-customer-appointment-whatsapp')
+testCustomerAppointmentWhatsapp() {
+  return this.meetingService.processCustomerAppointmentReminderWhatsapp();
+}
+
   @Get(':id/detail')
   getDetail(
     @Param('id', ParseIntPipe) id: number,
@@ -176,6 +182,8 @@ reassignMeeting(
   ) {
     return this.meetingService.updateStatus(id, body, user);
   }
+
+  
 
   @Delete(':id')
   remove(

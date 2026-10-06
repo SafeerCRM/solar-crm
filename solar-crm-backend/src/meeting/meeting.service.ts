@@ -29,6 +29,9 @@ import {
   SolarMitraReferralStatus,
 } from '../solar-mitra/solar-mitra-referral.entity';
 
+import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { Cron } from '@nestjs/schedule';
+
 @Injectable()
 export class MeetingService {
   constructor(
@@ -45,6 +48,8 @@ private readonly solarMitraReferralRepository:
 
   @Inject(forwardRef(() => ProjectService))
   private readonly projectService: ProjectService,
+
+  private readonly whatsappService: WhatsappService,
 ) {}
 
   private getRoles(user: any): string[] {
@@ -2103,6 +2108,302 @@ return updatedMeeting;
       user,
     );
   }
+
+  async processCustomerAppointmentReminderWhatsapp() {
+  const automation = await this.whatsappService.getAutomation(
+    'CUSTOMER_APPOINTMENT_REMINDER',
+  );
+
+  if (!automation) {
+    return {
+      processed: 0,
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      reason: 'AUTOMATION_NOT_FOUND',
+    };
+  }
+
+  if (!automation.isEnabled) {
+    return {
+      processed: 0,
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      reason: 'AUTOMATION_DISABLED',
+    };
+  }
+
+  const offsetMinutes = Math.max(
+    Number(automation.triggerOffsetMinutes || 0),
+    0,
+  );
+
+  /*
+   * Appointment reminders are currently configured as a
+   * day-based reminder (1440 minutes = 1 day).
+   *
+   * We deliberately use calendar dates in Asia/Kolkata rather
+   * than "exactly 24 hours from cron execution", because meetings
+   * may be scheduled at any time during the target day.
+   */
+  const offsetDays = Math.floor(
+    offsetMinutes / (24 * 60),
+  );
+
+  const getIndiaDateString = (
+    date: Date,
+  ): string => {
+    return date.toLocaleDateString('en-CA', {
+      timeZone: 'Asia/Kolkata',
+    });
+  };
+
+  const now = new Date();
+
+  /*
+   * Convert the current instant to an India calendar date first.
+   * Then calculate the target calendar date.
+   */
+  const todayIndia = getIndiaDateString(now);
+
+  const [
+    todayYear,
+    todayMonth,
+    todayDay,
+  ] = todayIndia.split('-').map(Number);
+
+  const targetDateBase = new Date(
+    Date.UTC(
+      todayYear,
+      todayMonth - 1,
+      todayDay + offsetDays,
+      12,
+      0,
+      0,
+    ),
+  );
+
+  const targetDateIndia =
+    getIndiaDateString(targetDateBase);
+
+  /*
+   * scheduledAt is timestamp without timezone in the current
+   * meeting model. Query the target calendar day directly.
+   *
+   * We include SCHEDULED and RESCHEDULED because your existing
+   * reschedule workflow keeps the same record and changes its
+   * status to RESCHEDULED.
+   */
+  const meetings = await this.meetingRepository
+    .createQueryBuilder('meeting')
+    .where(
+      'meeting.status IN (:...statuses)',
+      {
+        statuses: [
+          MeetingStatus.SCHEDULED,
+          MeetingStatus.RESCHEDULED,
+        ],
+      },
+    )
+    .andWhere(
+      `meeting.scheduledAt >= :startOfDay`,
+      {
+        startOfDay:
+          `${targetDateIndia} 00:00:00`,
+      },
+    )
+    .andWhere(
+      `meeting.scheduledAt < (:targetDate::date + INTERVAL '1 day')`,
+      {
+        targetDate: targetDateIndia,
+      },
+    )
+    .orderBy(
+      'meeting.scheduledAt',
+      'ASC',
+    )
+    .getMany();
+
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const meeting of meetings) {
+    try {
+      const customerPhone =
+        String(meeting.mobile || '').trim();
+
+      if (!customerPhone) {
+        skipped += 1;
+        continue;
+      }
+
+      const customerName =
+        String(
+          meeting.customerName || 'Customer',
+        ).trim() || 'Customer';
+
+      const scheduledAt =
+        new Date(meeting.scheduledAt);
+
+      if (
+        Number.isNaN(
+          scheduledAt.getTime(),
+        )
+      ) {
+        skipped += 1;
+        continue;
+      }
+
+      const appointmentDate =
+        scheduledAt.toLocaleDateString(
+          'en-IN',
+          {
+            timeZone: 'Asia/Kolkata',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          },
+        );
+
+      const appointmentTime =
+        scheduledAt.toLocaleTimeString(
+          'en-IN',
+          {
+            timeZone: 'Asia/Kolkata',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          },
+        );
+
+      const appointmentType =
+        meeting.meetingType ===
+        'SITE_VISIT'
+          ? 'Site Visit'
+          : meeting.meetingType ===
+              'OFFICE_MEETING'
+            ? 'Office Meeting'
+            : meeting.meetingType ===
+                'PHONE_DISCUSSION'
+              ? 'Phone Discussion'
+              : meeting.meetingType ===
+                  'VIDEO_MEETING'
+                ? 'Video Meeting'
+                : 'Appointment';
+
+      const result =
+        await this.whatsappService.executeAutomation(
+          {
+            automationKey:
+              'CUSTOMER_APPOINTMENT_REMINDER',
+
+            recipientPhone:
+              customerPhone,
+
+            recipientName:
+              customerName,
+
+            referenceType:
+              'MEETING',
+
+            referenceId:
+              meeting.id,
+
+            /*
+             * Including scheduledAt is important.
+             *
+             * If a meeting is rescheduled after a reminder was
+             * already sent, the new appointment gets a new
+             * occurrence key and can receive its new reminder.
+             */
+            occurrenceKey:
+              `appointment-${new Date(
+                meeting.scheduledAt,
+              ).toISOString()}`,
+
+            components: [
+              {
+                type: 'body',
+                parameters: [
+                  {
+                    type: 'text',
+                    text: customerName,
+                  },
+                  {
+                    type: 'text',
+                    text: appointmentDate,
+                  },
+                  {
+                    type: 'text',
+                    text: appointmentTime,
+                  },
+                  {
+                    type: 'text',
+                    text: appointmentType,
+                  },
+                ],
+              },
+            ],
+          },
+        );
+
+      if (result.sent) {
+        sent += 1;
+      } else {
+        skipped += 1;
+      }
+    } catch (error: any) {
+      failed += 1;
+
+      console.error(
+        `Customer appointment WhatsApp failed for meeting ${meeting.id}:`,
+        error?.response?.data ||
+          error?.message ||
+          error,
+      );
+    }
+  }
+
+  return {
+    processed: meetings.length,
+    sent,
+    skipped,
+    failed,
+    targetDate: targetDateIndia,
+    triggerOffsetMinutes:
+      offsetMinutes,
+    triggerOffsetDays:
+      offsetDays,
+  };
+}
+
+@Cron(
+  '0 0 9 * * *',
+  {
+    name: 'customer-appointment-reminder-whatsapp',
+    timeZone: 'Asia/Kolkata',
+    waitForCompletion: true,
+  },
+)
+async handleCustomerAppointmentReminderWhatsappCron() {
+  try {
+    const result =
+      await this.processCustomerAppointmentReminderWhatsapp();
+
+    console.log(
+      `Customer appointment WhatsApp cron completed: ${JSON.stringify(result)}`,
+    );
+  } catch (error: any) {
+    console.error(
+      'Customer appointment WhatsApp cron failed:',
+      error?.stack ||
+        error?.message ||
+        error,
+    );
+  }
+}
 
   async remove(id: number, user: any): Promise<{ message: string }> {
     const existingMeeting = await this.getAccessibleMeeting(id, user);

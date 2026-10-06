@@ -9,6 +9,8 @@ import {
   SolarMitraReferral,
 } from '../solar-mitra/solar-mitra-referral.entity';
 
+import { WhatsappModule } from '../whatsapp/whatsapp.module';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -17,6 +19,7 @@ import {
   SolarMitraReferral,
 ]),
     forwardRef(() => ProjectModule),
+    forwardRef(() => WhatsappModule),
   ],
   controllers: [MeetingController],
   providers: [MeetingService],
