@@ -2214,16 +2214,43 @@ return updatedMeeting;
       },
     )
     .andWhere(
-      `meeting.scheduledAt < (:targetDate::date + INTERVAL '1 day')`,
-      {
-        targetDate: targetDateIndia,
-      },
+  `meeting.scheduledAt < (:targetDate::date + INTERVAL '1 day')`,
+  {
+    targetDate: targetDateIndia,
+  },
+)
+
+/*
+ * Only the latest version of each meeting group can
+ * generate an appointment reminder.
+ *
+ * This prevents an older scheduled/rescheduled version
+ * from sending after a newer version has been created.
+ *
+ * Meetings without a meetingGroupId remain eligible.
+ */
+.andWhere(`
+  (
+    meeting."meetingGroupId" IS NULL
+    OR NOT EXISTS (
+      SELECT 1
+      FROM "meetings" newer_meeting
+      WHERE newer_meeting."meetingGroupId" = meeting."meetingGroupId"
+        AND (
+          newer_meeting."createdAt" > meeting."createdAt"
+          OR (
+            newer_meeting."createdAt" = meeting."createdAt"
+            AND newer_meeting."id" > meeting."id"
+          )
+        )
     )
-    .orderBy(
-      'meeting.scheduledAt',
-      'ASC',
-    )
-    .getMany();
+  )
+`)
+.orderBy(
+  'meeting.scheduledAt',
+  'ASC',
+)
+.getMany();
 
   let sent = 0;
   let skipped = 0;

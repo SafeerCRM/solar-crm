@@ -2800,6 +2800,157 @@ private async sendCustomerProjectUpdateWhatsapp(
   }
 }
 
+private async sendCustomerPaymentReceivedWhatsapp(
+  paymentReceipt: ProjectPaymentReceipt | null | undefined,
+) {
+  try {
+    if (!paymentReceipt) {
+      return;
+    }
+
+    if (
+      String(
+        paymentReceipt.approvalStatus || '',
+      ).toUpperCase() !== 'APPROVED'
+    ) {
+      return;
+    }
+
+    const projectId =
+      Number(paymentReceipt.projectId);
+
+    const receiptId =
+      Number(paymentReceipt.id);
+
+    const receivedAmount =
+      Number(
+        paymentReceipt.receivedAmount || 0,
+      );
+
+    if (
+      !Number.isInteger(projectId) ||
+      projectId <= 0 ||
+      !Number.isInteger(receiptId) ||
+      receiptId <= 0 ||
+      !Number.isFinite(receivedAmount) ||
+      receivedAmount <= 0
+    ) {
+      return;
+    }
+
+    const project =
+      await this.projectRepository.findOne({
+        where: {
+          id: projectId,
+        },
+      });
+
+    if (!project) {
+      return;
+    }
+
+    const customerPhone =
+      String(
+        (project as any).customerPhone ||
+          '',
+      ).trim();
+
+    if (!customerPhone) {
+      return;
+    }
+
+    const customerName =
+      String(
+        (project as any).customerName ||
+          'Customer',
+      ).trim() || 'Customer';
+
+    const paymentDate =
+      new Date(
+        paymentReceipt.paymentDate ||
+          paymentReceipt.approvedAt ||
+          paymentReceipt.createdAt ||
+          new Date(),
+      );
+
+    const formattedPaymentDate =
+      paymentDate.toLocaleDateString(
+        'en-IN',
+        {
+          timeZone: 'Asia/Kolkata',
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        },
+      );
+
+    const formattedAmount =
+      `₹${receivedAmount.toLocaleString(
+        'en-IN',
+        {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2,
+        },
+      )}`;
+
+    const result =
+      await this.whatsappService.executeAutomation({
+        automationKey:
+          'CUSTOMER_PAYMENT_RECEIVED',
+
+        recipientPhone:
+          customerPhone,
+
+        recipientName:
+          customerName,
+
+        referenceType:
+          'PAYMENT_RECEIPT',
+
+        referenceId:
+          receiptId,
+
+        occurrenceKey:
+          'approved',
+
+        components: [
+          {
+            type: 'body',
+            parameters: [
+              {
+                type: 'text',
+                text: customerName,
+              },
+              {
+                type: 'text',
+                text: formattedAmount,
+              },
+              {
+                type: 'text',
+                text: formattedPaymentDate,
+              },
+            ],
+          },
+        ],
+      });
+
+    if (!result.sent) {
+      console.log(
+        `Customer payment received WhatsApp skipped for receipt ${receiptId}: ${result.reason}`,
+      );
+    }
+  } catch (error: any) {
+    /*
+     * WhatsApp must never make an otherwise successful
+     * customer payment operation fail.
+     */
+    console.error(
+      'Failed to send customer payment received WhatsApp:',
+      error?.message || error,
+    );
+  }
+}
+
 private async sendCustomerExecutionMilestoneWhatsapp(
   activity: ProjectExecutionActivity,
 ): Promise<void> {
@@ -14723,7 +14874,8 @@ async settleIciciCustomerInstallmentPayment(input: {
    *
    * all use the same database transaction.
    */
-  return this.dataSource.transaction(
+  const settlementResult =
+  await this.dataSource.transaction(
     async (manager) => {
       const installmentRepository =
         manager.getRepository(
@@ -14811,7 +14963,10 @@ async settleIciciCustomerInstallmentPayment(input: {
           );
         }
 
-        return installment;
+        return {
+  installment,
+  paymentReceipt: null as ProjectPaymentReceipt | null,
+};
       }
 
       if (
@@ -14976,11 +15131,14 @@ async settleIciciCustomerInstallmentPayment(input: {
             'Automatically approved after verified ICICI payment status',
         } as Partial<ProjectPaymentReceipt>);
 
-      try {
-        await receiptRepository.save(
-          paymentReceipt,
-        );
-      } catch (error: any) {
+      let savedPaymentReceipt: ProjectPaymentReceipt;
+
+try {
+  savedPaymentReceipt =
+    await receiptRepository.save(
+      paymentReceipt,
+    );
+} catch (error: any) {
         if (
           String(
             error?.code || '',
@@ -15031,7 +15189,10 @@ async settleIciciCustomerInstallmentPayment(input: {
          *
          * Do not apply the amount again.
          */
-        return installment;
+        return {
+  installment,
+  paymentReceipt: null as ProjectPaymentReceipt | null,
+};
       }
 
       installment.paidAmount =
@@ -15190,9 +15351,20 @@ async settleIciciCustomerInstallmentPayment(input: {
         );
       }
 
-      return savedInstallment;
+      return {
+  installment: savedInstallment,
+  paymentReceipt: savedPaymentReceipt,
+};
     },
   );
+
+if (settlementResult.paymentReceipt) {
+  await this.sendCustomerPaymentReceivedWhatsapp(
+    settlementResult.paymentReceipt,
+  );
+}
+
+return settlementResult.installment;
 }
 
 async receivePaymentInstallment(
@@ -15231,7 +15403,7 @@ async receivePaymentInstallment(
     );
   }
 
-  const savedInstallment =
+  const paymentResult =
   await this.dataSource.transaction(
     async (manager) => {
       const installmentRepository =
@@ -15690,13 +15862,32 @@ if (paymentRemarks) {
   }
 }
 
-      return savedInstallment;
+      return {
+  installment: savedInstallment,
+  paymentReceipt: savedPaymentReceipt,
+};
     },
   );
+
+  const savedInstallment =
+  paymentResult.installment;
+
+const savedPaymentReceipt =
+  paymentResult.paymentReceipt;
 
 await this.syncSolarMitraPayoutEligibility(
   Number(savedInstallment.projectId),
 );
+
+if (
+  String(
+    savedPaymentReceipt.approvalStatus || '',
+  ).toUpperCase() === 'APPROVED'
+) {
+  await this.sendCustomerPaymentReceivedWhatsapp(
+    savedPaymentReceipt,
+  );
+}
 
 return savedInstallment;
 }
@@ -16111,11 +16302,32 @@ async approvePaymentInstallment(
     body?.approvalNote || 'Payment approved';
 
   const savedInstallment =
-    await this.projectPaymentInstallmentRepository.save(
-      installment,
-    );
+  await this.projectPaymentInstallmentRepository.save(
+    installment,
+  );
 
-    await this.postCustomerPaymentInstallmentLedger(
+/*
+ * A payment may originally have been recorded as PENDING
+ * and become financially approved only when its installment
+ * is approved.
+ *
+ * Keep the existing receipt approvalStatus untouched.
+ * We only load the individual receipt rows here so each
+ * genuine received amount can get its own confirmation.
+ */
+const paymentReceipts =
+  await this.projectPaymentReceiptRepository.find({
+    where: {
+      installmentId:
+        Number(savedInstallment.id),
+      isHidden: false,
+    },
+    order: {
+      id: 'ASC',
+    },
+  });
+
+await this.postCustomerPaymentInstallmentLedger(
   savedInstallment,
   currentUser,
 );
@@ -16163,10 +16375,29 @@ async approvePaymentInstallment(
   Number(savedInstallment.projectId),
 );
 
-  return {
-    message: 'Payment approved successfully',
-    installment: savedInstallment,
-  };
+for (const paymentReceipt of paymentReceipts) {
+  /*
+   * The installment approval makes these receipts
+   * financially approved even when their stored
+   * approvalStatus remains PENDING.
+   *
+   * Pass an approved view to the WhatsApp helper without
+   * mutating the actual receipt row.
+   */
+  await this.sendCustomerPaymentReceivedWhatsapp({
+    ...paymentReceipt,
+    approvalStatus: 'APPROVED',
+    approvedAt:
+      paymentReceipt.approvedAt ||
+      savedInstallment.approvedAt ||
+      new Date(),
+  });
+}
+
+return {
+  message: 'Payment approved successfully',
+  installment: savedInstallment,
+};
 }
 
 async rejectPaymentInstallment(

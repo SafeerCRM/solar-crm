@@ -17,7 +17,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 
 import { WhatsappService } from './whatsapp.service';
 
-import { WhatsappRecipientType } from './whatsapp-message.entity';
+
 
 @Controller('webhooks/whatsapp')
 export class WhatsappController {
@@ -25,135 +25,6 @@ export class WhatsappController {
     private readonly whatsappService: WhatsappService,
   ) {}
 
-  @Post('test-send')
-  async testSend(
-    @Body()
-    body: {
-      to: string;
-      message: string;
-    },
-  ) {
-    return this.whatsappService.sendTextMessage(
-      body.to,
-      body.message,
-    );
-  }
-
-  @Post('test-meta-template')
-async testMetaTemplate(
-  @Body()
-  body: {
-    to: string;
-  },
-) {
-  return this.whatsappService.sendTemplateMessage(
-    body.to,
-    'jaspers_market_order_confirmation_v1',
-    'en_US',
-    [
-      {
-        type: 'body',
-        parameters: [
-          {
-            type: 'text',
-            text: 'John Doe',
-          },
-          {
-            type: 'text',
-            text: '123456',
-          },
-          {
-            type: 'text',
-            text: 'Oct 5, 2026',
-          },
-        ],
-      },
-    ],
-    {
-      recipientType: WhatsappRecipientType.CUSTOMER,
-      recipientName: 'WhatsApp Test Customer',
-      automationKey: 'WHATSAPP_TEST_TEMPLATE',
-      referenceType: 'TEST',
-      referenceId: 'meta-test-waba',
-      deduplicationKey: `whatsapp-test-${Date.now()}`,
-    },
-  );
-}
-
-@Post('test-automation')
-async testAutomation(
-  @Body()
-  body: {
-    to: string;
-  },
-) {
-  return this.whatsappService.executeAutomation({
-    automationKey: 'CUSTOMER_PROJECT_UPDATE',
-    recipientPhone: body.to,
-    recipientName: 'WhatsApp Automation Test',
-    referenceType: 'TEST_AUTOMATION',
-    referenceId: 'project-update-test-1',
-    occurrenceKey: 'first-event',
-    components: [
-      {
-        type: 'body',
-        parameters: [
-          {
-            type: 'text',
-            text: 'WhatsApp Automation Test',
-          },
-          {
-            type: 'text',
-            text: 'Installation Completed',
-          },
-          {
-            type: 'text',
-            text: '5 October 2026',
-          },
-        ],
-      },
-    ],
-  });
-}
-
-  @Post('test-template')
-async testTemplate(
-  @Body()
-  body: {
-    to: string;
-  },
-) {
-  return this.whatsappService.sendTemplateMessage(
-    body.to,
-    'customer_payment_due',
-    'en',
-    [
-      {
-        type: 'body',
-        parameters: [
-          {
-            type: 'text',
-            text: 'Rahul Sharma',
-          },
-          {
-            type: 'text',
-            text: '25000',
-          },
-          {
-            type: 'text',
-            text: '30 September 2026',
-          },
-        ],
-      },
-    ],
-    {
-      recipientType: WhatsappRecipientType.CUSTOMER,
-      recipientName: 'Rahul Sharma',
-      referenceType: 'TEST',
-      referenceId: 'payment-template-test',
-    },
-  );
-}
 
   @Get()
   verifyWebhook(

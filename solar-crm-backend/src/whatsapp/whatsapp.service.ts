@@ -67,7 +67,7 @@ export class WhatsappService
     recipientType: WhatsappRecipientType.CUSTOMER,
     templateName: 'customer_payment_due',
     templateLanguage: 'en',
-    triggerOffsetMinutes: null,
+    triggerOffsetMinutes: 4320,
     repeatAfterMinutes: null,
     maxRepeatCount: null,
     description:
@@ -99,6 +99,19 @@ export class WhatsappService
     description:
       'Remind the customer before a scheduled meeting or site visit.',
   },
+  {
+  automationKey: 'CUSTOMER_PAYMENT_RECEIVED',
+  name: 'Customer Payment Received',
+  triggerType: WhatsappAutomationTriggerType.EVENT,
+  recipientType: WhatsappRecipientType.CUSTOMER,
+  templateName: 'customer_payment_received',
+  templateLanguage: 'en',
+  triggerOffsetMinutes: null,
+  repeatAfterMinutes: null,
+  maxRepeatCount: null,
+  description:
+    'Send confirmation to customer when a payment receipt becomes approved.',
+},
 ];
 
   private readonly accessToken =
@@ -183,7 +196,7 @@ async ensureDefaultAutomations() {
         name: definition.name,
         triggerType: definition.triggerType,
         recipientType: definition.recipientType,
-        isEnabled: true,
+        isEnabled: false,
         templateName: definition.templateName,
         templateLanguage:
           definition.templateLanguage,
