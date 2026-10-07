@@ -11216,41 +11216,20 @@ async getProjectStockMovements(
   );
 }
 
-async getProjectLagatSummary(
+private async getProjectMaterialLagat(
   projectId: number,
-  user: any,
+  project: any,
 ) {
-  const roles = Array.isArray(user?.roles)
-    ? user.roles
-    : [];
-
-  const canViewFinancials =
-    roles.includes('OWNER') ||
-    roles.includes('PROJECT_MANAGER') ||
-    roles.includes('ACCOUNT_MANAGER');
-
-  if (!canViewFinancials) {
-    throw new ForbiddenException(
-      'You are not allowed to view project costing',
-    );
-  }
-
-  const project =
-    await this.findOne(
-      projectId,
-      user,
-    );
-
   /*
-   * MATERIAL LAAGAT
+   * =========================================================
+   * 1. HISTORICAL STOCK / CONSUMPTION COST
+   * =========================================================
    *
-   * Use ProjectConsumption instead of current
-   * Material Master rate.
+   * This remains the primary source for anything physically
+   * issued through Stock Management.
    *
-   * ProjectConsumption is created at the same
-   * time as a PROJECT stock issue and preserves
-   * the issue-time stock average rate and
-   * totalAmount.
+   * The stored rate is the historical issue-time cost, so a
+   * later Material Master price change does not rewrite it.
    */
   const consumptions =
     await this.projectConsumptionRepository.find({
@@ -11262,33 +11241,28 @@ async getProjectLagatSummary(
       },
     });
 
-  const materialRows =
+  const consumptionRows =
     consumptions.map(
       (item: any) => {
         const quantity =
-          Number(
-            item.quantity || 0,
-          );
+          Number(item.quantity || 0);
 
         const rate =
-          Number(
-            item.rate || 0,
-          );
+          Number(item.rate || 0);
 
         const totalAmount =
-          Number(
-            item.totalAmount || 0,
-          ) ||
+          Number(item.totalAmount || 0) ||
           quantity * rate;
 
         return {
           id: Number(item.id),
 
+          source:
+            'STOCK_CONSUMPTION',
+
           materialId:
             item.materialId
-              ? Number(
-                  item.materialId,
-                )
+              ? Number(item.materialId)
               : null,
 
           materialName:
@@ -11315,8 +11289,8 @@ async getProjectLagatSummary(
       },
     );
 
-  const materialLagat =
-    materialRows.reduce(
+  const stockConsumptionTotal =
+    consumptionRows.reduce(
       (
         total: number,
         item: any,
@@ -11327,6 +11301,975 @@ async getProjectLagatSummary(
         ),
       0,
     );
+
+  /*
+   * =========================================================
+   * 2. FIND MAJOR MATERIALS ALREADY ISSUED THROUGH STOCK
+   * =========================================================
+   *
+   * We need this to prevent:
+   *
+   * stock issue cost
+   * +
+   * procurement fallback cost
+   *
+   * from counting the same Panel/Inverter twice.
+   */
+  const issuedMajorRows =
+    await this.projectStockMovementRepository
+      .createQueryBuilder('movement')
+      .leftJoin(
+        ProjectStockItem,
+        'stock',
+        'stock.id = movement.stockItemId',
+      )
+      .where(
+        'movement.projectId = :projectId',
+        {
+          projectId,
+        },
+      )
+      .andWhere(
+        'movement.movementType IN (:...issueTypes)',
+        {
+          issueTypes: [
+            ProjectStockMovementType.ISSUE,
+            ProjectStockMovementType
+              .ISSUE_FROM_AVAILABLE,
+            ProjectStockMovementType
+              .ISSUE_FROM_RESERVED,
+          ],
+        },
+      )
+      .andWhere(
+        'COALESCE(movement.isHidden, false) = false',
+      )
+      .select([
+        'movement.materialId AS "materialId"',
+        'movement.materialName AS "materialName"',
+        'movement.quantity AS "quantity"',
+        'stock.category AS "category"',
+        'stock.brand AS "brand"',
+      ])
+      .getRawMany();
+
+  const normalize =
+    (value: any) =>
+      String(value || '')
+        .trim()
+        .toUpperCase()
+        .replace(
+          /[^A-Z0-9]+/g,
+          ' ',
+        )
+        .replace(/\s+/g, ' ')
+        .trim();
+
+  const isNonDcrPanelText =
+    (value: any) => {
+      const text =
+        normalize(value);
+
+      return (
+        text.includes('NON DCR') ||
+        text.includes('NONDCR')
+      );
+    };
+
+  const isDcrPanelText =
+    (value: any) => {
+      const text =
+        normalize(value);
+
+      return (
+        text.includes('DCR') &&
+        !isNonDcrPanelText(
+          value,
+        )
+      );
+    };
+
+  const isPanelRow =
+    (row: any) => {
+      const combined =
+        [
+          row?.materialName,
+          row?.category,
+        ]
+          .filter(Boolean)
+          .join(' ');
+
+      return (
+        normalize(combined)
+          .includes('PANEL') ||
+        isDcrPanelText(
+          combined,
+        ) ||
+        isNonDcrPanelText(
+          combined,
+        )
+      );
+    };
+
+  const isInverterRow =
+    (row: any) => {
+      const combined =
+        normalize(
+          [
+            row?.materialName,
+            row?.category,
+          ]
+            .filter(Boolean)
+            .join(' '),
+        );
+
+      return (
+        combined.includes(
+          'INVERTER',
+        )
+      );
+    };
+
+  /*
+   * =========================================================
+   * 3. AUTO PROJECT PROCUREMENT
+   * =========================================================
+   *
+   * Only actually purchased quantities can become fallback
+   * Laagat.
+   *
+   * PENDING requirement != actual project cost.
+   */
+  const autoRequest =
+    await this.projectMaterialRequestRepository
+      .findOne({
+        where: {
+          projectId,
+
+          requestType:
+            ProjectMaterialRequestType
+              .AUTO_PROJECT_PROCUREMENT,
+        } as any,
+      });
+
+  let procurementRows: any[] =
+    [];
+
+  if (autoRequest) {
+    const requestItems =
+      await this
+        .projectMaterialRequestItemRepository
+        .find({
+          where: {
+            requestId:
+              autoRequest.id,
+            projectId,
+          } as any,
+          order: {
+            createdAt: 'ASC',
+          },
+        });
+
+    /*
+     * Material Settings.
+     *
+     * Active records only for fallback pricing.
+     */
+    const activeMaterials =
+      await this
+        .projectMaterialMasterRepository
+        .find({
+          where: {
+            isActive: true,
+          },
+        });
+
+    /*
+     * Existing PO items are preferred over today's
+     * Material Master price because they snapshot the
+     * actual purchase rate.
+     */
+    const poItems =
+      await this
+        .projectPurchaseOrderItemRepository
+        .createQueryBuilder('poItem')
+        .innerJoin(
+          ProjectPurchaseOrder,
+          'po',
+          'po.id = poItem.purchaseOrderId',
+        )
+        .where(
+          'poItem.projectId = :projectId',
+          {
+            projectId,
+          },
+        )
+        .andWhere(
+          'COALESCE(po.isHidden, false) = false',
+        )
+        .select([
+          'poItem.id AS "id"',
+          'poItem.materialRequestItemId AS "materialRequestItemId"',
+          'poItem.materialId AS "materialId"',
+          'poItem.materialName AS "materialName"',
+          'poItem.category AS "category"',
+          'poItem.brand AS "brand"',
+          'poItem.purchaseRate AS "purchaseRate"',
+          'poItem.quantity AS "quantity"',
+        ])
+        .getRawMany();
+
+    const projectPanelBrand =
+      normalize(
+        project?.panelBrand,
+      );
+
+    const projectConverterBrand =
+      normalize(
+        project?.converterBrand,
+      );
+
+    const converterCapacity =
+      Number.parseFloat(
+        String(
+          project?.converterCapacity ||
+            '',
+        ),
+      );
+
+    const findPanelMaster =
+      (
+        requestItem: any,
+        nonDcr: boolean,
+      ) => {
+        const requestBrand =
+          normalize(
+            requestItem?.brand ||
+              project?.panelBrand,
+          );
+
+        const candidates =
+          activeMaterials.filter(
+            (material: any) => {
+              const dealerCategory =
+                normalize(
+                  material
+                    ?.dealerCategory,
+                );
+
+              if (
+                dealerCategory !==
+                'PANELS'
+              ) {
+                return false;
+              }
+
+              const text =
+                [
+                  material.name,
+                  material.category,
+                  material.brand,
+                ]
+                  .filter(Boolean)
+                  .join(' ');
+
+              if (
+                nonDcr
+                  ? !isNonDcrPanelText(
+                      text,
+                    )
+                  : !isDcrPanelText(
+                      text,
+                    )
+              ) {
+                return false;
+              }
+
+              const materialText =
+                normalize(text);
+
+              /*
+               * Automatic request brand can be
+               * "ADANI TOPCON", while Material
+               * Master brand may simply be
+               * "ADANI".
+               *
+               * Require the manufacturer's first
+               * meaningful token to match.
+               */
+              const brand =
+                requestBrand ||
+                projectPanelBrand;
+
+              if (!brand) {
+                return false;
+              }
+
+              const brandTokens =
+                brand
+                  .split(' ')
+                  .filter(Boolean);
+
+              const manufacturer =
+                brandTokens[0] || '';
+
+              if (!manufacturer) {
+                return false;
+              }
+
+              return (
+                materialText.includes(
+                  manufacturer,
+                )
+              );
+            },
+          );
+
+        if (
+          candidates.length === 0
+        ) {
+          return null;
+        }
+
+        /*
+         * Prefer TOPCON when project/request says TOPCON.
+         */
+        const wantsTopcon =
+          normalize(
+            [
+              requestItem?.brand,
+              project?.panelBrand,
+            ]
+              .filter(Boolean)
+              .join(' '),
+          ).includes(
+            'TOPCON',
+          );
+
+        if (wantsTopcon) {
+          const topcon =
+            candidates.find(
+              (material: any) =>
+                normalize(
+                  [
+                    material.name,
+                    material.category,
+                  ]
+                    .filter(Boolean)
+                    .join(' '),
+                ).includes(
+                  'TOPCON',
+                ),
+            );
+
+          if (topcon) {
+            return topcon;
+          }
+        }
+
+        /*
+         * Never guess between multiple remaining
+         * products.
+         */
+        return candidates.length === 1
+          ? candidates[0]
+          : null;
+      };
+
+    const findInverterMaster =
+      (
+        requestItem: any,
+      ) => {
+        const requestBrand =
+          normalize(
+            requestItem?.brand ||
+              project?.converterBrand,
+          );
+
+        if (
+          !requestBrand ||
+          !Number.isFinite(
+            converterCapacity,
+          ) ||
+          converterCapacity <= 0
+        ) {
+          return null;
+        }
+
+        const manufacturer =
+          requestBrand
+            .split(' ')
+            .filter(Boolean)[0];
+
+        if (!manufacturer) {
+          return null;
+        }
+
+        const candidates =
+          activeMaterials.filter(
+            (material: any) => {
+              const dealerCategory =
+                normalize(
+                  material
+                    ?.dealerCategory,
+                );
+
+              if (
+                dealerCategory !==
+                  'ONGRID INVERTERS' &&
+                dealerCategory !==
+                  'HYBRID INVERTERS'
+              ) {
+                return false;
+              }
+
+              const materialText =
+                normalize(
+                  [
+                    material.name,
+                    material.category,
+                    material.brand,
+                  ]
+                    .filter(Boolean)
+                    .join(' '),
+                );
+
+              if (
+                !materialText.includes(
+                  manufacturer,
+                )
+              ) {
+                return false;
+              }
+
+              const capacityMatch =
+                materialText.match(
+                  /(\d+(?:\.\d+)?)\s*KW/,
+                );
+
+              if (
+                !capacityMatch?.[1]
+              ) {
+                return false;
+              }
+
+              return (
+                Number(
+                  capacityMatch[1],
+                ) ===
+                converterCapacity
+              );
+            },
+          );
+
+        /*
+         * If project phase is available, prefer it.
+         */
+        const projectPhase =
+          normalize(
+            project?.converterPhase,
+          );
+
+        if (
+          projectPhase &&
+          candidates.length > 1
+        ) {
+          const phaseToken =
+            projectPhase.includes('3')
+              ? '3PH'
+              : projectPhase.includes(
+                    '1',
+                  )
+                ? '1PH'
+                : '';
+
+          if (phaseToken) {
+            const phaseMatches =
+              candidates.filter(
+                (material: any) =>
+                  normalize(
+                    [
+                      material.name,
+                      material.category,
+                    ]
+                      .filter(Boolean)
+                      .join(' '),
+                  ).includes(
+                    phaseToken,
+                  ),
+              );
+
+            if (
+              phaseMatches.length ===
+              1
+            ) {
+              return phaseMatches[0];
+            }
+          }
+        }
+
+        return candidates.length === 1
+          ? candidates[0]
+          : null;
+      };
+
+    for (
+      const requestItem of
+      requestItems
+    ) {
+      const purchasedQuantity =
+        Number(
+          requestItem
+            .purchasedQuantity ||
+            0,
+        );
+
+      if (
+        purchasedQuantity <= 0
+      ) {
+        continue;
+      }
+
+      const requestCategory =
+        normalize(
+          requestItem.category,
+        );
+
+      const requestName =
+        normalize(
+          requestItem
+            .materialName,
+        );
+
+      const isPanel =
+        requestCategory ===
+          'PANEL' ||
+        requestName.includes(
+          'PANEL',
+        );
+
+      const isInverter =
+        requestCategory ===
+          'INVERTER' ||
+        requestName.includes(
+          'INVERTER',
+        );
+
+      /*
+       * Structure is intentionally NOT added here.
+       *
+       * Its physical components already flow through
+       * stock consumption, e.g. GI pipe, L-hook,
+       * fasteners, etc.
+       */
+      if (
+        !isPanel &&
+        !isInverter
+      ) {
+        continue;
+      }
+
+      /*
+       * How much of this major requirement is already
+       * represented by actual stock issue?
+       */
+      const requestBrand =
+        normalize(
+          requestItem.brand,
+        );
+
+      const manufacturer =
+        requestBrand
+          .split(' ')
+          .filter(Boolean)[0] ||
+        '';
+
+      const requestIsNonDcr =
+        isPanel &&
+        isNonDcrPanelText(
+          requestItem
+            .materialName,
+        );
+
+      let alreadyIssuedQuantity =
+        0;
+
+      for (
+        const issued of
+        issuedMajorRows
+      ) {
+        const issuedText =
+          normalize(
+            [
+              issued.materialName,
+              issued.category,
+              issued.brand,
+            ]
+              .filter(Boolean)
+              .join(' '),
+          );
+
+        if (isPanel) {
+          if (
+            !isPanelRow(
+              issued,
+            )
+          ) {
+            continue;
+          }
+
+          if (
+            requestIsNonDcr !==
+            isNonDcrPanelText(
+              issuedText,
+            )
+          ) {
+            continue;
+          }
+
+          if (
+            manufacturer &&
+            !issuedText.includes(
+              manufacturer,
+            )
+          ) {
+            continue;
+          }
+
+          alreadyIssuedQuantity +=
+            Number(
+              issued.quantity || 0,
+            );
+        }
+
+        if (isInverter) {
+          if (
+            !isInverterRow(
+              issued,
+            )
+          ) {
+            continue;
+          }
+
+          if (
+            manufacturer &&
+            !issuedText.includes(
+              manufacturer,
+            )
+          ) {
+            continue;
+          }
+
+          alreadyIssuedQuantity +=
+            Number(
+              issued.quantity || 0,
+            );
+        }
+      }
+
+      const fallbackQuantity =
+        Math.max(
+          purchasedQuantity -
+            alreadyIssuedQuantity,
+          0,
+        );
+
+      if (
+        fallbackQuantity <= 0
+      ) {
+        continue;
+      }
+
+      /*
+       * First preference:
+       * linked PO purchase rate.
+       */
+      const linkedPoItem =
+        poItems.find(
+          (poItem: any) =>
+            Number(
+              poItem
+                .materialRequestItemId ||
+                0,
+            ) ===
+            Number(
+              requestItem.id,
+            ) &&
+            Number(
+              poItem.purchaseRate ||
+                0,
+            ) > 0,
+        );
+
+      let rate =
+        Number(
+          linkedPoItem
+            ?.purchaseRate || 0,
+        );
+
+      let source =
+        rate > 0
+          ? 'PURCHASE_ORDER'
+          : '';
+
+      let materialId =
+        linkedPoItem?.materialId
+          ? Number(
+              linkedPoItem
+                .materialId,
+            )
+          : null;
+
+      let materialName =
+        linkedPoItem
+          ?.materialName ||
+        requestItem
+          .materialName ||
+        '';
+
+      /*
+       * Second preference:
+       * current active Material Settings.
+       *
+       * This is required for the historical Buy
+       * workflow because that workflow recorded
+       * purchasedQuantity but no purchase rate.
+       */
+      if (rate <= 0) {
+        const master =
+          isPanel
+            ? findPanelMaster(
+                requestItem,
+                requestIsNonDcr,
+              )
+            : findInverterMaster(
+                requestItem,
+              );
+
+        if (!master) {
+          /*
+           * Never invent a financial rate.
+           */
+          procurementRows.push({
+            id:
+              `PROC-${requestItem.id}`,
+
+            source:
+              'MATERIAL_MASTER_UNRESOLVED',
+
+            materialId: null,
+
+            materialName:
+              requestItem
+                .materialName ||
+              '',
+
+            branchName: '',
+
+            quantity:
+              fallbackQuantity,
+
+            rate: 0,
+
+            totalAmount: 0,
+
+            issuedByName: '',
+
+            remarks:
+              'Purchased procurement exists but Material Settings price could not be resolved safely.',
+
+            createdAt:
+              requestItem
+                .purchasedAt ||
+              requestItem
+                .createdAt,
+          });
+
+          continue;
+        }
+
+        rate =
+          Number(
+            master.rate || 0,
+          );
+
+        if (rate <= 0) {
+          procurementRows.push({
+            id:
+              `PROC-${requestItem.id}`,
+
+            source:
+              'MATERIAL_MASTER_UNRESOLVED',
+
+            materialId:
+              Number(
+                master.id,
+              ),
+
+            materialName:
+              master.name ||
+              requestItem
+                .materialName ||
+              '',
+
+            branchName: '',
+
+            quantity:
+              fallbackQuantity,
+
+            rate: 0,
+
+            totalAmount: 0,
+
+            issuedByName: '',
+
+            remarks:
+              'Matched Material Settings item has no valid purchase rate.',
+
+            createdAt:
+              requestItem
+                .purchasedAt ||
+              requestItem
+                .createdAt,
+          });
+
+          continue;
+        }
+
+        source =
+          'MATERIAL_MASTER_FALLBACK';
+
+        materialId =
+          Number(master.id);
+
+        materialName =
+          master.name ||
+          requestItem
+            .materialName ||
+          '';
+      }
+
+      procurementRows.push({
+        id:
+          `PROC-${requestItem.id}`,
+
+        source,
+
+        materialId,
+
+        materialName,
+
+        branchName: '',
+
+        quantity:
+          fallbackQuantity,
+
+        rate,
+
+        totalAmount:
+          fallbackQuantity *
+          rate,
+
+        issuedByName:
+          requestItem
+            .purchasedByName ||
+          '',
+
+        remarks:
+          source ===
+          'PURCHASE_ORDER'
+            ? 'Purchased major material — actual PO purchase rate'
+            : 'Purchased major material — Material Settings purchase-rate fallback',
+
+        createdAt:
+          requestItem
+            .purchasedAt ||
+          requestItem
+            .createdAt,
+      });
+    }
+  }
+
+  const materialRows = [
+    ...consumptionRows,
+    ...procurementRows,
+  ];
+
+  const procurementFallbackTotal =
+    procurementRows.reduce(
+      (
+        total: number,
+        item: any,
+      ) =>
+        total +
+        Number(
+          item.totalAmount || 0,
+        ),
+      0,
+    );
+
+  return {
+    rows:
+      materialRows,
+
+    stockConsumptionTotal,
+
+    procurementFallbackTotal,
+
+    total:
+      stockConsumptionTotal +
+      procurementFallbackTotal,
+  };
+}
+
+async getProjectLagatSummary(
+  projectId: number,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const canViewFinancials =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('ACCOUNT_MANAGER');
+
+  if (!canViewFinancials) {
+    throw new ForbiddenException(
+      'You are not allowed to view project costing',
+    );
+  }
+
+  const project =
+    await this.findOne(
+      projectId,
+      user,
+    );
+
+  /*
+ * MATERIAL LAAGAT
+ *
+ * Shared costing engine:
+ *
+ * - historical stock/consumption cost
+ * - purchased Panel/Inverter cost missing from stock issue
+ * - actual PO purchase rate first
+ * - Material Settings purchase rate as fallback
+ * - no generic Structure fallback
+ * - no pending procurement
+ */
+const materialCost =
+  await this.getProjectMaterialLagat(
+    projectId,
+    project,
+  );
+
+const materialRows =
+  materialCost.rows;
+
+const materialLagat =
+  materialCost.total;
 
   /*
    * CONTRACTOR / LABOUR LAAGAT
@@ -11710,12 +12653,20 @@ async getProjectLagatSummary(
     },
 
     material: {
-      total:
-        materialLagat,
+  total:
+    materialLagat,
 
-      rows:
-        materialRows,
-    },
+  stockConsumptionTotal:
+    materialCost
+      .stockConsumptionTotal,
+
+  procurementFallbackTotal:
+    materialCost
+      .procurementFallbackTotal,
+
+  rows:
+    materialRows,
+},
 
     contractor: {
       total:
@@ -12000,34 +12951,27 @@ async getProjectProfitabilitySummary(
         row.totalRevenueReceived || 0,
       );
 
-    const materialRow =
-      await this.projectConsumptionRepository
-        .createQueryBuilder('consumption')
-        .select(
-          `
-          COALESCE(
-            SUM(
-              COALESCE(
-                consumption."totalAmount",
-                COALESCE(consumption.quantity, 0) *
-                COALESCE(consumption.rate, 0)
-              )
-            ),
-            0
-          )
-          `,
-          'total',
-        )
-        .where(
-          'consumption."projectId" = :projectId',
-          { projectId },
-        )
-        .getRawOne<{
-          total: string | number | null;
-        }>();
+    const profitabilityProject =
+  await this.projectRepository.findOne({
+    where: {
+      id: projectId,
+    },
+  });
 
-    totalMaterialLagat +=
-      Number(materialRow?.total || 0);
+if (!profitabilityProject) {
+  continue;
+}
+
+const materialCost =
+  await this.getProjectMaterialLagat(
+    projectId,
+    profitabilityProject,
+  );
+
+totalMaterialLagat +=
+  Number(
+    materialCost.total || 0,
+  );
 
     const contractorRow =
       await this
