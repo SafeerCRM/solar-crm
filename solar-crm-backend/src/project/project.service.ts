@@ -11749,6 +11749,407 @@ async getProjectLagatSummary(
   };
 }
 
+async getProjectProfitabilitySummary(
+  filters: {
+    fromDate?: string;
+    toDate?: string;
+  },
+  user?: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const canView =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('ACCOUNT_MANAGER');
+
+  if (!canView) {
+    throw new ForbiddenException(
+      'You do not have access to project profitability',
+    );
+  }
+
+  /*
+   * Profitability qualification:
+   *
+   * A project belongs to the selected period when
+   * cumulative qualifying payment first reached 20%.
+   *
+   * This intentionally follows the exact same receipt
+   * qualification/date precedence already used by the
+   * Projects payment-percentage filter.
+   */
+  const projectTotalAmountSql = `
+    COALESCE(
+      NULLIF(project."finalCost", 0),
+      NULLIF(project."netAmount", 0),
+      NULLIF(project."projectCost", 0),
+      0
+    )
+  `;
+
+  const approvedPaymentAmountSql = `
+    COALESCE(
+      (
+        SELECT SUM(
+          COALESCE(
+            receipt_total."receivedAmount",
+            0
+          )
+        )
+        FROM project_payment_receipts receipt_total
+
+        INNER JOIN project_payment_installments installment_total
+          ON installment_total.id =
+            receipt_total."installmentId"
+
+        WHERE
+          receipt_total."projectId" = project.id
+
+          AND COALESCE(
+            receipt_total."isHidden",
+            false
+          ) = false
+
+          AND COALESCE(
+            installment_total."isHidden",
+            false
+          ) = false
+
+          AND COALESCE(
+            receipt_total."receivedAmount",
+            0
+          ) > 0
+
+          AND (
+            receipt_total."approvalStatus" = 'APPROVED'
+
+            OR (
+              receipt_total."approvalStatus" = 'PENDING'
+              AND installment_total."approvalStatus" = 'APPROVED'
+            )
+          )
+      ),
+      0
+    )
+  `;
+
+  const paymentThresholdReachedDateSql = `
+    (
+      SELECT threshold_history."eligibilityDate"
+
+      FROM (
+        SELECT
+          COALESCE(
+            receipt_filter."approvedAt",
+            installment_filter."approvedAt",
+            receipt_filter."paymentDate",
+            receipt_filter."createdAt"
+          ) AS "eligibilityDate",
+
+          SUM(
+            COALESCE(
+              receipt_filter."receivedAmount",
+              0
+            )
+          ) OVER (
+            ORDER BY
+              COALESCE(
+                receipt_filter."approvedAt",
+                installment_filter."approvedAt",
+                receipt_filter."paymentDate",
+                receipt_filter."createdAt"
+              ) ASC,
+              receipt_filter.id ASC
+          ) AS "cumulativeAmount"
+
+        FROM project_payment_receipts receipt_filter
+
+        INNER JOIN project_payment_installments installment_filter
+          ON installment_filter.id =
+            receipt_filter."installmentId"
+
+        WHERE
+          receipt_filter."projectId" = project.id
+
+          AND COALESCE(
+            receipt_filter."isHidden",
+            false
+          ) = false
+
+          AND COALESCE(
+            installment_filter."isHidden",
+            false
+          ) = false
+
+          AND COALESCE(
+            receipt_filter."receivedAmount",
+            0
+          ) > 0
+
+          AND (
+            receipt_filter."approvalStatus" = 'APPROVED'
+
+            OR (
+              receipt_filter."approvalStatus" = 'PENDING'
+              AND installment_filter."approvalStatus" = 'APPROVED'
+            )
+          )
+      ) threshold_history
+
+      WHERE
+        threshold_history."cumulativeAmount" >=
+          (
+            (${projectTotalAmountSql}) *
+            0.20
+          )
+
+      ORDER BY
+        threshold_history."eligibilityDate" ASC
+
+      LIMIT 1
+    )
+  `;
+
+  const projectQuery =
+    this.projectRepository
+      .createQueryBuilder('project')
+      .select('project.id', 'projectId')
+      .addSelect(
+        approvedPaymentAmountSql,
+        'totalRevenueReceived',
+      )
+      .addSelect(
+        paymentThresholdReachedDateSql,
+        'qualifiedAt',
+      )
+      .where(
+        'COALESCE(project."isHidden", false) = false',
+      )
+      .andWhere(
+        `(${projectTotalAmountSql}) > 0`,
+      )
+      .andWhere(
+        `(${approvedPaymentAmountSql}) >= ((${projectTotalAmountSql}) * 0.20)`,
+      );
+
+  /*
+   * These dates apply ONLY to the date on which
+   * the project first reached 20% payment.
+   */
+  if (filters?.fromDate) {
+    projectQuery.andWhere(
+      `${paymentThresholdReachedDateSql} >= :profitabilityFromDate`,
+      {
+        profitabilityFromDate: new Date(
+          `${filters.fromDate}T00:00:00`,
+        ),
+      },
+    );
+  }
+
+  if (filters?.toDate) {
+    projectQuery.andWhere(
+      `${paymentThresholdReachedDateSql} <= :profitabilityToDate`,
+      {
+        profitabilityToDate: new Date(
+          `${filters.toDate}T23:59:59.999`,
+        ),
+      },
+    );
+  }
+
+  const qualifiedProjects =
+    await projectQuery.getRawMany<{
+      projectId: string | number;
+      totalRevenueReceived:
+        | string
+        | number
+        | null;
+      qualifiedAt: string | Date | null;
+    }>();
+
+  let totalMaterialLagat = 0;
+  let totalContractorLagat = 0;
+  let totalOtherExpenditure = 0;
+  let totalRevenueReceived = 0;
+
+  /*
+   * Use the SAME sources as the validated
+   * individual Project Laagat screen.
+   *
+   * We intentionally calculate only the qualified
+   * project set instead of changing the normal
+   * Projects list filters.
+   */
+  for (const row of qualifiedProjects) {
+    const projectId =
+      Number(row.projectId);
+
+    if (
+      !Number.isInteger(projectId) ||
+      projectId <= 0
+    ) {
+      continue;
+    }
+
+    totalRevenueReceived +=
+      Number(
+        row.totalRevenueReceived || 0,
+      );
+
+    const materialRow =
+      await this.projectConsumptionRepository
+        .createQueryBuilder('consumption')
+        .select(
+          `
+          COALESCE(
+            SUM(
+              COALESCE(
+                consumption."totalAmount",
+                COALESCE(consumption.quantity, 0) *
+                COALESCE(consumption.rate, 0)
+              )
+            ),
+            0
+          )
+          `,
+          'total',
+        )
+        .where(
+          'consumption."projectId" = :projectId',
+          { projectId },
+        )
+        .getRawOne<{
+          total: string | number | null;
+        }>();
+
+    totalMaterialLagat +=
+      Number(materialRow?.total || 0);
+
+    const contractorRow =
+      await this
+        .projectContractorAssignmentRepository
+        .createQueryBuilder('assignment')
+        .select(
+          `
+          COALESCE(
+            SUM(
+              COALESCE(
+                assignment.amount,
+                0
+              )
+            ),
+            0
+          )
+          `,
+          'total',
+        )
+        .where(
+          'assignment."projectId" = :projectId',
+          { projectId },
+        )
+        .andWhere(
+          'assignment.status != :reassignedStatus',
+          {
+            reassignedStatus:
+              ProjectContractorWorkStatus.REASSIGNED,
+          },
+        )
+        .getRawOne<{
+          total: string | number | null;
+        }>();
+
+    totalContractorLagat +=
+      Number(contractorRow?.total || 0);
+
+    const expenseRow =
+      await this.projectAccountExpenseRepository
+        .createQueryBuilder('expense')
+        .select(
+          `
+          COALESCE(
+            SUM(
+              COALESCE(
+                expense."totalAmount",
+                expense.amount,
+                0
+              )
+            ),
+            0
+          )
+          `,
+          'total',
+        )
+        .where(
+          'expense."projectId" = :projectId',
+          { projectId },
+        )
+        .andWhere(
+          'expense."expenseType" = :expenseType',
+          {
+            expenseType: 'OTHER',
+          },
+        )
+        .andWhere(
+          'expense."approvalStatus" = :approvalStatus',
+          {
+            approvalStatus: 'APPROVED',
+          },
+        )
+        .andWhere(
+          'COALESCE(expense."isHidden", false) = false',
+        )
+        .getRawOne<{
+          total: string | number | null;
+        }>();
+
+    totalOtherExpenditure +=
+      Number(expenseRow?.total || 0);
+  }
+
+  const totalLagat =
+    totalMaterialLagat +
+    totalContractorLagat +
+    totalOtherExpenditure;
+
+  const netProfit =
+    totalRevenueReceived -
+    totalLagat;
+
+  return {
+    filters: {
+      fromDate:
+        filters?.fromDate || null,
+
+      toDate:
+        filters?.toDate || null,
+
+      paymentQualificationPercentage: 20,
+    },
+
+    qualifiedProjectCount:
+      qualifiedProjects.length,
+
+    materialLagat:
+      totalMaterialLagat,
+
+    contractorLagat:
+      totalContractorLagat,
+
+    otherExpenditure:
+      totalOtherExpenditure,
+
+    totalLagat,
+
+    totalRevenueReceived,
+
+    netProfit,
+  };
+}
+
 async createProjectOtherExpenditure(
   projectId: number,
   body: any,

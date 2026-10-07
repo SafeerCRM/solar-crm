@@ -169,10 +169,30 @@ paymentThresholdReached?: {
 createdAt?: string;
 };
 
+
+
 type ProjectOwner = {
   projectOwnerId: number;
   projectOwnerName?: string;
   projectOwnerRole?: string;
+};
+
+type ProjectProfitabilitySummary = {
+  filters?: {
+    fromDate?: string | null;
+    toDate?: string | null;
+    paymentQualificationPercentage?: number;
+  };
+
+  qualifiedProjectCount: number;
+
+  materialLagat: number;
+  contractorLagat: number;
+  otherExpenditure: number;
+
+  totalLagat: number;
+  totalRevenueReceived: number;
+  netProfit: number;
 };
 
 function formatLabel(value?: string) {
@@ -184,6 +204,18 @@ function formatLabel(value?: string) {
 
 function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
+}
+
+function money2(
+  value?: number | string | null,
+) {
+  return `₹${Number(value || 0).toLocaleString(
+    'en-IN',
+    {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    },
+  )}`;
 }
 
 function escapeCsvValue(value: any) {
@@ -283,10 +315,69 @@ const [executionScheduledTo, setExecutionScheduledTo] =
 const [activityMatchMode, setActivityMatchMode] =
   useState<'ALL' | 'ANY'>('ALL');
 
+  const [
+  profitabilitySummary,
+  setProfitabilitySummary,
+] = useState<ProjectProfitabilitySummary | null>(
+  null,
+);
+
+const [
+  profitabilityLoading,
+  setProfitabilityLoading,
+] = useState(false);
+
+const [
+  profitabilityMonth,
+  setProfitabilityMonth,
+] = useState('');
+
+const [
+  profitabilityFromDate,
+  setProfitabilityFromDate,
+] = useState('');
+
+const [
+  profitabilityToDate,
+  setProfitabilityToDate,
+] = useState('');
+
   useEffect(() => {
   setCurrentUserRoles(
     getRolesFromToken(),
   );
+}, []);
+
+useEffect(() => {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const monthNumber = now.getMonth() + 1;
+
+  const monthValue =
+    `${year}-${String(monthNumber).padStart(
+      2,
+      '0',
+    )}`;
+
+  const firstDay =
+    `${monthValue}-01`;
+
+  const lastDate = new Date(
+    year,
+    monthNumber,
+    0,
+  ).getDate();
+
+  const lastDay =
+    `${monthValue}-${String(lastDate).padStart(
+      2,
+      '0',
+    )}`;
+
+  setProfitabilityMonth(monthValue);
+  setProfitabilityFromDate(firstDay);
+  setProfitabilityToDate(lastDay);
 }, []);
 
 useEffect(() => {
@@ -451,6 +542,51 @@ activityMatchMode,
 showAdvancedActivityFilters,
   page,
 ]);
+
+const fetchProfitabilitySummary =
+  async () => {
+    try {
+      setProfitabilityLoading(true);
+
+      const token =
+        localStorage.getItem('token');
+
+      const res = await axios.get(
+        `${API_BASE_URL}/project/profitability/summary`,
+        {
+          params: {
+            fromDate:
+              profitabilityFromDate ||
+              undefined,
+
+            toDate:
+              profitabilityToDate ||
+              undefined,
+          },
+
+          headers: token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+
+      setProfitabilitySummary(
+        res.data || null,
+      );
+    } catch (error: any) {
+      console.error(
+        'Failed to load project profitability:',
+        error,
+      );
+
+      setProfitabilitySummary(null);
+    } finally {
+      setProfitabilityLoading(false);
+    }
+  };
 
   const fetchProjects = async () => {
     try {
@@ -1044,6 +1180,43 @@ useEffect(() => {
   hiddenProjectSearch,
   hiddenProjectPage,
 ]);
+
+useEffect(() => {
+  const canLoad =
+    currentUserRoles.includes('OWNER') ||
+    currentUserRoles.includes(
+      'PROJECT_MANAGER',
+    ) ||
+    currentUserRoles.includes(
+      'ACCOUNT_MANAGER',
+    );
+
+  if (!canLoad) return;
+
+  if (
+  !profitabilityFromDate ||
+  !profitabilityToDate ||
+  profitabilityFromDate >
+    profitabilityToDate
+) {
+  return;
+}
+
+  fetchProfitabilitySummary();
+}, [
+  currentUserRoles,
+  profitabilityFromDate,
+  profitabilityToDate,
+]);
+
+const canViewProfitability =
+  currentUserRoles.includes('OWNER') ||
+  currentUserRoles.includes(
+    'PROJECT_MANAGER',
+  ) ||
+  currentUserRoles.includes(
+    'ACCOUNT_MANAGER',
+  );
 
 const isMeetingManager =
   currentUserRoles.includes(
@@ -1921,6 +2094,299 @@ setPage(1);
 </button>
 </div>
 </div>
+
+{canViewProfitability && (
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h2 className="text-xl font-bold text-gray-900">
+          Project Profitability
+        </h2>
+
+        <p className="mt-1 text-sm text-gray-500">
+          Actual Laagat and revenue for projects that
+          reached at least 20% payment during the
+          selected period.
+        </p>
+      </div>
+
+      <div className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-700">
+        ≥ 20% Payment Qualified
+      </div>
+    </div>
+
+    <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div>
+        <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+          Month
+        </label>
+
+        <input
+          type="month"
+          value={profitabilityMonth}
+          onChange={(e) => {
+            const selectedMonth =
+              e.target.value;
+
+            setProfitabilityMonth(
+              selectedMonth,
+            );
+
+            if (!selectedMonth) {
+              setProfitabilityFromDate('');
+              setProfitabilityToDate('');
+              return;
+            }
+
+            const [
+              selectedYear,
+              selectedMonthNumber,
+            ] = selectedMonth
+              .split('-')
+              .map(Number);
+
+            const firstDay =
+              `${selectedYear}-${String(
+                selectedMonthNumber,
+              ).padStart(2, '0')}-01`;
+
+            const lastDate =
+              new Date(
+                selectedYear,
+                selectedMonthNumber,
+                0,
+              ).getDate();
+
+            const lastDay =
+              `${selectedYear}-${String(
+                selectedMonthNumber,
+              ).padStart(2, '0')}-${String(
+                lastDate,
+              ).padStart(2, '0')}`;
+
+            setProfitabilityFromDate(
+              firstDay,
+            );
+
+            setProfitabilityToDate(
+              lastDay,
+            );
+          }}
+          className="w-full rounded-xl border p-3"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+          From Date
+        </label>
+
+        <input
+          type="date"
+          value={profitabilityFromDate}
+          onChange={(e) => {
+            setProfitabilityFromDate(
+              e.target.value,
+            );
+
+            setProfitabilityMonth('');
+          }}
+          className="w-full rounded-xl border p-3"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+          To Date
+        </label>
+
+        <input
+          type="date"
+          value={profitabilityToDate}
+          onChange={(e) => {
+            setProfitabilityToDate(
+              e.target.value,
+            );
+
+            setProfitabilityMonth('');
+          }}
+          className="w-full rounded-xl border p-3"
+        />
+      </div>
+    </div>
+
+    {profitabilityFromDate &&
+      profitabilityToDate &&
+      profitabilityFromDate >
+        profitabilityToDate && (
+        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+          From Date cannot be later than To Date.
+        </div>
+      )}
+
+    {profitabilityLoading ? (
+      <div className="mt-5 rounded-xl bg-gray-50 p-5 text-sm font-semibold text-gray-500">
+        Loading profitability...
+      </div>
+    ) : (
+      <>
+        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-gray-200 p-4">
+            <p className="text-xs font-bold uppercase text-gray-500">
+              Material Laagat
+            </p>
+
+            <p className="mt-2 text-2xl font-black text-gray-900">
+              {money2(
+                profitabilitySummary
+                  ?.materialLagat,
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 p-4">
+            <p className="text-xs font-bold uppercase text-gray-500">
+              Contractor Laagat
+            </p>
+
+            <p className="mt-2 text-2xl font-black text-gray-900">
+              {money2(
+                profitabilitySummary
+                  ?.contractorLagat,
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 p-4">
+            <p className="text-xs font-bold uppercase text-gray-500">
+              Other Expenditure
+            </p>
+
+            <p className="mt-2 text-2xl font-black text-gray-900">
+              {money2(
+                profitabilitySummary
+                  ?.otherExpenditure,
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-gray-900 p-4 text-white">
+            <p className="text-xs font-bold uppercase text-gray-300">
+              Total Laagat
+            </p>
+
+            <p className="mt-2 text-2xl font-black">
+              {money2(
+                profitabilitySummary
+                  ?.totalLagat,
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="rounded-2xl border border-gray-200 p-4">
+            <p className="text-xs font-bold uppercase text-gray-500">
+              Qualified Projects
+            </p>
+
+            <p className="mt-2 text-2xl font-black text-gray-900">
+              {profitabilitySummary
+                ?.qualifiedProjectCount ?? 0}
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              First reached ≥20% in selected period
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+            <p className="text-xs font-bold uppercase text-blue-700">
+              Revenue Received
+            </p>
+
+            <p className="mt-2 text-2xl font-black text-blue-900">
+              {money2(
+                profitabilitySummary
+                  ?.totalRevenueReceived,
+              )}
+            </p>
+          </div>
+
+          <div
+            className={`rounded-2xl border p-4 ${
+              Number(
+                profitabilitySummary
+                  ?.netProfit || 0,
+              ) >= 0
+                ? 'border-green-200 bg-green-50'
+                : 'border-red-200 bg-red-50'
+            }`}
+          >
+            <p
+              className={`text-xs font-bold uppercase ${
+                Number(
+                  profitabilitySummary
+                    ?.netProfit || 0,
+                ) >= 0
+                  ? 'text-green-700'
+                  : 'text-red-700'
+              }`}
+            >
+              Net Profit
+            </p>
+
+            <p
+              className={`mt-2 text-2xl font-black ${
+                Number(
+                  profitabilitySummary
+                    ?.netProfit || 0,
+                ) >= 0
+                  ? 'text-green-800'
+                  : 'text-red-800'
+              }`}
+            >
+              {money2(
+                profitabilitySummary
+                  ?.netProfit,
+              )}
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Revenue Received − Total Laagat
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+          <p className="text-xs text-gray-500">
+            Material uses historical issued cost.
+            Contractor excludes reassigned work.
+            Other expenditure includes approved,
+            non-hidden project expenses only.
+          </p>
+
+          <button
+            type="button"
+            onClick={
+              fetchProfitabilitySummary
+            }
+            disabled={
+              profitabilityLoading ||
+              !profitabilityFromDate ||
+              !profitabilityToDate ||
+              profitabilityFromDate >
+                profitabilityToDate
+            }
+            className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Refresh
+          </button>
+        </div>
+      </>
+    )}
+  </div>
+)}
 
 {showHiddenProjects && (
   <div className="rounded-2xl bg-white p-5 shadow">

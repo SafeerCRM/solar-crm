@@ -6219,6 +6219,27 @@ approveMaterialRequestForStock(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Get('profitability/summary')
+getProjectProfitabilitySummary(
+  @Query('fromDate') fromDate: string,
+  @Query('toDate') toDate: string,
+  @Req() req: any,
+) {
+  return this.projectService
+    .getProjectProfitabilitySummary(
+      {
+        fromDate,
+        toDate,
+      },
+      req.user,
+    );
+}
+
 @Get(':id/edit-history')
 getProjectEditHistory(
   @Param('id', ParseIntPipe) id: number,
