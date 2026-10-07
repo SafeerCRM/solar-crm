@@ -384,10 +384,36 @@ async executeAutomation(
   }
 
   private normalizePhone(phone: string): string {
-    return String(phone || '')
-      .replace(/\D/g, '')
-      .replace(/^0+/, '');
+  let digits = String(phone || '')
+    .replace(/\D/g, '')
+    .replace(/^0+/, '');
+
+  if (!digits) {
+    return '';
   }
+
+  /*
+   * CRM primarily stores Indian mobile numbers
+   * in their normal 10-digit domestic format.
+   *
+   * Meta WhatsApp expects the recipient in
+   * international format without the "+" sign.
+   */
+  if (/^[6-9]\d{9}$/.test(digits)) {
+    digits = `91${digits}`;
+  }
+
+  /*
+   * Also tolerate numbers entered as:
+   * 091XXXXXXXXXX
+   * after the leading zero has been removed.
+   */
+  if (/^91[6-9]\d{9}$/.test(digits)) {
+    return digits;
+  }
+
+  return digits;
+}
 
   private getMetaError(data: any) {
     return {
