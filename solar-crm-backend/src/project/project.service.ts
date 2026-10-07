@@ -11219,6 +11219,7 @@ async getProjectStockMovements(
 private async getProjectMaterialLagat(
   projectId: number,
   project: any,
+  preloadedActiveMaterials?: any[],
 ) {
   /*
    * =========================================================
@@ -11476,13 +11477,14 @@ private async getProjectMaterialLagat(
      * Active records only for fallback pricing.
      */
     const activeMaterials =
-      await this
-        .projectMaterialMasterRepository
-        .find({
-          where: {
-            isActive: true,
-          },
-        });
+  preloadedActiveMaterials ??
+  await this
+    .projectMaterialMasterRepository
+    .find({
+      where: {
+        isActive: true,
+      },
+    });
 
     /*
      * Existing PO items are preferred over today's
@@ -12935,6 +12937,16 @@ async getProjectProfitabilitySummary(
    * project set instead of changing the normal
    * Projects list filters.
    */
+
+  const profitabilityActiveMaterials =
+  await this
+    .projectMaterialMasterRepository
+    .find({
+      where: {
+        isActive: true,
+      },
+    });
+
   for (const row of qualifiedProjects) {
     const projectId =
       Number(row.projectId);
@@ -12966,6 +12978,7 @@ const materialCost =
   await this.getProjectMaterialLagat(
     projectId,
     profitabilityProject,
+    profitabilityActiveMaterials,
   );
 
 totalMaterialLagat +=
