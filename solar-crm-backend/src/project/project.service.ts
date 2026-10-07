@@ -22582,7 +22582,9 @@ async moveProjectStatus(
     throw new BadRequestException('Invalid project status movement');
   }
 
-  project.status = nextStatus as ProjectStatus;
+  const previousStatus = project.status;
+
+project.status = nextStatus as ProjectStatus;
 
   const note = String(body?.note || '').trim();
 
@@ -22610,7 +22612,7 @@ if (customerUpdateText) {
   await this.sendCustomerProjectUpdateWhatsapp(
     savedProject,
     customerUpdateText,
-    `status-${nextStatus}`,
+    `status-${previousStatus}-to-${nextStatus}`,
   );
 }
 
