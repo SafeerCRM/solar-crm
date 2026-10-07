@@ -3266,6 +3266,56 @@ getProjectStockMovements(
 @Roles(
   'OWNER',
   'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Get(':id/lagat-summary')
+getProjectLagatSummary(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .getProjectLagatSummary(
+      id,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Post(':id/other-expenditure')
+createProjectOtherExpenditure(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .createProjectOtherExpenditure(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
   'PROJECT_EXECUTIVE',
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',

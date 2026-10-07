@@ -238,6 +238,88 @@ type ProjectStockMovement = {
   createdAt?: string;
 };
 
+type ProjectLagatMaterialRow = {
+  id: number;
+  materialId?: number | null;
+  materialName?: string;
+  branchName?: string;
+  quantity?: number;
+  rate?: number;
+  totalAmount?: number;
+  issuedByName?: string;
+  remarks?: string;
+  createdAt?: string;
+};
+
+type ProjectLagatContractorRow = {
+  id: number;
+  contractorId?: number;
+  contractorName?: string;
+  workScope?: string;
+  status?: string;
+  amount?: number;
+  scheduledDate?: string;
+  createdAt?: string;
+};
+
+type ProjectLagatExpenseRow = {
+  id: number;
+  expenseNumber?: string;
+  expenseDate?: string;
+  purpose?: string;
+  amount?: number;
+  proofUrl?: string | null;
+  remarks?: string;
+  expenseStatus?: string;
+  approvalStatus?: string;
+  createdByName?: string;
+  approvedByName?: string;
+  createdAt?: string;
+};
+
+type ProjectLagatSummary = {
+  project: {
+    id: number;
+    customerName?: string;
+    kNumber?: string;
+    status?: string;
+    projectWorkState?: string;
+    projectAmount?: number;
+  };
+
+  payment: {
+    totalRevenueReceived: number;
+    paymentPercentage: number;
+    twentyPercentReached: boolean;
+    twentyPercentReachedAt?: string | null;
+    twentyPercentThresholdAmount: number;
+  };
+
+  material: {
+    total: number;
+    rows: ProjectLagatMaterialRow[];
+  };
+
+  contractor: {
+    total: number;
+    rows: ProjectLagatContractorRow[];
+  };
+
+  otherExpenditure: {
+    total: number;
+    rows: ProjectLagatExpenseRow[];
+  };
+
+  totals: {
+    materialLagat: number;
+    contractorLagat: number;
+    otherExpenditure: number;
+    totalLagat: number;
+    totalRevenueReceived: number;
+    netProfit: number;
+  };
+};
+
 type ProjectComment = {
   id: number;
   projectId: number;
@@ -885,6 +967,40 @@ const [
   projectStockMovementsLoading,
   setProjectStockMovementsLoading,
 ] = useState(false);
+
+const [
+  projectLagatSummary,
+  setProjectLagatSummary,
+] = useState<ProjectLagatSummary | null>(
+  null,
+);
+
+const [
+  projectLagatLoading,
+  setProjectLagatLoading,
+] = useState(false);
+
+const [
+  otherExpenditureForm,
+  setOtherExpenditureForm,
+] = useState({
+  amount: '',
+  purpose: '',
+  remarks: '',
+  expenseDate: dayjs().format(
+    'YYYY-MM-DD',
+  ),
+});
+
+const [
+  otherExpenditureSaving,
+  setOtherExpenditureSaving,
+] = useState(false);
+
+const [
+  otherExpenditureMessage,
+  setOtherExpenditureMessage,
+] = useState('');
 const [materialRequestTitle, setMaterialRequestTitle] = useState('');
 const [materialRequestRemarks, setMaterialRequestRemarks] = useState('');
 const [materialRows, setMaterialRows] = useState<MaterialRequestRow[]>([]);
@@ -1897,6 +2013,134 @@ const fetchProjectStockMovements =
       setProjectStockMovementsLoading(
         false,
       );
+    }
+  };
+
+  const fetchProjectLagatSummary =
+  async () => {
+    try {
+      setProjectLagatLoading(true);
+
+      const token =
+        localStorage.getItem('token');
+
+      const res = await axios.get(
+        `${API_BASE_URL}/project/${projectId}/lagat-summary`,
+        {
+          headers: token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+
+      setProjectLagatSummary(
+        res.data || null,
+      );
+    } catch (error) {
+      console.error(
+        'Failed to load project laagat:',
+        error,
+      );
+
+      setProjectLagatSummary(null);
+    } finally {
+      setProjectLagatLoading(false);
+    }
+  };
+
+const createProjectOtherExpenditure =
+  async () => {
+    const amount =
+      Number(
+        otherExpenditureForm.amount,
+      );
+
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      setOtherExpenditureMessage(
+        'Enter a valid amount.',
+      );
+      return;
+    }
+
+    if (
+      !otherExpenditureForm.purpose.trim()
+    ) {
+      setOtherExpenditureMessage(
+        'Purpose is required.',
+      );
+      return;
+    }
+
+    try {
+      setOtherExpenditureSaving(true);
+      setOtherExpenditureMessage('');
+
+      const token =
+        localStorage.getItem('token');
+
+      await axios.post(
+        `${API_BASE_URL}/project/${projectId}/other-expenditure`,
+        {
+          amount,
+
+          purpose:
+            otherExpenditureForm
+              .purpose
+              .trim(),
+
+          remarks:
+            otherExpenditureForm
+              .remarks
+              .trim() ||
+            undefined,
+
+          expenseDate:
+            otherExpenditureForm
+              .expenseDate,
+        },
+        {
+          headers: token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+
+      setOtherExpenditureForm({
+        amount: '',
+        purpose: '',
+        remarks: '',
+        expenseDate:
+          dayjs().format(
+            'YYYY-MM-DD',
+          ),
+      });
+
+      setOtherExpenditureMessage(
+        'Other expenditure submitted for approval.',
+      );
+
+      await fetchProjectLagatSummary();
+    } catch (error: any) {
+      console.error(
+        'Failed to add project expenditure:',
+        error,
+      );
+
+      setOtherExpenditureMessage(
+        error?.response?.data?.message ||
+          'Failed to add expenditure.',
+      );
+    } finally {
+      setOtherExpenditureSaving(false);
     }
   };
 
@@ -4844,6 +5088,7 @@ useEffect(() => {
   'LOAN_DEPARTMENT',
   'PROJECT_MANAGEMENT',
   'STOCK_MATERIAL_LEDGER',
+  'LAGAT_PROFITABILITY',
   'PROJECT_EXECUTION',
   'CONTRACTOR_WORK',
   'SUBSIDY_DEPARTMENT',
@@ -4888,6 +5133,13 @@ useEffect(() => {
   'STOCK_MATERIAL_LEDGER'
 ) {
   fetchProjectStockMovements();
+}
+
+if (
+  activeTab ===
+  'LAGAT_PROFITABILITY'
+) {
+  fetchProjectLagatSummary();
 }
 
   if (activeTab === 'SUBSIDY_DEPARTMENT') {
@@ -6966,6 +7218,10 @@ const isLoanProcessCompleted =
   label: 'Stock / Material Ledger',
 },
 {
+  key: 'LAGAT_PROFITABILITY',
+  label: 'Laagat & Profitability',
+},
+{
   key: 'PROJECT_EXECUTION',
   label: 'Project Execution',
 },
@@ -7107,6 +7363,21 @@ if (
       contractorWorkTab,
     ];
   }
+}
+
+const canViewLagatProfitability =
+  hasRole([
+    'OWNER',
+    'PROJECT_MANAGER',
+    'ACCOUNT_MANAGER',
+  ]);
+
+if (!canViewLagatProfitability) {
+  visibleTabs = visibleTabs.filter(
+    (tab) =>
+      tab.key !==
+      'LAGAT_PROFITABILITY',
+  );
 }
 
   return visibleTabs.map((tab) => (
@@ -8478,6 +8749,532 @@ if (
         </>
       )}
     </div>
+  </div>
+)}
+
+{activeTab ===
+  'LAGAT_PROFITABILITY' && (
+  <div className="space-y-5">
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">
+            Project Laagat & Profitability
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Actual project costing from
+            issued materials, contractor
+            assignments and approved other
+            expenditure.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={
+            fetchProjectLagatSummary
+          }
+          disabled={
+            projectLagatLoading
+          }
+          className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {projectLagatLoading
+            ? 'Refreshing...'
+            : 'Refresh'}
+        </button>
+      </div>
+    </div>
+
+    {projectLagatLoading && (
+      <div className="rounded-2xl bg-white p-8 text-center text-sm text-gray-500 shadow">
+        Loading project costing...
+      </div>
+    )}
+
+    {!projectLagatLoading &&
+      projectLagatSummary && (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl bg-white p-5 shadow">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Material Laagat
+              </p>
+
+              <p className="mt-2 text-2xl font-bold text-gray-900">
+                {money(
+                  projectLagatSummary
+                    .totals
+                    .materialLagat,
+                )}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white p-5 shadow">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Contractor Laagat
+              </p>
+
+              <p className="mt-2 text-2xl font-bold text-gray-900">
+                {money(
+                  projectLagatSummary
+                    .totals
+                    .contractorLagat,
+                )}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white p-5 shadow">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Other Expenditure
+              </p>
+
+              <p className="mt-2 text-2xl font-bold text-gray-900">
+                {money(
+                  projectLagatSummary
+                    .totals
+                    .otherExpenditure,
+                )}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-gray-900 p-5 text-white shadow">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-300">
+                Total Laagat
+              </p>
+
+              <p className="mt-2 text-2xl font-bold">
+                {money(
+                  projectLagatSummary
+                    .totals
+                    .totalLagat,
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl bg-white p-5 shadow">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Project Amount
+              </p>
+
+              <p className="mt-2 text-xl font-bold text-gray-900">
+                {money(
+                  projectLagatSummary
+                    .project
+                    .projectAmount,
+                )}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white p-5 shadow">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Revenue Received
+              </p>
+
+              <p className="mt-2 text-xl font-bold text-gray-900">
+                {money(
+                  projectLagatSummary
+                    .totals
+                    .totalRevenueReceived,
+                )}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                {projectLagatSummary
+                  .payment
+                  .paymentPercentage
+                  .toFixed(2)}
+                % received
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white p-5 shadow">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Net Profit
+              </p>
+
+              <p
+                className={`mt-2 text-xl font-bold ${
+                  projectLagatSummary
+                    .totals
+                    .netProfit >= 0
+                    ? 'text-green-700'
+                    : 'text-red-600'
+                }`}
+              >
+                {money(
+                  projectLagatSummary
+                    .totals
+                    .netProfit,
+                )}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                Revenue received − Total
+                Laagat
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-gray-900">
+                  20% Payment Qualification
+                </h3>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Existing CRM payment
+                  qualification logic.
+                </p>
+              </div>
+
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-bold ${
+                  projectLagatSummary
+                    .payment
+                    .twentyPercentReached
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-yellow-100 text-yellow-700'
+                }`}
+              >
+                {projectLagatSummary
+                  .payment
+                  .twentyPercentReached
+                  ? 'QUALIFIED'
+                  : 'NOT YET QUALIFIED'}
+              </span>
+            </div>
+
+            {projectLagatSummary
+              .payment
+              .twentyPercentReachedAt && (
+              <p className="mt-3 text-sm text-gray-700">
+                Qualified on:{' '}
+                <span className="font-semibold">
+                  {new Date(
+                    projectLagatSummary
+                      .payment
+                      .twentyPercentReachedAt,
+                  ).toLocaleString(
+                    'en-IN',
+                  )}
+                </span>
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow">
+            <h3 className="text-lg font-bold text-gray-900">
+              Add Other Expenditure
+            </h3>
+
+            <p className="mt-1 text-sm text-gray-500">
+              This creates a project-linked
+              expense in the existing account
+              expense system. It contributes to
+              Laagat only after approval.
+            </p>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">
+                  Amount
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={
+                    otherExpenditureForm.amount
+                  }
+                  onChange={(e) =>
+                    setOtherExpenditureForm(
+                      (prev) => ({
+                        ...prev,
+                        amount:
+                          e.target.value,
+                      }),
+                    )
+                  }
+                  className="w-full rounded-xl border border-gray-300 px-3 py-2"
+                  placeholder="Enter amount"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">
+                  Expense Date
+                </label>
+
+                <input
+                  type="date"
+                  value={
+                    otherExpenditureForm
+                      .expenseDate
+                  }
+                  onChange={(e) =>
+                    setOtherExpenditureForm(
+                      (prev) => ({
+                        ...prev,
+                        expenseDate:
+                          e.target.value,
+                      }),
+                    )
+                  }
+                  className="w-full rounded-xl border border-gray-300 px-3 py-2"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-sm font-semibold text-gray-700">
+                  Purpose
+                </label>
+
+                <input
+                  type="text"
+                  value={
+                    otherExpenditureForm
+                      .purpose
+                  }
+                  onChange={(e) =>
+                    setOtherExpenditureForm(
+                      (prev) => ({
+                        ...prev,
+                        purpose:
+                          e.target.value,
+                      }),
+                    )
+                  }
+                  className="w-full rounded-xl border border-gray-300 px-3 py-2"
+                  placeholder="e.g. Local transport / site adjustment"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-sm font-semibold text-gray-700">
+                  Remarks
+                </label>
+
+                <textarea
+                  rows={3}
+                  value={
+                    otherExpenditureForm
+                      .remarks
+                  }
+                  onChange={(e) =>
+                    setOtherExpenditureForm(
+                      (prev) => ({
+                        ...prev,
+                        remarks:
+                          e.target.value,
+                      }),
+                    )
+                  }
+                  className="w-full rounded-xl border border-gray-300 px-3 py-2"
+                  placeholder="Optional details"
+                />
+              </div>
+            </div>
+
+            {otherExpenditureMessage && (
+              <p className="mt-3 text-sm font-medium text-gray-700">
+                {
+                  otherExpenditureMessage
+                }
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={
+                createProjectOtherExpenditure
+              }
+              disabled={
+                otherExpenditureSaving
+              }
+              className="mt-4 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
+            >
+              {otherExpenditureSaving
+                ? 'Submitting...'
+                : 'Add Expenditure'}
+            </button>
+          </div>
+
+          <div className="grid gap-5 xl:grid-cols-2">
+            <div className="rounded-2xl bg-white p-5 shadow">
+              <h3 className="font-bold text-gray-900">
+                Material Cost Breakdown
+              </h3>
+
+              <div className="mt-4 space-y-3">
+                {projectLagatSummary
+                  .material.rows.length ===
+                0 ? (
+                  <p className="text-sm text-gray-500">
+                    No project material
+                    consumption found.
+                  </p>
+                ) : (
+                  projectLagatSummary
+                    .material.rows.map(
+                      (row) => (
+                        <div
+                          key={row.id}
+                          className="rounded-xl border border-gray-200 p-3"
+                        >
+                          <div className="flex justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-gray-900">
+                                {row.materialName ||
+                                  '-'}
+                              </p>
+
+                              <p className="mt-1 text-xs text-gray-500">
+                                {Number(
+                                  row.quantity ||
+                                    0,
+                                )}{' '}
+                                ×{' '}
+                                {money(
+                                  row.rate,
+                                )}
+                              </p>
+                            </div>
+
+                            <p className="font-bold text-gray-900">
+                              {money(
+                                row.totalAmount,
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      ),
+                    )
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-white p-5 shadow">
+              <h3 className="font-bold text-gray-900">
+                Contractor / Labour Cost
+              </h3>
+
+              <div className="mt-4 space-y-3">
+                {projectLagatSummary
+                  .contractor.rows
+                  .length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    No active contractor
+                    assignments found.
+                  </p>
+                ) : (
+                  projectLagatSummary
+                    .contractor.rows.map(
+                      (row) => (
+                        <div
+                          key={row.id}
+                          className="rounded-xl border border-gray-200 p-3"
+                        >
+                          <div className="flex justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-gray-900">
+                                {row.contractorName ||
+                                  '-'}
+                              </p>
+
+                              <p className="mt-1 text-xs text-gray-500">
+                                {String(
+                                  row.workScope ||
+                                    '',
+                                ).replaceAll(
+                                  '_',
+                                  ' ',
+                                )}
+                              </p>
+                            </div>
+
+                            <p className="font-bold text-gray-900">
+                              {money(
+                                row.amount,
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      ),
+                    )
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow">
+            <h3 className="font-bold text-gray-900">
+              Approved Other Expenditure
+            </h3>
+
+            <div className="mt-4 space-y-3">
+              {projectLagatSummary
+                .otherExpenditure.rows
+                .length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  No approved project
+                  expenditure yet.
+                </p>
+              ) : (
+                projectLagatSummary
+                  .otherExpenditure.rows
+                  .map((row) => (
+                    <div
+                      key={row.id}
+                      className="rounded-xl border border-gray-200 p-4"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-gray-900">
+                            {row.purpose ||
+                              'Other Expenditure'}
+                          </p>
+
+                          <p className="mt-1 text-xs text-gray-500">
+                            {row.expenseDate
+                              ? new Date(
+                                  row.expenseDate,
+                                ).toLocaleDateString(
+                                  'en-IN',
+                                )
+                              : '-'}
+                            {row.createdByName
+                              ? ` • ${row.createdByName}`
+                              : ''}
+                          </p>
+
+                          {row.remarks && (
+                            <p className="mt-2 text-sm text-gray-600">
+                              {
+                                row.remarks
+                              }
+                            </p>
+                          )}
+                        </div>
+
+                        <p className="font-bold text-gray-900">
+                          {money(
+                            row.amount,
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
   </div>
 )}
 

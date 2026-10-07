@@ -11216,6 +11216,660 @@ async getProjectStockMovements(
   );
 }
 
+async getProjectLagatSummary(
+  projectId: number,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const canViewFinancials =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('ACCOUNT_MANAGER');
+
+  if (!canViewFinancials) {
+    throw new ForbiddenException(
+      'You are not allowed to view project costing',
+    );
+  }
+
+  const project =
+    await this.findOne(
+      projectId,
+      user,
+    );
+
+  /*
+   * MATERIAL LAAGAT
+   *
+   * Use ProjectConsumption instead of current
+   * Material Master rate.
+   *
+   * ProjectConsumption is created at the same
+   * time as a PROJECT stock issue and preserves
+   * the issue-time stock average rate and
+   * totalAmount.
+   */
+  const consumptions =
+    await this.projectConsumptionRepository.find({
+      where: {
+        projectId,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  const materialRows =
+    consumptions.map(
+      (item: any) => {
+        const quantity =
+          Number(
+            item.quantity || 0,
+          );
+
+        const rate =
+          Number(
+            item.rate || 0,
+          );
+
+        const totalAmount =
+          Number(
+            item.totalAmount || 0,
+          ) ||
+          quantity * rate;
+
+        return {
+          id: Number(item.id),
+
+          materialId:
+            item.materialId
+              ? Number(
+                  item.materialId,
+                )
+              : null,
+
+          materialName:
+            item.materialName || '',
+
+          branchName:
+            item.branchName || '',
+
+          quantity,
+
+          rate,
+
+          totalAmount,
+
+          issuedByName:
+            item.issuedByName || '',
+
+          remarks:
+            item.remarks || '',
+
+          createdAt:
+            item.createdAt,
+        };
+      },
+    );
+
+  const materialLagat =
+    materialRows.reduce(
+      (
+        total: number,
+        item: any,
+      ) =>
+        total +
+        Number(
+          item.totalAmount || 0,
+        ),
+      0,
+    );
+
+  /*
+   * CONTRACTOR / LABOUR LAAGAT
+   *
+   * REASSIGNED assignments are historical
+   * records and must not be counted again.
+   */
+  const contractorAssignments =
+    await this
+      .projectContractorAssignmentRepository
+      .find({
+        where: {
+          projectId,
+        },
+        order: {
+          createdAt: 'DESC',
+        },
+      });
+
+  const contractorRows =
+    contractorAssignments
+      .filter(
+        (assignment) =>
+          assignment.status !==
+          ProjectContractorWorkStatus.REASSIGNED,
+      )
+      .map(
+        (assignment) => ({
+          id:
+            Number(
+              assignment.id,
+            ),
+
+          contractorId:
+            Number(
+              assignment.contractorId,
+            ),
+
+          contractorName:
+            assignment.contractorName ||
+            '',
+
+          workScope:
+            assignment.workScope ||
+            '',
+
+          status:
+            assignment.status,
+
+          amount:
+            Number(
+              assignment.amount || 0,
+            ),
+
+          scheduledDate:
+            assignment.scheduledDate,
+
+          createdAt:
+            assignment.createdAt,
+        }),
+      );
+
+  const contractorLagat =
+    contractorRows.reduce(
+      (
+        total: number,
+        item: any,
+      ) =>
+        total +
+        Number(
+          item.amount || 0,
+        ),
+      0,
+    );
+
+  /*
+   * OTHER EXPENDITURE
+   *
+   * Reuse the existing Account Expense system.
+   *
+   * Only:
+   * - this project
+   * - OTHER expense type
+   * - approved
+   * - non-hidden
+   *
+   * expenses affect official Project Laagat.
+   */
+  const projectExpenses =
+    await this
+      .projectAccountExpenseRepository
+      .find({
+        where: {
+          projectId,
+
+          expenseType:
+            ProjectAccountExpenseType.OTHER,
+
+          approvalStatus:
+            ProjectAccountExpenseApprovalStatus.APPROVED,
+
+          isHidden: false,
+        } as any,
+
+        order: {
+          createdAt: 'DESC',
+        },
+      });
+
+  const otherExpenseRows =
+    projectExpenses.map(
+      (expense: any) => ({
+        id:
+          Number(expense.id),
+
+        expenseNumber:
+          expense.expenseNumber ||
+          '',
+
+        expenseDate:
+          expense.expenseDate ||
+          null,
+
+        purpose:
+          expense.purpose ||
+          expense.expenseHead ||
+          '',
+
+        amount:
+          Number(
+            expense.totalAmount ||
+            expense.amount ||
+            0,
+          ),
+
+        proofUrl:
+          expense.proofUrl ||
+          null,
+
+        remarks:
+          expense.remarks ||
+          '',
+
+        expenseStatus:
+          expense.expenseStatus ||
+          '',
+
+        approvalStatus:
+          expense.approvalStatus ||
+          '',
+
+        createdByName:
+          expense.createdByName ||
+          '',
+
+        approvedByName:
+          expense.approvedByName ||
+          '',
+
+        createdAt:
+          expense.createdAt,
+      }),
+    );
+
+  const otherExpenditure =
+    otherExpenseRows.reduce(
+      (
+        total: number,
+        item: any,
+      ) =>
+        total +
+        Number(
+          item.amount || 0,
+        ),
+      0,
+    );
+
+  /*
+   * PAYMENT RECEIVED + 20% QUALIFICATION
+   *
+   * Reuse the existing helper so this stays
+   * aligned with Payment Collection and the
+   * existing payment-percentage filters.
+   */
+  const payment20 =
+    await this
+      .getProjectPaymentThresholdReachedDate(
+        projectId,
+        20,
+      );
+
+  /*
+   * The helper's cumulativeAmount stops when
+   * the threshold is reached, so it must NOT
+   * be used as total received.
+   *
+   * Calculate current total qualifying receipts
+   * separately using the same qualification rule.
+   */
+  const receivedRow =
+    await this
+      .projectPaymentReceiptRepository
+      .createQueryBuilder(
+        'receipt',
+      )
+      .innerJoin(
+        ProjectPaymentInstallment,
+        'installment',
+        `
+        installment.id =
+          receipt."installmentId"
+        `,
+      )
+      .select(
+        `
+        COALESCE(
+          SUM(
+            COALESCE(
+              receipt."receivedAmount",
+              0
+            )
+          ),
+          0
+        )
+        `,
+        'totalReceived',
+      )
+      .where(
+        `
+        receipt."projectId" =
+          :projectId
+        `,
+        {
+          projectId,
+        },
+      )
+      .andWhere(
+        `
+        COALESCE(
+          receipt."isHidden",
+          false
+        ) = false
+        `,
+      )
+      .andWhere(
+        `
+        COALESCE(
+          installment."isHidden",
+          false
+        ) = false
+        `,
+      )
+      .andWhere(
+        `
+        COALESCE(
+          receipt."receivedAmount",
+          0
+        ) > 0
+        `,
+      )
+      .andWhere(
+        `
+        (
+          receipt."approvalStatus" =
+            :approvedStatus
+
+          OR (
+            receipt."approvalStatus" =
+              :pendingStatus
+
+            AND
+            installment."approvalStatus" =
+              :approvedStatus
+          )
+        )
+        `,
+        {
+          approvedStatus:
+            'APPROVED',
+
+          pendingStatus:
+            'PENDING',
+        },
+      )
+      .getRawOne<{
+        totalReceived:
+          string | number | null;
+      }>();
+
+  const totalRevenueReceived =
+    Number(
+      receivedRow?.totalReceived ||
+      0,
+    );
+
+  const projectAmount =
+    Number(
+      (project as any).finalCost ||
+      0,
+    ) > 0
+      ? Number(
+          (project as any).finalCost,
+        )
+      : Number(
+          (project as any).netAmount ||
+          0,
+        ) > 0
+        ? Number(
+            (project as any).netAmount,
+          )
+        : Number(
+            (project as any).projectCost ||
+            0,
+          );
+
+  const paymentPercentage =
+    projectAmount > 0
+      ? (
+          totalRevenueReceived /
+          projectAmount
+        ) * 100
+      : 0;
+
+  const totalLagat =
+    materialLagat +
+    contractorLagat +
+    otherExpenditure;
+
+  /*
+   * Client-requested current profit:
+   *
+   * received revenue - total project laagat
+   */
+  const netProfit =
+    totalRevenueReceived -
+    totalLagat;
+
+  return {
+    project: {
+      id:
+        Number(project.id),
+
+      customerName:
+        project.customerName ||
+        '',
+
+      kNumber:
+        (project as any)
+          .electricityKNumber ||
+        '',
+
+      status:
+        project.status,
+
+      projectWorkState:
+        (project as any)
+          .projectWorkState ||
+        '',
+
+      projectAmount,
+    },
+
+    payment: {
+      totalRevenueReceived,
+
+      paymentPercentage:
+        Number(
+          paymentPercentage.toFixed(
+            2,
+          ),
+        ),
+
+      twentyPercentReached:
+        payment20.reached,
+
+      twentyPercentReachedAt:
+        payment20.reachedAt,
+
+      twentyPercentThresholdAmount:
+        payment20.thresholdAmount,
+    },
+
+    material: {
+      total:
+        materialLagat,
+
+      rows:
+        materialRows,
+    },
+
+    contractor: {
+      total:
+        contractorLagat,
+
+      rows:
+        contractorRows,
+    },
+
+    otherExpenditure: {
+      total:
+        otherExpenditure,
+
+      rows:
+        otherExpenseRows,
+    },
+
+    totals: {
+      materialLagat,
+
+      contractorLagat,
+
+      otherExpenditure,
+
+      totalLagat,
+
+      totalRevenueReceived,
+
+      netProfit,
+    },
+  };
+}
+
+async createProjectOtherExpenditure(
+  projectId: number,
+  body: any,
+  user: any,
+) {
+  const roles =
+    Array.isArray(user?.roles)
+      ? user.roles
+      : [];
+
+  const canCreate =
+    roles.includes('OWNER') ||
+    roles.includes(
+      'PROJECT_MANAGER',
+    ) ||
+    roles.includes(
+      'ACCOUNT_MANAGER',
+    );
+
+  if (!canCreate) {
+    throw new ForbiddenException(
+      'You are not allowed to add project expenditure',
+    );
+  }
+
+  const project =
+    await this.findOne(
+      projectId,
+      user,
+    );
+
+  const amount =
+    Number(
+      body?.amount || 0,
+    );
+
+  if (
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid expenditure amount is required',
+    );
+  }
+
+  const purpose =
+    String(
+      body?.purpose ||
+      body?.remarks ||
+      '',
+    ).trim();
+
+  if (!purpose) {
+    throw new BadRequestException(
+      'Purpose is required',
+    );
+  }
+
+  /*
+   * Do NOT create a second expense system.
+   *
+   * This deliberately passes through the
+   * existing Account Expense creation method.
+   */
+  return this.createAccountExpense(
+    {
+      expenseType:
+        ProjectAccountExpenseType.OTHER,
+
+      amount,
+
+      totalAmount:
+        amount,
+
+      expenseDate:
+        body?.expenseDate ||
+        new Date()
+          .toISOString()
+          .slice(
+            0,
+            10,
+          ),
+
+      expenseHead:
+        'Project Other Expenditure',
+
+      purpose,
+
+      remarks:
+        body?.remarks ||
+        null,
+
+      proofUrl:
+        body?.proofUrl ||
+        null,
+
+      projectId,
+
+      branchName:
+        project.branchName ||
+        null,
+
+      projectOwnerId:
+        project.projectOwnerId ||
+        null,
+
+      projectOwnerName:
+        project.projectOwnerName ||
+        null,
+
+      expenseStatus:
+        body?.expenseStatus ||
+        'UNPAID',
+
+      recurringExpense:
+        false,
+    },
+    user,
+  );
+}
+
 async hideProjectStockMovement(
   movementId: number,
   body: any,
