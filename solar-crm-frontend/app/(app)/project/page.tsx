@@ -2356,6 +2356,24 @@ setPage(1);
       </div>
     </div>
 
+    {profitabilityCategory === 'COMPLETED' &&
+  profitabilityCompletionCondition !== 'PAYMENT' && (
+    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+      <p className="text-sm font-semibold text-amber-900">
+        Historical Project Audit Information
+      </p>
+
+      <p className="mt-1 text-sm leading-relaxed text-amber-800">
+        Legacy projects without a recorded completion
+        date are excluded from date-based completion
+        audits. Only projects with verified completion
+        dates are included in the selected period.
+        The 100% Payment Received audit is calculated
+        independently using qualifying payment records.
+      </p>
+    </div>
+  )}
+
     {profitabilityFromDate &&
       profitabilityToDate &&
       profitabilityFromDate >
