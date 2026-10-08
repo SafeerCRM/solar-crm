@@ -11219,7 +11219,14 @@ async getProjectStockMovements(
 private async getProjectMaterialLagat(
   projectId: number,
   project: any,
-  preloadedActiveMaterials?: any[],
+  preloaded?: {
+    consumptions?: any[];
+    issuedMajorRows?: any[];
+    autoRequest?: any | null;
+    requestItems?: any[];
+    activeMaterials?: any[];
+    poItems?: any[];
+  },
 ) {
   /*
    * =========================================================
@@ -11233,14 +11240,15 @@ private async getProjectMaterialLagat(
    * later Material Master price change does not rewrite it.
    */
   const consumptions =
-    await this.projectConsumptionRepository.find({
-      where: {
-        projectId,
-      },
-      order: {
-        createdAt: 'DESC',
-      },
-    });
+  preloaded?.consumptions ??
+  await this.projectConsumptionRepository.find({
+    where: {
+      projectId,
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
 
   const consumptionRows =
     consumptions.map(
@@ -11317,12 +11325,13 @@ private async getProjectMaterialLagat(
    * from counting the same Panel/Inverter twice.
    */
   const issuedMajorRows =
-    await this.projectStockMovementRepository
-      .createQueryBuilder('movement')
-      .leftJoin(
-        ProjectStockItem,
-        'stock',
-        'stock.id = movement.stockItemId',
+  preloaded?.issuedMajorRows ??
+  await this.projectStockMovementRepository
+    .createQueryBuilder('movement')
+    .leftJoin(
+      ProjectStockItem,
+      'stock',
+      'stock.id = movement.stockItemId',
       )
       .where(
         'movement.projectId = :projectId',
@@ -11442,34 +11451,41 @@ private async getProjectMaterialLagat(
    * PENDING requirement != actual project cost.
    */
   const autoRequest =
-    await this.projectMaterialRequestRepository
-      .findOne({
-        where: {
-          projectId,
+  preloaded &&
+  Object.prototype.hasOwnProperty.call(
+    preloaded,
+    'autoRequest',
+  )
+    ? preloaded.autoRequest
+    : await this.projectMaterialRequestRepository
+        .findOne({
+          where: {
+            projectId,
 
-          requestType:
-            ProjectMaterialRequestType
-              .AUTO_PROJECT_PROCUREMENT,
-        } as any,
-      });
+            requestType:
+              ProjectMaterialRequestType
+                .AUTO_PROJECT_PROCUREMENT,
+          } as any,
+        });
 
   let procurementRows: any[] =
     [];
 
   if (autoRequest) {
     const requestItems =
-      await this
-        .projectMaterialRequestItemRepository
-        .find({
-          where: {
-            requestId:
-              autoRequest.id,
-            projectId,
-          } as any,
-          order: {
-            createdAt: 'ASC',
-          },
-        });
+  preloaded?.requestItems ??
+  await this
+    .projectMaterialRequestItemRepository
+    .find({
+      where: {
+        requestId:
+          autoRequest.id,
+        projectId,
+      } as any,
+      order: {
+        createdAt: 'ASC',
+      },
+    });
 
     /*
      * Material Settings.
@@ -11477,7 +11493,7 @@ private async getProjectMaterialLagat(
      * Active records only for fallback pricing.
      */
     const activeMaterials =
-  preloadedActiveMaterials ??
+  preloaded?.activeMaterials ??
   await this
     .projectMaterialMasterRepository
     .find({
@@ -11492,8 +11508,9 @@ private async getProjectMaterialLagat(
      * actual purchase rate.
      */
     const poItems =
-      await this
-        .projectPurchaseOrderItemRepository
+  preloaded?.poItems ??
+  await this
+    .projectPurchaseOrderItemRepository
         .createQueryBuilder('poItem')
         .innerJoin(
           ProjectPurchaseOrder,
@@ -12924,32 +12941,263 @@ async getProjectProfitabilitySummary(
       qualifiedAt: string | Date | null;
     }>();
 
-  let totalMaterialLagat = 0;
-  let totalContractorLagat = 0;
-  let totalOtherExpenditure = 0;
-  let totalRevenueReceived = 0;
+  
+const projectIds = [
+  ...new Set(
+    qualifiedProjects
+      .map((row) => Number(row.projectId))
+      .filter(
+        (id) =>
+          Number.isInteger(id) && id > 0,
+      ),
+  ),
+];
 
-  /*
-   * Use the SAME sources as the validated
-   * individual Project Laagat screen.
-   *
-   * We intentionally calculate only the qualified
-   * project set instead of changing the normal
-   * Projects list filters.
-   */
+let totalMaterialLagat = 0;
+let totalContractorLagat = 0;
+let totalOtherExpenditure = 0;
+let totalRevenueReceived = 0;
 
-  const profitabilityActiveMaterials =
-  await this
-    .projectMaterialMasterRepository
-    .find({
-      where: {
-        isActive: true,
-      },
-    });
+if (projectIds.length > 0) {
+  const [
+    profitabilityProjects,
+    allConsumptions,
+    allIssuedMajorRows,
+    allAutoRequests,
+    profitabilityActiveMaterials,
+    allPoItems,
+    contractorRows,
+    expenseRows,
+  ] = await Promise.all([
+    this.projectRepository
+      .createQueryBuilder('project')
+      .where('project.id IN (:...projectIds)', {
+        projectIds,
+      })
+      .getMany(),
+
+    this.projectConsumptionRepository
+      .createQueryBuilder('consumption')
+      .where(
+        'consumption.projectId IN (:...projectIds)',
+        { projectIds },
+      )
+      .orderBy('consumption.createdAt', 'DESC')
+      .getMany(),
+
+    this.projectStockMovementRepository
+      .createQueryBuilder('movement')
+      .leftJoin(
+        ProjectStockItem,
+        'stock',
+        'stock.id = movement.stockItemId',
+      )
+      .where(
+        'movement.projectId IN (:...projectIds)',
+        { projectIds },
+      )
+      .andWhere(
+        'movement.movementType IN (:...issueTypes)',
+        {
+          issueTypes: [
+            ProjectStockMovementType.ISSUE,
+            ProjectStockMovementType.ISSUE_FROM_AVAILABLE,
+            ProjectStockMovementType.ISSUE_FROM_RESERVED,
+          ],
+        },
+      )
+      .andWhere(
+        'COALESCE(movement.isHidden, false) = false',
+      )
+      .select([
+        'movement.projectId AS "projectId"',
+        'movement.materialId AS "materialId"',
+        'movement.materialName AS "materialName"',
+        'movement.quantity AS "quantity"',
+        'stock.category AS "category"',
+        'stock.brand AS "brand"',
+      ])
+      .getRawMany(),
+
+    this.projectMaterialRequestRepository
+      .createQueryBuilder('request')
+      .where(
+        'request.projectId IN (:...projectIds)',
+        { projectIds },
+      )
+      .andWhere(
+        'request.requestType = :requestType',
+        {
+          requestType:
+            ProjectMaterialRequestType.AUTO_PROJECT_PROCUREMENT,
+        },
+      )
+      .getMany(),
+
+    this.projectMaterialMasterRepository.find({
+      where: { isActive: true },
+    }),
+
+    this.projectPurchaseOrderItemRepository
+      .createQueryBuilder('poItem')
+      .innerJoin(
+        ProjectPurchaseOrder,
+        'po',
+        'po.id = poItem.purchaseOrderId',
+      )
+      .where(
+        'poItem.projectId IN (:...projectIds)',
+        { projectIds },
+      )
+      .andWhere(
+        'COALESCE(po.isHidden, false) = false',
+      )
+      .select([
+        'poItem.id AS "id"',
+        'poItem.projectId AS "projectId"',
+        'poItem.materialRequestItemId AS "materialRequestItemId"',
+        'poItem.materialId AS "materialId"',
+        'poItem.materialName AS "materialName"',
+        'poItem.category AS "category"',
+        'poItem.brand AS "brand"',
+        'poItem.purchaseRate AS "purchaseRate"',
+        'poItem.quantity AS "quantity"',
+      ])
+      .getRawMany(),
+
+    this.projectContractorAssignmentRepository
+      .createQueryBuilder('assignment')
+      .select('assignment.projectId', 'projectId')
+      .addSelect(
+        `COALESCE(SUM(COALESCE(assignment.amount, 0)), 0)`,
+        'total',
+      )
+      .where(
+        'assignment.projectId IN (:...projectIds)',
+        { projectIds },
+      )
+      .andWhere(
+        'assignment.status != :reassignedStatus',
+        {
+          reassignedStatus:
+            ProjectContractorWorkStatus.REASSIGNED,
+        },
+      )
+      .groupBy('assignment.projectId')
+      .getRawMany(),
+
+    this.projectAccountExpenseRepository
+      .createQueryBuilder('expense')
+      .select('expense.projectId', 'projectId')
+      .addSelect(
+        `COALESCE(SUM(COALESCE(expense."totalAmount", expense.amount, 0)), 0)`,
+        'total',
+      )
+      .where(
+        'expense.projectId IN (:...projectIds)',
+        { projectIds },
+      )
+      .andWhere(
+        'expense.expenseType = :expenseType',
+        { expenseType: 'OTHER' },
+      )
+      .andWhere(
+        'expense.approvalStatus = :approvalStatus',
+        { approvalStatus: 'APPROVED' },
+      )
+      .andWhere(
+        'COALESCE(expense.isHidden, false) = false',
+      )
+      .groupBy('expense.projectId')
+      .getRawMany(),
+  ]);
+
+  const autoRequestIds = allAutoRequests
+    .map((request: any) => Number(request.id))
+    .filter(
+      (id: number) =>
+        Number.isInteger(id) && id > 0,
+    );
+
+  const allRequestItems =
+    autoRequestIds.length > 0
+      ? await this.projectMaterialRequestItemRepository
+          .createQueryBuilder('item')
+          .where(
+            'item.requestId IN (:...requestIds)',
+            { requestIds: autoRequestIds },
+          )
+          .andWhere(
+            'item.projectId IN (:...projectIds)',
+            { projectIds },
+          )
+          .orderBy('item.createdAt', 'ASC')
+          .getMany()
+      : [];
+
+  const groupByProject = (
+    rows: any[],
+  ): Map<number, any[]> => {
+    const result = new Map<number, any[]>();
+
+    for (const item of rows) {
+      const id = Number(item.projectId);
+      const existing = result.get(id) || [];
+      existing.push(item);
+      result.set(id, existing);
+    }
+
+    return result;
+  };
+
+  const projectMap = new Map(
+    profitabilityProjects.map(
+      (project) => [Number(project.id), project],
+    ),
+  );
+
+  const consumptionsByProject =
+    groupByProject(allConsumptions);
+
+  const issuedByProject =
+    groupByProject(allIssuedMajorRows);
+
+  const requestItemsByProject =
+    groupByProject(allRequestItems);
+
+  const poItemsByProject =
+    groupByProject(allPoItems);
+
+  const autoRequestByProject = new Map<number, any>();
+
+  for (const request of allAutoRequests) {
+    const id = Number((request as any).projectId);
+
+    if (!autoRequestByProject.has(id)) {
+      autoRequestByProject.set(id, request);
+    }
+  }
+
+  const contractorByProject = new Map<number, number>();
+
+  for (const row of contractorRows) {
+    contractorByProject.set(
+      Number(row.projectId),
+      Number(row.total || 0),
+    );
+  }
+
+  const expenseByProject = new Map<number, number>();
+
+  for (const row of expenseRows) {
+    expenseByProject.set(
+      Number(row.projectId),
+      Number(row.total || 0),
+    );
+  }
 
   for (const row of qualifiedProjects) {
-    const projectId =
-      Number(row.projectId);
+    const projectId = Number(row.projectId);
 
     if (
       !Number.isInteger(projectId) ||
@@ -12958,114 +13206,52 @@ async getProjectProfitabilitySummary(
       continue;
     }
 
+    const profitabilityProject =
+      projectMap.get(projectId);
+
+    if (!profitabilityProject) {
+      continue;
+    }
+
     totalRevenueReceived +=
-      Number(
-        row.totalRevenueReceived || 0,
+      Number(row.totalRevenueReceived || 0);
+
+    const materialCost =
+      await this.getProjectMaterialLagat(
+        projectId,
+        profitabilityProject,
+        {
+          consumptions:
+            consumptionsByProject.get(projectId) || [],
+
+          issuedMajorRows:
+            issuedByProject.get(projectId) || [],
+
+          autoRequest:
+            autoRequestByProject.get(projectId) || null,
+
+          requestItems:
+            requestItemsByProject.get(projectId) || [],
+
+          activeMaterials:
+            profitabilityActiveMaterials,
+
+          poItems:
+            poItemsByProject.get(projectId) || [],
+        },
       );
 
-    const profitabilityProject =
-  await this.projectRepository.findOne({
-    where: {
-      id: projectId,
-    },
-  });
-
-if (!profitabilityProject) {
-  continue;
-}
-
-const materialCost =
-  await this.getProjectMaterialLagat(
-    projectId,
-    profitabilityProject,
-    profitabilityActiveMaterials,
-  );
-
-totalMaterialLagat +=
-  Number(
-    materialCost.total || 0,
-  );
-
-    const contractorRow =
-      await this
-        .projectContractorAssignmentRepository
-        .createQueryBuilder('assignment')
-        .select(
-          `
-          COALESCE(
-            SUM(
-              COALESCE(
-                assignment.amount,
-                0
-              )
-            ),
-            0
-          )
-          `,
-          'total',
-        )
-        .where(
-          'assignment."projectId" = :projectId',
-          { projectId },
-        )
-        .andWhere(
-          'assignment.status != :reassignedStatus',
-          {
-            reassignedStatus:
-              ProjectContractorWorkStatus.REASSIGNED,
-          },
-        )
-        .getRawOne<{
-          total: string | number | null;
-        }>();
+    totalMaterialLagat +=
+      Number(materialCost.total || 0);
 
     totalContractorLagat +=
-      Number(contractorRow?.total || 0);
-
-    const expenseRow =
-      await this.projectAccountExpenseRepository
-        .createQueryBuilder('expense')
-        .select(
-          `
-          COALESCE(
-            SUM(
-              COALESCE(
-                expense."totalAmount",
-                expense.amount,
-                0
-              )
-            ),
-            0
-          )
-          `,
-          'total',
-        )
-        .where(
-          'expense."projectId" = :projectId',
-          { projectId },
-        )
-        .andWhere(
-          'expense."expenseType" = :expenseType',
-          {
-            expenseType: 'OTHER',
-          },
-        )
-        .andWhere(
-          'expense."approvalStatus" = :approvalStatus',
-          {
-            approvalStatus: 'APPROVED',
-          },
-        )
-        .andWhere(
-          'COALESCE(expense."isHidden", false) = false',
-        )
-        .getRawOne<{
-          total: string | number | null;
-        }>();
+      contractorByProject.get(projectId) || 0;
 
     totalOtherExpenditure +=
-      Number(expenseRow?.total || 0);
+      expenseByProject.get(projectId) || 0;
   }
+}
+
 
   const totalLagat =
     totalMaterialLagat +
