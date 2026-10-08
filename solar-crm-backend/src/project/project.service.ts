@@ -12723,6 +12723,8 @@ async getProjectProfitabilitySummary(
   filters: {
     fromDate?: string;
     toDate?: string;
+    category?: 'ALL' | 'COMPLETED' | 'RUNNING';
+    completionCondition?: 'STATUS' | 'PAYMENT' | 'BOTH';
   },
   user?: any,
 ) {
@@ -12740,6 +12742,28 @@ async getProjectProfitabilitySummary(
       'You do not have access to project profitability',
     );
   }
+
+  const category = filters?.category || 'ALL';
+const completionCondition =
+  filters?.completionCondition || 'BOTH';
+
+if (
+  !['ALL', 'COMPLETED', 'RUNNING'].includes(category)
+) {
+  throw new BadRequestException(
+    'Invalid profitability category',
+  );
+}
+
+if (
+  !['STATUS', 'PAYMENT', 'BOTH'].includes(
+    completionCondition,
+  )
+) {
+  throw new BadRequestException(
+    'Invalid completion condition',
+  );
+}
 
   /*
    * Profitability qualification:
@@ -12806,130 +12830,204 @@ async getProjectProfitabilitySummary(
     )
   `;
 
-  const paymentThresholdReachedDateSql = `
-    (
-      SELECT threshold_history."eligibilityDate"
+  
+const getPaymentThresholdReachedDateSql = (
+  threshold: number,
+) => `
+  (
+    SELECT threshold_history."eligibilityDate"
 
-      FROM (
-        SELECT
+    FROM (
+      SELECT
+        COALESCE(
+          receipt_filter."approvedAt",
+          installment_filter."approvedAt",
+          receipt_filter."paymentDate",
+          receipt_filter."createdAt"
+        ) AS "eligibilityDate",
+
+        SUM(
           COALESCE(
-            receipt_filter."approvedAt",
-            installment_filter."approvedAt",
-            receipt_filter."paymentDate",
-            receipt_filter."createdAt"
-          ) AS "eligibilityDate",
-
-          SUM(
-            COALESCE(
-              receipt_filter."receivedAmount",
-              0
-            )
-          ) OVER (
-            ORDER BY
-              COALESCE(
-                receipt_filter."approvedAt",
-                installment_filter."approvedAt",
-                receipt_filter."paymentDate",
-                receipt_filter."createdAt"
-              ) ASC,
-              receipt_filter.id ASC
-          ) AS "cumulativeAmount"
-
-        FROM project_payment_receipts receipt_filter
-
-        INNER JOIN project_payment_installments installment_filter
-          ON installment_filter.id =
-            receipt_filter."installmentId"
-
-        WHERE
-          receipt_filter."projectId" = project.id
-
-          AND COALESCE(
-            receipt_filter."isHidden",
-            false
-          ) = false
-
-          AND COALESCE(
-            installment_filter."isHidden",
-            false
-          ) = false
-
-          AND COALESCE(
             receipt_filter."receivedAmount",
             0
-          ) > 0
-
-          AND (
-            receipt_filter."approvalStatus" = 'APPROVED'
-
-            OR (
-              receipt_filter."approvalStatus" = 'PENDING'
-              AND installment_filter."approvalStatus" = 'APPROVED'
-            )
           )
-      ) threshold_history
+        ) OVER (
+          ORDER BY
+            COALESCE(
+              receipt_filter."approvedAt",
+              installment_filter."approvedAt",
+              receipt_filter."paymentDate",
+              receipt_filter."createdAt"
+            ) ASC,
+            receipt_filter.id ASC
+        ) AS "cumulativeAmount"
+
+      FROM project_payment_receipts receipt_filter
+
+      INNER JOIN project_payment_installments installment_filter
+        ON installment_filter.id =
+          receipt_filter."installmentId"
 
       WHERE
-        threshold_history."cumulativeAmount" >=
-          (
-            (${projectTotalAmountSql}) *
-            0.20
+        receipt_filter."projectId" = project.id
+
+        AND COALESCE(
+          receipt_filter."isHidden",
+          false
+        ) = false
+
+        AND COALESCE(
+          installment_filter."isHidden",
+          false
+        ) = false
+
+        AND COALESCE(
+          receipt_filter."receivedAmount",
+          0
+        ) > 0
+
+        AND (
+          receipt_filter."approvalStatus" = 'APPROVED'
+
+          OR (
+            receipt_filter."approvalStatus" = 'PENDING'
+            AND installment_filter."approvalStatus" = 'APPROVED'
           )
+        )
+    ) threshold_history
 
-      ORDER BY
-        threshold_history."eligibilityDate" ASC
+    WHERE
+      threshold_history."cumulativeAmount" >=
+        (
+          (${projectTotalAmountSql}) *
+          ${threshold}
+        )
 
-      LIMIT 1
+    ORDER BY
+      threshold_history."eligibilityDate" ASC
+
+    LIMIT 1
+  )
+`;
+
+const paymentThresholdReachedDateSql =
+  getPaymentThresholdReachedDateSql(0.20);
+
+const fullPaymentReachedDateSql =
+  getPaymentThresholdReachedDateSql(1.00);
+
+
+  
+const completionDateSql =
+  `project."actualCompletionDate"`;
+
+const payment100DateSql =
+  fullPaymentReachedDateSql;
+
+const bothCompletionDateSql = `
+  CASE
+    WHEN ${completionDateSql} IS NOT NULL
+      AND ${payment100DateSql} IS NOT NULL
+    THEN GREATEST(
+      ${completionDateSql},
+      ${payment100DateSql}
     )
-  `;
+    ELSE NULL
+  END
+`;
 
-  const projectQuery =
-    this.projectRepository
-      .createQueryBuilder('project')
-      .select('project.id', 'projectId')
-      .addSelect(
-        approvedPaymentAmountSql,
-        'totalRevenueReceived',
-      )
-      .addSelect(
-        paymentThresholdReachedDateSql,
-        'qualifiedAt',
-      )
-      .where(
-        'COALESCE(project."isHidden", false) = false',
-      )
-      .andWhere(
-        `(${projectTotalAmountSql}) > 0`,
-      )
-      .andWhere(
-        `(${approvedPaymentAmountSql}) >= ((${projectTotalAmountSql}) * 0.20)`,
-      );
+const qualificationDateSql =
+  category === 'COMPLETED'
+    ? completionCondition === 'STATUS'
+      ? completionDateSql
+      : completionCondition === 'PAYMENT'
+        ? payment100DateSql
+        : bothCompletionDateSql
+    : paymentThresholdReachedDateSql;
 
-  /*
-   * These dates apply ONLY to the date on which
-   * the project first reached 20% payment.
-   */
-  if (filters?.fromDate) {
+const projectQuery =
+  this.projectRepository
+    .createQueryBuilder('project')
+    .select('project.id', 'projectId')
+    .addSelect(
+      approvedPaymentAmountSql,
+      'totalRevenueReceived',
+    )
+    .addSelect(
+      qualificationDateSql,
+      'qualifiedAt',
+    )
+    .where(
+      'COALESCE(project."isHidden", false) = false',
+    )
+    .andWhere(
+      `(${projectTotalAmountSql}) > 0`,
+    );
+
+if (category === 'ALL') {
+  projectQuery.andWhere(
+    `(${approvedPaymentAmountSql}) >= ((${projectTotalAmountSql}) * 0.20)`,
+  );
+}
+
+if (category === 'RUNNING') {
+  projectQuery
+    .andWhere(
+      `project.status != :completedStatus`,
+      { completedStatus: 'COMPLETED' },
+    )
+    .andWhere(
+      `(${approvedPaymentAmountSql}) >= ((${projectTotalAmountSql}) * 0.20)`,
+    );
+}
+
+if (category === 'COMPLETED') {
+  if (
+    completionCondition === 'STATUS' ||
+    completionCondition === 'BOTH'
+  ) {
     projectQuery.andWhere(
-      `${paymentThresholdReachedDateSql} >= :profitabilityFromDate`,
-      {
-        profitabilityFromDate: new Date(
-          `${filters.fromDate}T00:00:00`,
-        ),
-      },
+      `project.status = :completedStatus`,
+      { completedStatus: 'COMPLETED' },
     );
   }
 
-  if (filters?.toDate) {
+  if (
+    completionCondition === 'PAYMENT' ||
+    completionCondition === 'BOTH'
+  ) {
     projectQuery.andWhere(
-      `${paymentThresholdReachedDateSql} <= :profitabilityToDate`,
-      {
-        profitabilityToDate: new Date(
-          `${filters.toDate}T23:59:59.999`,
-        ),
-      },
+      `(${approvedPaymentAmountSql}) >= (${projectTotalAmountSql})`,
     );
   }
+
+  projectQuery.andWhere(
+    `(${qualificationDateSql}) IS NOT NULL`,
+  );
+}
+
+if (filters?.fromDate) {
+  projectQuery.andWhere(
+    `(${qualificationDateSql}) >= :profitabilityFromDate`,
+    {
+      profitabilityFromDate: new Date(
+        `${filters.fromDate}T00:00:00`,
+      ),
+    },
+  );
+}
+
+if (filters?.toDate) {
+  projectQuery.andWhere(
+    `(${qualificationDateSql}) <= :profitabilityToDate`,
+    {
+      profitabilityToDate: new Date(
+        `${filters.toDate}T23:59:59.999`,
+      ),
+    },
+  );
+}
+
 
   const qualifiedProjects =
     await projectQuery.getRawMany<{
@@ -13263,15 +13361,27 @@ if (projectIds.length > 0) {
     totalLagat;
 
   return {
-    filters: {
-      fromDate:
-        filters?.fromDate || null,
+  filters: {
+    fromDate:
+      filters?.fromDate || null,
 
-      toDate:
-        filters?.toDate || null,
+    toDate:
+      filters?.toDate || null,
 
-      paymentQualificationPercentage: 20,
-    },
+    category,
+
+    completionCondition:
+      category === 'COMPLETED'
+        ? completionCondition
+        : null,
+
+    paymentQualificationPercentage:
+      category === 'COMPLETED'
+        ? completionCondition === 'STATUS'
+          ? null
+          : 100
+        : 20,
+  },
 
     qualifiedProjectCount:
       qualifiedProjects.length,

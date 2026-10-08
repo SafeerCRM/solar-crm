@@ -6229,12 +6229,18 @@ getProjectProfitabilitySummary(
   @Query('fromDate') fromDate: string,
   @Query('toDate') toDate: string,
   @Req() req: any,
+  @Query('category')
+  category?: 'ALL' | 'COMPLETED' | 'RUNNING',
+  @Query('completionCondition')
+  completionCondition?: 'STATUS' | 'PAYMENT' | 'BOTH',
 ) {
   return this.projectService
     .getProjectProfitabilitySummary(
       {
         fromDate,
         toDate,
+        category,
+        completionCondition,
       },
       req.user,
     );
