@@ -342,6 +342,16 @@ const [
   setProfitabilityToDate,
 ] = useState('');
 
+const [
+  profitabilityCategory,
+  setProfitabilityCategory,
+] = useState<'ALL' | 'COMPLETED' | 'RUNNING'>('ALL');
+
+const [
+  profitabilityCompletionCondition,
+  setProfitabilityCompletionCondition,
+] = useState<'STATUS' | 'PAYMENT' | 'BOTH'>('BOTH');
+
   useEffect(() => {
   setCurrentUserRoles(
     getRolesFromToken(),
@@ -555,14 +565,14 @@ const fetchProfitabilitySummary =
         `${API_BASE_URL}/project/profitability/summary`,
         {
           params: {
-            fromDate:
-              profitabilityFromDate ||
-              undefined,
-
-            toDate:
-              profitabilityToDate ||
-              undefined,
-          },
+  fromDate: profitabilityFromDate || undefined,
+  toDate: profitabilityToDate || undefined,
+  category: profitabilityCategory,
+  completionCondition:
+    profitabilityCategory === 'COMPLETED'
+      ? profitabilityCompletionCondition
+      : undefined,
+},
 
           headers: token
             ? {
@@ -1207,6 +1217,8 @@ useEffect(() => {
   currentUserRoles,
   profitabilityFromDate,
   profitabilityToDate,
+  profitabilityCategory,
+  profitabilityCompletionCondition,
 ]);
 
 const canViewProfitability =
@@ -2104,16 +2116,145 @@ setPage(1);
         </h2>
 
         <p className="mt-1 text-sm text-gray-500">
-          Actual Laagat and revenue for projects that
-          reached at least 20% payment during the
-          selected period.
-        </p>
+  {profitabilityCategory === 'ALL'
+    ? 'Actual Laagat and revenue for projects that first reached 20% payment during the selected period.'
+    : profitabilityCategory === 'RUNNING'
+      ? 'Profitability of currently running projects that first reached 20% payment during the selected period.'
+      : 'Profitability of projects meeting the selected completion condition during the audit period.'}
+</p>
       </div>
 
       <div className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-700">
-        ≥ 20% Payment Qualified
+        {profitabilityCategory === 'COMPLETED'
+  ? 'Completion Audit'
+  : '≥ 20% Payment Qualified'}
       </div>
     </div>
+
+
+<div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
+  <div>
+    <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+      Project Category
+    </label>
+
+    <select
+      value={profitabilityCategory}
+      onChange={(e) =>
+        setProfitabilityCategory(
+          e.target.value as
+            | 'ALL'
+            | 'COMPLETED'
+            | 'RUNNING',
+        )
+      }
+      className="w-full rounded-xl border border-gray-300 bg-white p-3"
+    >
+      <option value="ALL">
+        All Qualified Projects (20% Payment)
+      </option>
+      <option value="COMPLETED">
+        Completed Projects
+      </option>
+      <option value="RUNNING">
+        Active / Running Projects
+      </option>
+    </select>
+  </div>
+
+  {profitabilityCategory === 'COMPLETED' && (
+    <div>
+      <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+        Completion Condition
+      </label>
+
+      <select
+        value={profitabilityCompletionCondition}
+        onChange={(e) =>
+          setProfitabilityCompletionCondition(
+            e.target.value as
+              | 'STATUS'
+              | 'PAYMENT'
+              | 'BOTH',
+          )
+        }
+        className="w-full rounded-xl border border-gray-300 bg-white p-3"
+      >
+        <option value="STATUS">
+          Project Status Completed
+        </option>
+        <option value="PAYMENT">
+          100% Payment Received
+        </option>
+        <option value="BOTH">
+          Both Conditions Satisfied
+        </option>
+      </select>
+    </div>
+  )}
+</div>
+
+
+<div className="mt-4 flex flex-wrap gap-2">
+  <button
+    type="button"
+    onClick={() => {
+      const year = new Date().getFullYear();
+      setProfitabilityMonth('');
+      setProfitabilityFromDate(`${year}-01-01`);
+      setProfitabilityToDate(`${year}-12-31`);
+    }}
+    className="rounded-xl border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+  >
+    This Calendar Year
+  </button>
+
+  <button
+    type="button"
+    onClick={() => {
+      const year = new Date().getFullYear();
+      setProfitabilityMonth('');
+      setProfitabilityFromDate(`${year - 1}-01-01`);
+      setProfitabilityToDate(`${year - 1}-12-31`);
+    }}
+    className="rounded-xl border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+  >
+    Previous Calendar Year
+  </button>
+
+  <button
+    type="button"
+    onClick={() => {
+      const now = new Date();
+      const end = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        0,
+      );
+      const start = new Date(
+        now.getFullYear(),
+        now.getMonth() - 2,
+        1,
+      );
+
+      const formatLocalDate = (date: Date) =>
+        `${date.getFullYear()}-${String(
+          date.getMonth() + 1,
+        ).padStart(2, '0')}-${String(
+          date.getDate(),
+        ).padStart(2, '0')}`;
+
+      setProfitabilityMonth('');
+      setProfitabilityFromDate(formatLocalDate(start));
+      setProfitabilityToDate(formatLocalDate(end));
+    }}
+    className="rounded-xl border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+  >
+    Last 3 Calendar Months
+  </button>
+</div>
+
+
 
     <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
       <div>
@@ -2296,7 +2437,13 @@ setPage(1);
             </p>
 
             <p className="mt-1 text-xs text-gray-500">
-              First reached ≥20% in selected period
+              {profitabilityCategory === 'COMPLETED'
+  ? profitabilityCompletionCondition === 'STATUS'
+    ? 'Status completed during selected period'
+    : profitabilityCompletionCondition === 'PAYMENT'
+      ? 'First reached 100% payment during selected period'
+      : 'Both conditions satisfied during selected period'
+  : 'First reached ≥20% in selected period'}
             </p>
           </div>
 
