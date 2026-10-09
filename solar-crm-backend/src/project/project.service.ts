@@ -55441,6 +55441,50 @@ async issueStock(body: any, user: any) {
 let materialId = Number(body?.materialId || 0);
   const quantity = Number(body?.quantity || 0);
 
+    const sourceType = String(
+    body?.sourceType || 'MANUAL',
+  ).trim();
+
+  let selectedDealerId: number | null = null;
+  let selectedDealerName = '';
+
+  if (sourceType === 'DEALER') {
+    selectedDealerId = Number(body?.dealerId);
+
+    if (
+      !Number.isSafeInteger(selectedDealerId) ||
+      selectedDealerId <= 0
+    ) {
+      throw new BadRequestException(
+        'Please search and select a dealer',
+      );
+    }
+
+    const dealer = await this.projectVendorRepository.findOne({
+      where: {
+        id: selectedDealerId,
+        isActive: true,
+        isHidden: false,
+      },
+    });
+
+    if (
+      !dealer ||
+      !(
+        ['DEALER', 'BOTH'].includes(
+          String(dealer.partyType || '').toUpperCase(),
+        ) ||
+        dealer.canBuyFromUs === true
+      )
+    ) {
+      throw new BadRequestException(
+        'Selected dealer is unavailable',
+      );
+    }
+
+    selectedDealerName = dealer.vendorName;
+  }
+
   if (!materialId && !stockItemId) {
   throw new BadRequestException('Material or stock item is required');
 }
@@ -55519,10 +55563,28 @@ movement.movementType = ProjectStockMovementType.ISSUE;
 movement.quantity = quantity;
 movement.rate = rate;
 movement.totalAmount = totalAmount;
-movement.sourceType = body?.sourceType || 'MANUAL_STOCK_ISSUE';
-movement.sourceId = body?.sourceId ? Number(body.sourceId) : undefined as any;
-movement.projectId = body?.projectId ? Number(body.projectId) : undefined as any;
-movement.remarks = body?.remarks || '';
+movement.sourceType = sourceType;
+
+movement.sourceId =
+  sourceType === 'DEALER'
+    ? selectedDealerId!
+    : body?.sourceId
+      ? Number(body.sourceId)
+      : undefined as any;
+
+movement.projectId =
+  body?.projectId
+    ? Number(body.projectId)
+    : undefined as any;
+
+movement.remarks =
+  sourceType === 'DEALER'
+    ? `Dealer: ${selectedDealerName} (ID: ${selectedDealerId})${
+        String(body?.remarks || '').trim()
+          ? ` | ${String(body.remarks).trim()}`
+          : ''
+      }`
+    : body?.remarks || '';
 movement.createdBy = Number(user?.id || user?.userId || user?.sub || 0);
 movement.createdByName = user?.name || user?.email || '';
 

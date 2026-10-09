@@ -45,6 +45,17 @@ const [projectSearchResults, setProjectSearchResults] =
   useState<any[]>([]);
 const [projectSearchLoading, setProjectSearchLoading] =
   useState(false);
+  const [issueDealerSearch, setIssueDealerSearch] =
+  useState('');
+
+const [issueDealerResults, setIssueDealerResults] =
+  useState<any[]>([]);
+
+const [issueDealerLoading, setIssueDealerLoading] =
+  useState(false);
+
+const [selectedIssueDealer, setSelectedIssueDealer] =
+  useState<any | null>(null);
 const [selectedProject, setSelectedProject] =
   useState<any | null>(null);
 
@@ -109,6 +120,7 @@ const [issueForm, setIssueForm] = useState({
   sourceType: 'MANUAL',
   deductFrom: 'AVAILABLE',
   projectId: '',
+  dealerId: '',
   dealerName: '',
   dealerPhone: '',
   remarks: '',
@@ -1121,6 +1133,72 @@ const receiveStock = async () => {
   }
 };
 
+const searchDealersForStockIssue = async (value: string) => {
+  setIssueDealerSearch(value);
+  setIssueDealerResults([]);
+
+  if (!value.trim()) {
+    setIssueDealerLoading(false);
+    return;
+  }
+
+  try {
+    setIssueDealerLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const response = await axios.get(
+      `${API_BASE_URL}/project/trading/dealer-search`,
+      {
+        params: {
+          search: value.trim(),
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setIssueDealerResults(
+      Array.isArray(response.data)
+        ? response.data
+        : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to search dealers for stock issue:',
+      error,
+    );
+
+    setIssueDealerResults([]);
+  } finally {
+    setIssueDealerLoading(false);
+  }
+};
+
+const selectDealerForStockIssue = (dealer: any) => {
+  setSelectedIssueDealer(dealer);
+
+  setIssueForm((prev) => ({
+    ...prev,
+    dealerId: String(dealer.id),
+    dealerName: dealer.name || '',
+    dealerPhone: dealer.phone || '',
+  }));
+
+  setIssueDealerSearch(
+    `${dealer.name || 'Unnamed Dealer'}${
+      dealer.firmName
+        ? ` - ${dealer.firmName}`
+        : ''
+    }`,
+  );
+
+  setIssueDealerResults([]);
+};
+
 const issueStock = async () => {
   if (!issueForm.stockItemId) {
     alert('Please select stock item');
@@ -1132,13 +1210,19 @@ const issueStock = async () => {
     return;
   }
 
-  if (
+    if (
     issueForm.sourceType === 'PROJECT' &&
     !issueForm.projectId
   ) {
-    alert(
-      'Please search and select a project',
-    );
+    alert('Please search and select a project');
+    return;
+  }
+
+    if (
+    issueForm.sourceType === 'DEALER' &&
+    !issueForm.dealerId
+  ) {
+    alert('Please search and select a dealer');
     return;
   }
 
@@ -1169,6 +1253,11 @@ const issueStock = async () => {
           projectId:
             issueForm.projectId ||
             undefined,
+
+                    dealerId:
+            issueForm.sourceType === 'DEALER'
+              ? Number(issueForm.dealerId)
+              : undefined,
 
           dealerName:
             issueForm.dealerName,
@@ -1252,16 +1341,21 @@ const issueStock = async () => {
         'Stock issued successfully',
     );
 
-    setIssueForm({
+        setIssueForm({
       stockItemId: '',
       quantity: '',
       sourceType: 'MANUAL',
       deductFrom: 'AVAILABLE',
       projectId: '',
+      dealerId: '',
       dealerName: '',
       dealerPhone: '',
       remarks: '',
     });
+
+    setSelectedIssueDealer(null);
+    setIssueDealerSearch('');
+    setIssueDealerResults([]);
 
     setSelectedProject(null);
     setProjectSearch('');
@@ -2959,19 +3053,37 @@ const filteredIncomingMaterials =
       onChange={(e) => {
   const nextSourceType = e.target.value;
 
-  setIssueForm({
-    ...issueForm,
+  setIssueForm((prev) => ({
+    ...prev,
     sourceType: nextSourceType,
     projectId:
       nextSourceType === 'PROJECT'
-        ? issueForm.projectId
+        ? prev.projectId
         : '',
-  });
+    dealerId:
+      nextSourceType === 'DEALER'
+        ? prev.dealerId
+        : '',
+    dealerName:
+      nextSourceType === 'DEALER'
+        ? prev.dealerName
+        : '',
+    dealerPhone:
+      nextSourceType === 'DEALER'
+        ? prev.dealerPhone
+        : '',
+  }));
 
   if (nextSourceType !== 'PROJECT') {
     setSelectedProject(null);
     setProjectSearch('');
     setProjectSearchResults([]);
+  }
+
+  if (nextSourceType !== 'DEALER') {
+    setSelectedIssueDealer(null);
+    setIssueDealerSearch('');
+    setIssueDealerResults([]);
   }
 }}
       className="rounded-xl border p-3 text-sm"
@@ -3007,33 +3119,87 @@ const filteredIncomingMaterials =
   </option>
 </select>
 
-    {issueForm.sourceType === 'DEALER' && (
-      <>
+        {issueForm.sourceType === 'DEALER' && (
+      <div className="relative md:col-span-2">
         <input
           type="text"
-          placeholder="Dealer Name"
-          value={issueForm.dealerName}
-          onChange={(e) =>
-            setIssueForm({
-              ...issueForm,
-              dealerName: e.target.value,
-            })
-          }
-          className="rounded-xl border p-3 text-sm"
+          placeholder="Search dealer by name, firm or phone"
+          value={issueDealerSearch}
+          onChange={(e) => {
+            setSelectedIssueDealer(null);
+
+            setIssueForm((prev) => ({
+              ...prev,
+              dealerId: '',
+              dealerName: '',
+              dealerPhone: '',
+            }));
+
+            void searchDealersForStockIssue(
+              e.target.value,
+            );
+          }}
+          className="w-full rounded-xl border p-3 text-sm"
         />
-        <input
-          type="text"
-          placeholder="Dealer Phone"
-          value={issueForm.dealerPhone}
-          onChange={(e) =>
-            setIssueForm({
-              ...issueForm,
-              dealerPhone: e.target.value,
-            })
-          }
-          className="rounded-xl border p-3 text-sm"
-        />
-      </>
+
+        {issueDealerLoading && (
+          <p className="mt-1 text-xs text-gray-500">
+            Searching dealers...
+          </p>
+        )}
+
+        {issueDealerResults.length > 0 &&
+          !selectedIssueDealer && (
+            <div className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border bg-white shadow-lg">
+              {issueDealerResults.map(
+                (dealer: any) => (
+                  <button
+                    key={dealer.id}
+                    type="button"
+                    onClick={() =>
+                      selectDealerForStockIssue(dealer)
+                    }
+                    className="block w-full border-b px-4 py-3 text-left hover:bg-gray-50"
+                  >
+                    <p className="font-semibold text-gray-800">
+                      {dealer.name || 'Unnamed Dealer'}
+                    </p>
+
+                    <p className="mt-1 text-xs text-gray-500">
+                      {[
+                        dealer.firmName,
+                        dealer.phone,
+                        dealer.city,
+                        `ID: ${dealer.id}`,
+                      ]
+                        .filter(Boolean)
+                        .join(' | ')}
+                    </p>
+                  </button>
+                ),
+              )}
+            </div>
+          )}
+
+        {selectedIssueDealer && (
+          <div className="mt-2 rounded-xl bg-green-50 p-3 text-sm">
+            <p className="font-semibold text-green-800">
+              Selected Dealer
+            </p>
+
+            <p className="mt-1 text-green-700">
+              {selectedIssueDealer.name}
+            </p>
+
+            <p className="mt-1 text-xs text-green-700">
+              ID: {selectedIssueDealer.id}
+              {selectedIssueDealer.phone
+                ? ` | ${selectedIssueDealer.phone}`
+                : ''}
+            </p>
+          </div>
+        )}
+      </div>
     )}
 
     <input
