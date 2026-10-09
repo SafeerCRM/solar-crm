@@ -135,6 +135,21 @@ const [showHiddenAfterSalesServices, setShowHiddenAfterSalesServices] =
 const [cleaningSettingSaving, setCleaningSettingSaving] =
   useState(false);
 
+  const [contractorSlaHours, setContractorSlaHours] =
+  useState('24');
+
+const [contractorPenaltyPerDay, setContractorPenaltyPerDay] =
+  useState('500');
+
+const [contractorSlaLoading, setContractorSlaLoading] =
+  useState(true);
+
+const [contractorSlaSaving, setContractorSlaSaving] =
+  useState(false);
+
+const [contractorSlaError, setContractorSlaError] =
+  useState('');
+
   const headers = () => ({
     Authorization: `Bearer ${localStorage.getItem('token')}`,
   });
@@ -147,6 +162,7 @@ const [cleaningSettingSaving, setCleaningSettingSaving] =
   loadPolicies();
   loadAfterSalesServices();
   loadCleaningSetting();
+  loadContractorSlaSettings();
 }, []);
 
   useEffect(() => {
@@ -1051,6 +1067,95 @@ const restoreAfterSalesService = async (item: any) => {
   );
 
   await loadAfterSalesServices();
+};
+
+const loadContractorSlaSettings = async () => {
+  try {
+    setContractorSlaLoading(true);
+    setContractorSlaError('');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/contractor-sla/settings`,
+      { headers: headers() },
+    );
+
+    setContractorSlaHours(
+      String(res.data?.slaHours ?? 24),
+    );
+
+    setContractorPenaltyPerDay(
+      String(res.data?.penaltyPerDay ?? 500),
+    );
+  } catch (error: any) {
+    console.error(error);
+
+    setContractorSlaError(
+      error?.response?.data?.message ||
+        'Unable to load contractor SLA settings',
+    );
+  } finally {
+    setContractorSlaLoading(false);
+  }
+};
+
+const saveContractorSlaSettings = async () => {
+  const slaHours = Number(contractorSlaHours);
+  const penaltyPerDay = Number(contractorPenaltyPerDay);
+
+  if (
+    contractorSlaHours.trim() === '' ||
+    !Number.isInteger(slaHours) ||
+    slaHours < 1 ||
+    slaHours > 720
+  ) {
+    alert('Enter SLA hours between 1 and 720.');
+    return;
+  }
+
+  if (
+    contractorPenaltyPerDay.trim() === '' ||
+    !Number.isFinite(penaltyPerDay) ||
+    penaltyPerDay < 0 ||
+    penaltyPerDay > 100000 ||
+    !Number.isInteger(
+      Math.round(penaltyPerDay * 1000000) / 10000,
+    )
+  ) {
+    alert(
+      'Enter a valid daily penalty between ₹0 and ₹1,00,000 (maximum 2 decimal places).',
+    );
+    return;
+  }
+
+  try {
+    setContractorSlaSaving(true);
+    setContractorSlaError('');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/contractor-sla/settings`,
+      { slaHours, penaltyPerDay },
+      { headers: headers() },
+    );
+
+    setContractorSlaHours(String(slaHours));
+    setContractorPenaltyPerDay(String(penaltyPerDay));
+
+    alert('Contractor SLA settings saved successfully.');
+  } catch (error: any) {
+    console.error(error);
+
+    const message =
+      error?.response?.data?.message ||
+      'Failed to save contractor SLA settings';
+
+    setContractorSlaError(
+      Array.isArray(message)
+        ? message.join(', ')
+        : String(message),
+    );
+  } finally {
+    setContractorSlaSaving(false);
+  }
 };
 
 const loadCleaningSetting = async () => {
@@ -2385,6 +2490,113 @@ const saveCleaningSetting = async () => {
       ))
     )}
   </div>
+</section>
+
+<section className="mt-6 rounded-2xl bg-white p-6 shadow">
+  <div>
+    <h2 className="text-lg font-bold text-gray-800">
+      Contractor SLA & Penalty Settings
+    </h2>
+
+    <p className="mt-1 text-sm text-gray-500">
+      Configure the time allowed for contractor work and the
+      penalty for each chargeable overdue day.
+    </p>
+  </div>
+
+  {contractorSlaLoading ? (
+    <p className="mt-5 text-sm text-gray-500">
+      Loading contractor SLA settings...
+    </p>
+  ) : (
+    <div className="mt-5 grid gap-5 md:grid-cols-2">
+      <div>
+        <label className="mb-2 block text-sm font-semibold text-gray-700">
+          Work Completion Time (Hours)
+        </label>
+
+        <input
+          type="number"
+          min="1"
+          max="720"
+          step="1"
+          value={contractorSlaHours}
+          onChange={(e) =>
+            setContractorSlaHours(e.target.value)
+          }
+          className="w-full rounded-xl border p-3"
+        />
+
+        <p className="mt-2 text-xs text-gray-500">
+          Each newly assigned activity receives this many
+          hours to complete.
+        </p>
+      </div>
+
+      <div>
+        <label className="mb-2 block text-sm font-semibold text-gray-700">
+          Penalty per Overdue Day (₹)
+        </label>
+
+        <input
+          type="number"
+          min="0"
+          max="100000"
+          step="0.01"
+          value={contractorPenaltyPerDay}
+          onChange={(e) =>
+            setContractorPenaltyPerDay(e.target.value)
+          }
+          className="w-full rounded-xl border p-3"
+        />
+
+        <p className="mt-2 text-xs text-gray-500">
+          One penalty per eligible assignment batch-day,
+          regardless of the number of overdue activities.
+        </p>
+      </div>
+
+      <div className="md:col-span-2">
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+          <p className="font-semibold text-gray-800">
+            How changes are applied
+          </p>
+
+          <p className="mt-2">
+            New contractor assignments use these settings.
+            Existing assignments retain the duration and
+            penalty rate recorded when they were created.
+          </p>
+
+          <p className="mt-2">
+            Approved work delays pause the affected activity.
+            Previously incurred penalties are preserved.
+          </p>
+        </div>
+
+        {contractorSlaError && (
+          <p className="mt-3 text-sm font-semibold text-red-600">
+            {contractorSlaError}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={saveContractorSlaSettings}
+          disabled={
+            contractorSlaSaving ||
+            contractorSlaLoading ||
+            Boolean(contractorSlaError)
+          }
+          className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-bold text-white disabled:opacity-60"
+        >
+          {contractorSlaSaving
+            ? 'Saving...'
+            : 'Save Contractor SLA Settings'}
+        </button>
+      </div>
+    </div>
+  )}
 </section>
 
 <section className="mt-6 rounded-2xl bg-white p-6 shadow">

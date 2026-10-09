@@ -231,6 +231,66 @@ type RescheduleRequest = {
   createdAt?: string;
 };
 
+type ContractorSlaWork = {
+  workId: number;
+  workItem: string;
+  status: string;
+  assignedAt: string;
+  effectiveDeadline: string;
+  completedAt: string | null;
+  isOverdue: boolean;
+};
+
+type ContractorSlaSummary = {
+  assignmentId: number;
+  totalDeductiblePenalty: number;
+  batches: Array<{
+    batchId: number;
+    works: ContractorSlaWork[];
+  }>;
+};
+
+const SLA_WORK_HINDI: Record<string, string> = {
+  STRUCTURE_WORK: 'स्ट्रक्चर का काम',
+  STRUCTURE_INSPECTION: 'स्ट्रक्चर निरीक्षण',
+  PILLAR_WORK: 'पिलर का काम',
+  PILLAR_INSPECTION: 'पिलर निरीक्षण',
+  PANEL_INSTALLATION: 'सोलर पैनल लगाना',
+  INVERTER_INSTALLATION: 'इन्वर्टर लगाना',
+  WIRING: 'वायरिंग का काम',
+  EARTHING: 'अर्थिंग का काम',
+  SOLAR_METER_WORK: 'सोलर मीटर का काम',
+  NET_METER_WORK: 'नेट मीटर का काम',
+  GENERATION_WORK: 'बिजली उत्पादन शुरू करना',
+  OTHER: 'अन्य काम',
+};
+
+const SLA_ALLOWED_PROOFS: Record<string, string[]> = {
+  STRUCTURE_WORK: ['STRUCTURE_PHOTO'],
+  STRUCTURE_INSPECTION: ['STRUCTURE_PHOTO'],
+  PILLAR_WORK: ['PILLAR_PHOTO'],
+  PILLAR_INSPECTION: ['PILLAR_PHOTO'],
+  PANEL_INSTALLATION: [
+    'PANEL_SERIAL_NUMBER_PHOTO',
+    'PANEL_WITH_CLIENT_PHOTO',
+  ],
+  INVERTER_INSTALLATION: ['INVERTER_PHOTO'],
+  WIRING: ['OTHER'],
+  EARTHING: ['EARTHING_WITH_CLIENT_PHOTO'],
+  SOLAR_METER_WORK: ['SOLAR_METER_PHOTO'],
+  NET_METER_WORK: ['NET_METER_PHOTO'],
+  GENERATION_WORK: ['OTHER'],
+  OTHER: ['OTHER'],
+};
+
+const SLA_STATUS_HINDI: Record<string, string> = {
+  RUNNING: 'काम जारी है',
+  PAUSED: 'समय सीमा रोकी गई है',
+  COMPLETED: 'काम पूरा हुआ',
+  STOPPED: 'काम बंद किया गया',
+  REASSIGNED: 'काम दूसरे ठेकेदार को दिया गया',
+};
+
 const CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE: Record<string, string[]> = {
   FULL_PROJECT: [
     'STRUCTURE_PHOTO',
@@ -343,6 +403,21 @@ const [proofFiles, setProofFiles] =
 const [proofType, setProofType] =
   useState<Record<number, string>>({});
 
+  const [slaSummaries, setSlaSummaries] = useState<
+  Record<number, ContractorSlaSummary>
+>({});
+
+const [selectedSlaWork, setSelectedSlaWork] = useState<
+  Record<number, string>
+>({});
+
+const [slaDelayReason, setSlaDelayReason] = useState<
+  Record<number, string>
+>({});
+
+const [slaDelayBusyId, setSlaDelayBusyId] =
+  useState<number | null>(null);
+
 const [proofRemarks, setProofRemarks] =
   useState<Record<number, string>>({});
 
@@ -431,6 +506,7 @@ setProjects(assignedProjects);
 assignedProjects.forEach((item: ContractorProject) => {
   if (item?.id) {
     fetchProofs(item.id);
+    fetchContractorSla(item.id);
     fetchComments(item.id);
     fetchRemainingMaterials(item.id);
   }
@@ -548,6 +624,111 @@ const updateCleaningStatus = async (
     );
   } finally {
     setCleaningUpdatingId(null);
+  }
+};
+
+const requestSlaDelay = async (
+  assignmentId: number,
+  workId: number,
+) => {
+  const reason = (slaDelayReason[workId] || '').trim();
+
+  if (reason.length < 5) {
+    alert('कृपया देरी का कारण कम से कम 5 अक्षरों में लिखें।');
+    return;
+  }
+
+  try {
+    setSlaDelayBusyId(workId);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/contractor-sla/delay/request`,
+      { workId, reason },
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    alert(
+      'अतिरिक्त समय का अनुरोध भेज दिया गया है। मंजूरी मिलने तक समय सीमा जारी रहेगी।',
+    );
+
+    setSlaDelayReason((prev) => ({
+      ...prev,
+      [workId]: '',
+    }));
+
+    await fetchContractorSla(assignmentId);
+  } catch (error: any) {
+    const message =
+      error?.response?.data?.message ||
+      'अनुरोध भेजने में समस्या हुई।';
+
+    alert(Array.isArray(message) ? message.join(', ') : message);
+  } finally {
+    setSlaDelayBusyId(null);
+  }
+};
+
+const resumeSlaWork = async (
+  assignmentId: number,
+  workId: number,
+) => {
+  if (!window.confirm('क्या आप इस काम की समय सीमा फिर से शुरू करना चाहते हैं?')) {
+    return;
+  }
+
+  try {
+    setSlaDelayBusyId(workId);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/contractor-sla/work/${workId}/resume`,
+      {},
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    alert('काम की समय सीमा फिर से शुरू हो गई है।');
+    await fetchContractorSla(assignmentId);
+  } catch (error: any) {
+    const message =
+      error?.response?.data?.message ||
+      'काम फिर से शुरू करने में समस्या हुई।';
+
+    alert(Array.isArray(message) ? message.join(', ') : message);
+  } finally {
+    setSlaDelayBusyId(null);
+  }
+};
+
+const fetchContractorSla = async (assignmentId: number) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/contractor-sla/assignment/${assignmentId}/summary`,
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    setSlaSummaries((prev) => ({
+      ...prev,
+      [assignmentId]: res.data,
+    }));
+  } catch (error) {
+    console.error('Contractor SLA fetch failed', error);
   }
 };
 
@@ -789,6 +970,41 @@ const uploadContractorProofs = async (
     return;
   }
 
+  const slaWorks =
+  slaSummaries[item.id]?.batches.flatMap(
+    (batch) => batch.works,
+  ) || [];
+
+const selectedWorkId = Number(selectedSlaWork[item.id]);
+
+const selectedWork = slaWorks.find(
+  (work) => work.workId === selectedWorkId,
+);
+
+if (selectedWork) {
+  const allowedProofs =
+    SLA_ALLOWED_PROOFS[selectedWork.workItem] || [];
+
+  if (!allowedProofs.includes(proofType[item.id])) {
+    alert(
+      'चुने गए काम के अनुसार सही फोटो का प्रकार चुनें।',
+    );
+    return;
+  }
+}
+
+if (
+  slaWorks.length > 0 &&
+  !slaWorks.some(
+    (work) =>
+      work.workId === selectedWorkId &&
+      ['RUNNING', 'PAUSED'].includes(work.status),
+  )
+) {
+  alert('कृपया पहले उस काम को चुनें जिसकी फोटो अपलोड कर रहे हैं।');
+  return;
+}
+
   const gps = gpsData[item.id];
 
   if (!gps?.latitude || !gps?.longitude) {
@@ -817,6 +1033,9 @@ for (const file of files) {
     formData.append('assignmentId', String(item.id));
     formData.append('projectId', String(item.projectId));
     formData.append('proofType', proofType[item.id]);
+    if (slaWorks.length > 0) {
+  formData.append('slaWorkId', String(selectedWorkId));
+}
     formData.append('latitude', gps.latitude);
     formData.append('longitude', gps.longitude);
     formData.append('gpsAddress', gps.gpsAddress || '');
@@ -841,11 +1060,17 @@ for (const file of files) {
     }));
 
     setProofRemarks((prev) => ({
-      ...prev,
-      [item.id]: '',
-    }));
+  ...prev,
+  [item.id]: '',
+}));
 
-    fetchProofs(item.id);
+setSelectedSlaWork((prev) => ({
+  ...prev,
+  [item.id]: '',
+}));
+
+await fetchProofs(item.id);
+await fetchContractorSla(item.id);
   } catch (error: any) {
     console.error(error);
 
@@ -1620,6 +1845,134 @@ const selectedCleaningWorks = cleaningAssignments.filter(
   onSubmit={() => requestPostpone('SITE_WORK', item.id)}
 />
 
+
+{slaSummaries[item.id]?.batches.map((batch) => (
+  <div
+    key={batch.batchId}
+    className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-4"
+  >
+    <h3 className="font-bold text-gray-800">
+      सौंपे गए काम और समय सीमा
+    </h3>
+
+    <div className="mt-3 space-y-3">
+      {batch.works.map((work) => (
+        <div
+          key={work.workId}
+          className="rounded-xl border border-gray-200 bg-white p-3"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-bold text-gray-800">
+              {SLA_WORK_HINDI[work.workItem] ||
+                work.workItem.replace(/_/g, ' ')}
+            </span>
+
+            <span className="text-xs font-semibold text-gray-600">
+              {SLA_STATUS_HINDI[work.status] || work.status}
+            </span>
+          </div>
+
+          <p className="mt-2 text-xs text-gray-600">
+            अंतिम समय:{' '}
+            {new Date(work.effectiveDeadline).toLocaleString(
+              'hi-IN',
+              {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+                timeZone: 'Asia/Kolkata',
+              },
+            )}
+          </p>
+
+          {work.status === 'COMPLETED' && work.completedAt && (
+            <p className="mt-2 text-xs font-semibold text-green-700">
+              ✓ काम पूरा हुआ:{' '}
+              {new Date(work.completedAt).toLocaleString(
+                'hi-IN',
+                {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                  timeZone: 'Asia/Kolkata',
+                },
+              )}
+            </p>
+          )}
+
+          {work.isOverdue && work.status === 'RUNNING' && (
+  <p className="mt-2 text-xs font-bold text-red-600">
+    निर्धारित समय सीमा पार हो गई है।
+    कृपया काम पूरा करें या अतिरिक्त समय का अनुरोध करें।
+  </p>
+)}
+
+{work.status === 'RUNNING' && (
+  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+    <label className="block text-xs font-semibold text-gray-700">
+      अतिरिक्त समय चाहिए? देरी का कारण लिखें
+    </label>
+
+    <textarea
+      rows={2}
+      value={slaDelayReason[work.workId] || ''}
+      onChange={(e) =>
+        setSlaDelayReason((prev) => ({
+          ...prev,
+          [work.workId]: e.target.value,
+        }))
+      }
+      placeholder="जैसे: साइट पर सामग्री नहीं पहुंची है"
+      className="mt-2 w-full rounded-lg border border-gray-300 bg-white p-2 text-sm"
+    />
+
+    <button
+      type="button"
+      disabled={
+        slaDelayBusyId === work.workId ||
+        !(slaDelayReason[work.workId] || '').trim()
+      }
+      onClick={() =>
+        requestSlaDelay(item.id, work.workId)
+      }
+      className="mt-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+    >
+      {slaDelayBusyId === work.workId
+        ? 'भेज रहे हैं...'
+        : 'अतिरिक्त समय का अनुरोध करें'}
+    </button>
+
+    <p className="mt-2 text-xs text-gray-600">
+      अनुरोध भेजने से समय सीमा नहीं रुकेगी।
+      मालिक या प्रोजेक्ट मैनेजर की मंजूरी जरूरी है।
+    </p>
+  </div>
+)}
+
+{work.status === 'PAUSED' && (
+  <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3">
+    <p className="text-xs font-semibold text-blue-800">
+      अतिरिक्त समय मंजूर है। इस काम की समय सीमा फिलहाल रोकी गई है।
+    </p>
+
+    <button
+      type="button"
+      disabled={slaDelayBusyId === work.workId}
+      onClick={() =>
+        resumeSlaWork(item.id, work.workId)
+      }
+      className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+    >
+      {slaDelayBusyId === work.workId
+        ? 'कृपया प्रतीक्षा करें...'
+        : 'काम फिर से शुरू करें'}
+    </button>
+  </div>
+)}
+        </div>
+      ))}
+    </div>
+  </div>
+))}
+
 <div className="mt-5 rounded-xl border bg-gray-50 p-4">
   <h3 className="font-bold text-gray-800">
     जरूरी फोटो चेकलिस्ट
@@ -1657,6 +2010,58 @@ const selectedCleaningWorks = cleaningAssignments.filter(
     GPS वाली फोटो अपलोड करें
   </h3>
 
+  {(() => {
+  const works =
+    slaSummaries[item.id]?.batches.flatMap(
+      (batch) => batch.works,
+    ) || [];
+
+  if (!works.length) return null;
+
+  const availableWorks = works.filter((work) =>
+    ['RUNNING', 'PAUSED'].includes(work.status),
+  );
+
+  return (
+    <div className="mt-3">
+      <label className="mb-2 block text-sm font-semibold text-gray-700">
+        यह फोटो किस काम की है?
+      </label>
+
+      <select
+        value={selectedSlaWork[item.id] || ''}
+        onChange={(e) => {
+  setSelectedSlaWork((prev) => ({
+    ...prev,
+    [item.id]: e.target.value,
+  }));
+
+  setProofType((prev) => ({
+    ...prev,
+    [item.id]: '',
+  }));
+}}
+        className="w-full rounded-xl border border-gray-300 bg-white p-3"
+      >
+        <option value="">काम चुनें</option>
+
+        {availableWorks.map((work) => (
+          <option key={work.workId} value={work.workId}>
+            {SLA_WORK_HINDI[work.workItem] ||
+              work.workItem.replace(/_/g, ' ')}
+          </option>
+        ))}
+      </select>
+
+      <p className="mt-2 text-xs text-gray-500">
+        जिस काम की फोटो अपलोड कर रहे हैं, वही काम चुनें।
+        फोटो सफलतापूर्वक अपलोड होने पर उस काम की समय सीमा
+        रुक जाएगी।
+      </p>
+    </div>
+  );
+})()}
+
   <div className="mt-3 grid gap-3 md:grid-cols-2">
     <select
       value={proofType[item.id] || ''}
@@ -1670,15 +2075,27 @@ const selectedCleaningWorks = cleaningAssignments.filter(
     >
       <option value="">फोटो का प्रकार चुनें</option>
 
-{(
-  CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE[
-    item.workScope || 'FULL_PROJECT'
-  ] || []
-).map((requiredProof) => (
-  <option key={requiredProof} value={requiredProof}>
-    {getHindiProof(requiredProof)}
-  </option>
-))}
+{(() => {
+  const selectedWorkId = Number(selectedSlaWork[item.id]);
+
+  const selectedWork = slaSummaries[
+    item.id
+  ]?.batches
+    .flatMap((batch) => batch.works)
+    .find((work) => work.workId === selectedWorkId);
+
+  const allowedProofs = selectedWork
+    ? SLA_ALLOWED_PROOFS[selectedWork.workItem] || []
+    : CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE[
+        item.workScope || 'FULL_PROJECT'
+      ] || [];
+
+  return allowedProofs.map((requiredProof) => (
+    <option key={requiredProof} value={requiredProof}>
+      {getHindiProof(requiredProof)}
+    </option>
+  ));
+})()}
     </select>
 
     <input

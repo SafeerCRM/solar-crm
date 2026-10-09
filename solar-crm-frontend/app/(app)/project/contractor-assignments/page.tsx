@@ -157,6 +157,37 @@ function SummaryCard({
   );
 }
 
+type PendingContractorSlaDelay = {
+  id: number;
+  workId: number;
+  batchId: number;
+  contractorId: number;
+  contractorName: string | null;
+  projectId: number | null;
+  assignmentId: number | null;
+  workItem: string | null;
+  workStatus: string | null;
+  reason: string;
+  status: string;
+  requestedAt: string;
+  deadlineAt: string | null;
+};
+
+const CONTRACTOR_SLA_WORK_LABELS: Record<string, string> = {
+  STRUCTURE_WORK: 'Structure Work',
+  STRUCTURE_INSPECTION: 'Structure Inspection',
+  PILLAR_WORK: 'Pillar Work',
+  PILLAR_INSPECTION: 'Pillar Inspection',
+  PANEL_INSTALLATION: 'Panel Installation',
+  INVERTER_INSTALLATION: 'Inverter Installation',
+  WIRING: 'Wiring',
+  EARTHING: 'Earthing',
+  SOLAR_METER_WORK: 'Solar Meter Work',
+  NET_METER_WORK: 'Net Meter Work',
+  GENERATION_WORK: 'Generation Work',
+  OTHER: 'Other Work',
+};
+
 export default function ContractorAssignmentRegisterPage() {
   const [items, setItems] = useState<ContractorAssignment[]>([]);
   const [summary, setSummary] = useState<Summary>(emptySummary);
@@ -185,6 +216,19 @@ const [scheduledTo, setScheduledTo] =
 
 const [projectOwners, setProjectOwners] =
   useState<ProjectOwner[]>([]);
+
+  const [pendingSlaDelays, setPendingSlaDelays] = useState<
+  PendingContractorSlaDelay[]
+>([]);
+
+const [loadingSlaDelays, setLoadingSlaDelays] = useState(false);
+
+const [slaReviewNotes, setSlaReviewNotes] = useState<
+  Record<number, string>
+>({});
+
+const [slaReviewBusyId, setSlaReviewBusyId] =
+  useState<number | null>(null);
 
 const [pendingRescheduleRequests, setPendingRescheduleRequests] =
   useState<any[]>([]);
@@ -278,6 +322,101 @@ const [pendingRescheduleRequests, setPendingRescheduleRequests] =
   }
 };
 
+const reviewSlaDelay = async (
+  requestId: number,
+  approved: boolean,
+) => {
+  if (slaReviewBusyId !== null) return;
+
+  const reviewNote = (slaReviewNotes[requestId] || '').trim();
+
+  if (!approved && !reviewNote) {
+    alert('Please enter a reason for rejecting this request.');
+    return;
+  }
+
+  const confirmed = window.confirm(
+    approved
+      ? 'Approve this request? The SLA clock for this activity will pause from the approval time.'
+      : 'Reject this request? The SLA clock will continue running.',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setSlaReviewBusyId(requestId);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/contractor-sla/delay/${requestId}/review`,
+      {
+        approved,
+        reviewNote,
+      },
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    alert(
+      approved
+        ? 'SLA delay request approved. The activity clock is now paused.'
+        : 'SLA delay request rejected.',
+    );
+
+    setSlaReviewNotes((prev) => {
+      const next = { ...prev };
+      delete next[requestId];
+      return next;
+    });
+
+    await fetchPendingSlaDelays();
+  } catch (error: any) {
+    const message =
+      error?.response?.data?.message ||
+      'Unable to review this SLA request.';
+
+    alert(
+      Array.isArray(message)
+        ? message.join(', ')
+        : String(message),
+    );
+
+    // Refresh because another manager may have reviewed it.
+    await fetchPendingSlaDelays();
+  } finally {
+    setSlaReviewBusyId(null);
+  }
+};
+
+const fetchPendingSlaDelays = async () => {
+  try {
+    setLoadingSlaDelays(true);
+
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/contractor-sla/delay/pending`,
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    setPendingSlaDelays(
+      Array.isArray(res.data) ? res.data : [],
+    );
+  } catch (error) {
+    console.error('Failed to load pending SLA delays', error);
+  } finally {
+    setLoadingSlaDelays(false);
+  }
+};
+
   const fetchPendingRescheduleRequests = async () => {
   try {
     const token = localStorage.getItem('token');
@@ -361,6 +500,7 @@ const rejectRescheduleRequest = async (id: number) => {
   useEffect(() => {
   fetchAssignments();
   fetchPendingRescheduleRequests();
+  fetchPendingSlaDelays();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [page]);
@@ -412,6 +552,156 @@ useEffect(() => {
   </p>
 </Link>
       </div>
+
+      <div className="rounded-2xl border border-amber-200 bg-white p-5 shadow">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 className="text-lg font-bold text-gray-800">
+        Pending SLA Delay Requests
+      </h2>
+      <p className="mt-1 text-sm text-gray-500">
+        Contractor requests for additional time on assigned activities.
+        These are separate from site-work postpone requests.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={fetchPendingSlaDelays}
+      disabled={loadingSlaDelays}
+      className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+    >
+      {loadingSlaDelays ? 'Refreshing...' : 'Refresh Requests'}
+    </button>
+  </div>
+
+  <p className="mt-3 text-sm font-semibold text-amber-800">
+    Pending requests: {pendingSlaDelays.length}
+  </p>
+
+  {loadingSlaDelays && (
+    <p className="mt-3 text-sm text-gray-500">
+      Loading SLA requests...
+    </p>
+  )}
+
+  {!loadingSlaDelays && pendingSlaDelays.length === 0 && (
+    <p className="mt-3 rounded-xl bg-gray-50 p-4 text-sm text-gray-600">
+      No pending SLA delay requests.
+    </p>
+  )}
+
+  <div className="mt-4 space-y-3">
+    {pendingSlaDelays.map((request) => (
+      <div
+        key={request.id}
+        className="rounded-xl border border-gray-200 p-4"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="font-bold text-gray-800">
+              {request.contractorName ||
+                `Contractor #${request.contractorId}`}
+            </p>
+
+            <p className="mt-1 text-sm text-gray-600">
+              Project #{request.projectId ?? 'N/A'} | Assignment #
+              {request.assignmentId ?? 'N/A'}
+            </p>
+          </div>
+
+          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+            Pending Approval
+          </span>
+        </div>
+
+        <p className="mt-3 text-sm font-semibold text-gray-800">
+          Activity:{' '}
+          {CONTRACTOR_SLA_WORK_LABELS[request.workItem || ''] ||
+            request.workItem ||
+            'Unknown'}
+        </p>
+
+        <div className="mt-2 rounded-lg bg-gray-50 p-3">
+          <p className="text-xs font-semibold text-gray-500">
+            Contractor's reason
+          </p>
+          <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">
+            {request.reason}
+          </p>
+        </div>
+
+        <p className="mt-3 text-xs text-gray-500">
+          Requested:{' '}
+          {new Date(request.requestedAt).toLocaleString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          })}
+        </p>
+
+        {request.deadlineAt && (
+  <p className="mt-1 text-xs text-gray-500">
+    Original deadline:{' '}
+    {new Date(request.deadlineAt).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    })}
+  </p>
+)}
+
+<div className="mt-4 border-t border-gray-200 pt-4">
+  <label className="block text-sm font-semibold text-gray-700">
+    Review Remarks
+  </label>
+
+  <textarea
+    rows={2}
+    value={slaReviewNotes[request.id] || ''}
+    onChange={(e) =>
+      setSlaReviewNotes((prev) => ({
+        ...prev,
+        [request.id]: e.target.value,
+      }))
+    }
+    placeholder="Optional for approval; required for rejection"
+    className="mt-2 w-full rounded-lg border border-gray-300 p-3 text-sm"
+  />
+
+  <div className="mt-3 flex flex-wrap gap-3">
+    <button
+      type="button"
+      disabled={slaReviewBusyId !== null}
+      onClick={() => reviewSlaDelay(request.id, true)}
+      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {slaReviewBusyId === request.id
+        ? 'Processing...'
+        : 'Approve & Pause SLA'}
+    </button>
+
+    <button
+      type="button"
+      disabled={slaReviewBusyId !== null}
+      onClick={() => reviewSlaDelay(request.id, false)}
+      className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {slaReviewBusyId === request.id
+        ? 'Processing...'
+        : 'Reject Request'}
+    </button>
+  </div>
+
+  <p className="mt-3 text-xs text-gray-500">
+    Approval pauses only this activity. Other assigned
+    activities continue with their own deadlines.
+  </p>
+</div>
+      </div>
+    ))}
+  </div>
+</div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="text-lg font-bold text-gray-800">Filters</h2>
