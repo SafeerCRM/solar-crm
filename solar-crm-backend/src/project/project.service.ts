@@ -12394,8 +12394,6 @@ const materialLagat =
         where: {
           projectId,
 
-          expenseType:
-            ProjectAccountExpenseType.OTHER,
 
           approvalStatus:
             ProjectAccountExpenseApprovalStatus.APPROVED,
@@ -12408,8 +12406,27 @@ const materialLagat =
         },
       });
 
+      const eligibleExpenseTypes = new Set([
+  'OTHER',
+  'TRANSPORTATION',
+  'TRAVEL',
+  'FUEL',
+  'FOOD',
+  'CUSTOMER_VISIT',
+  'REPAIR_MAINTENANCE',
+  'OFFICE_SUPPLIES',
+  'MOBILE_RECHARGE',
+]);
+
+const eligibleProjectExpenses = projectExpenses.filter(
+  (expense: any) =>
+    eligibleExpenseTypes.has(
+      String(expense.expenseType || ''),
+    ),
+);
+
   const otherExpenseRows =
-    projectExpenses.map(
+  eligibleProjectExpenses.map(
       (expense: any) => ({
         id:
           Number(expense.id),
@@ -12417,6 +12434,9 @@ const materialLagat =
         expenseNumber:
           expense.expenseNumber ||
           '',
+
+          expenseType:
+  expense.expenseType || '',
 
         expenseDate:
           expense.expenseDate ||
@@ -13206,9 +13226,21 @@ if (projectIds.length > 0) {
         { projectIds },
       )
       .andWhere(
-        'expense.expenseType = :expenseType',
-        { expenseType: 'OTHER' },
-      )
+  'expense.expenseType IN (:...eligibleExpenseTypes)',
+  {
+    eligibleExpenseTypes: [
+      'OTHER',
+      'TRANSPORTATION',
+      'TRAVEL',
+      'FUEL',
+      'FOOD',
+      'CUSTOMER_VISIT',
+      'REPAIR_MAINTENANCE',
+      'OFFICE_SUPPLIES',
+      'MOBILE_RECHARGE',
+    ],
+  },
+)
       .andWhere(
         'expense.approvalStatus = :approvalStatus',
         { approvalStatus: 'APPROVED' },
@@ -18852,6 +18884,45 @@ async createAccountExpense(
     ? body.expenseType
     : ProjectAccountExpenseType.OTHER;
 
+      const projectId = body?.projectId
+    ? Number(body.projectId)
+    : null;
+
+  if (projectId !== null) {
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      throw new BadRequestException(
+        'Please select a valid project',
+      );
+    }
+
+    const projectExists =
+      await this.projectRepository.exist({
+        where: { id: projectId },
+      });
+
+    if (!projectExists) {
+      throw new BadRequestException(
+        'Selected project does not exist',
+      );
+    }
+  }
+
+  const projectRequiredExpenseTypes = [
+  'SITE_PURCHASE',
+  'CONTRACTOR_PAYMENT',
+  'LABOUR_PAYMENT',
+  'TRANSPORTATION',
+];
+
+if (
+  projectRequiredExpenseTypes.includes(String(expenseType)) &&
+  !projectId
+) {
+  throw new BadRequestException(
+    'Please select a customer project for this expense type',
+  );
+}
+
   const expenseData: Partial<ProjectAccountExpense> = {
     expenseType,
     amount,
@@ -18879,7 +18950,7 @@ async createAccountExpense(
     paidFrom: body?.paidFrom || null,
     paidTo: body?.paidTo || null,
 
-    projectId: body?.projectId ? Number(body.projectId) : undefined,
+    projectId: projectId ?? undefined,
         contractorAssignmentId:
       expenseType === ProjectAccountExpenseType.CONTRACTOR_PAYMENT &&
       body?.contractorAssignmentId
@@ -19504,6 +19575,45 @@ const activeProjects = Math.max(
   };
 }
 
+private async attachExpenseProjectDetails(
+  expenses: ProjectAccountExpense[],
+) {
+  const projectIds = [
+    ...new Set(
+      expenses
+        .map((expense) => Number(expense.projectId || 0))
+        .filter((id) => Number.isInteger(id) && id > 0),
+    ),
+  ];
+
+  if (!projectIds.length) {
+    return expenses.map((expense) => ({
+      ...expense,
+      projectCustomerName: null,
+      projectKNumber: null,
+    }));
+  }
+
+  const projects = await this.projectRepository.find({
+    where: { id: In(projectIds) },
+    select: ['id', 'customerName', 'electricityKNumber'],
+  });
+
+  const projectMap = new Map(
+    projects.map((project) => [Number(project.id), project]),
+  );
+
+  return expenses.map((expense) => {
+    const project = projectMap.get(Number(expense.projectId));
+
+    return {
+      ...expense,
+      projectCustomerName: project?.customerName || null,
+      projectKNumber: project?.electricityKNumber || null,
+    };
+  });
+}
+
 async listAccountExpenses(query: any = {}) {
   const page = Math.max(
     Number(query?.page || 1),
@@ -19550,10 +19660,13 @@ async listAccountExpenses(query: any = {}) {
     .take(limit);
 
   const [data, total] =
-    await qb.getManyAndCount();
+  await qb.getManyAndCount();
 
-  return {
-    data,
+const enrichedData =
+  await this.attachExpenseProjectDetails(data);
+
+return {
+  data: enrichedData,
     pagination: {
       page,
       limit,
@@ -19613,8 +19726,11 @@ async getMyAccountExpenses(query: any, currentUser: any) {
 
   const [data, total] = await qb.getManyAndCount();
 
-  return {
-    data,
+const enrichedData =
+  await this.attachExpenseProjectDetails(data);
+
+return {
+  data: enrichedData,
     pagination: {
       page,
       limit,

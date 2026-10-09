@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
+import { uploadPreparedFile } from '@/app/utils/fileUpload';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -42,6 +43,19 @@ export default function MyExpenseRequestsPage() {
   const [saving, setSaving] = useState(false);
 
   const [expenseType, setExpenseType] = useState('TRAVEL');
+  const [selectedProjectId, setSelectedProjectId] =
+  useState<number | null>(null);
+
+const [selectedProjectName, setSelectedProjectName] =
+  useState('');
+  const [expenseProjectSearch, setExpenseProjectSearch] =
+  useState('');
+
+const [expenseProjectResults, setExpenseProjectResults] =
+  useState<any[]>([]);
+
+const [expenseProjectLoading, setExpenseProjectLoading] =
+  useState(false);
   const [otherExpenseName, setOtherExpenseName] = useState('');
   const [amount, setAmount] = useState('');
   const [remarks, setRemarks] = useState('');
@@ -124,6 +138,61 @@ const [uploadingProof, setUploadingProof] = useState(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
+  const searchProjectsForExpense = async (value: string) => {
+  setExpenseProjectSearch(value);
+
+  // Changing the search invalidates the previous selection.
+  setSelectedProjectId(null);
+  setSelectedProjectName('');
+  setExpenseProjectResults([]);
+
+  if (value.trim().length < 2) {
+    setExpenseProjectLoading(false);
+    return;
+  }
+
+  try {
+    setExpenseProjectLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project`,
+      {
+        params: {
+          page: 1,
+          limit: 20,
+          search: value.trim(),
+        },
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    setExpenseProjectResults(
+      Array.isArray(res.data?.data) ? res.data.data : [],
+    );
+  } catch (error) {
+    console.error('Failed to search expense projects:', error);
+    setExpenseProjectResults([]);
+  } finally {
+    setExpenseProjectLoading(false);
+  }
+};
+
+const selectProjectForExpense = (project: any) => {
+  setSelectedProjectId(Number(project.id));
+
+  const displayName =
+    `#${project.id} - ${project.customerName || 'Unnamed Project'}` +
+    (project.kNumber ? ` - ${project.kNumber}` : '');
+
+  setSelectedProjectName(displayName);
+  setExpenseProjectSearch(displayName);
+  setExpenseProjectResults([]);
+};
+
   const createRequest = async () => {
     if (!amount || Number(amount) <= 0) {
       alert('Please enter valid amount');
@@ -139,6 +208,25 @@ const [uploadingProof, setUploadingProof] = useState(false);
       alert('Please enter other expense name');
       return;
     }
+
+    const projectRequiredExpenseTypes = [
+  'SITE_PURCHASE',
+  'CONTRACTOR_PAYMENT',
+  'LABOUR_PAYMENT',
+  'TRANSPORTATION',
+];
+
+if (
+  projectRequiredExpenseTypes.includes(expenseType) &&
+  !selectedProjectId
+) {
+  alert(
+    'कृपया ग्राहक का प्रोजेक्ट चुनें।\n' +
+    'Customer ka project select karna zaroori hai.\n' +
+    'Please select the customer project for this expense.',
+  );
+  return;
+}
 
     let finalRemarks = remarks;
 
@@ -176,12 +264,13 @@ if (proofFile) {
       await axios.post(
         `${API_BASE_URL}/project/account-expenses/request`,
         {
-          expenseType,
-          amount: Number(amount),
-          remarks: finalRemarks,
-          purpose: purpose.trim(),
-          proofUrl,
-        },
+  expenseType,
+  amount: Number(amount),
+  remarks: finalRemarks,
+  purpose: purpose.trim(),
+  proofUrl,
+  projectId: selectedProjectId,
+},
         {
           headers: getAuthHeaders(),
         },
@@ -194,6 +283,10 @@ if (proofFile) {
       setAmount('');
       setRemarks('');
       setPurpose('');
+      setSelectedProjectId(null);
+setSelectedProjectName('');
+setExpenseProjectSearch('');
+setExpenseProjectResults([]);
      setProofFile(null);
       setPage(1);
 
@@ -260,6 +353,114 @@ if (proofFile) {
   : 'Submit Request'}
           </button>
         </div>
+
+        <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4">
+  <h3 className="text-base font-bold text-amber-900">
+    Important: Project-Related Expense / जरूरी सूचना
+  </h3>
+
+  <div className="mt-3 space-y-3 text-sm text-gray-800">
+    <p>
+      <strong>हिंदी:</strong> अगर कोई खर्च किसी ग्राहक के
+      सोलर प्रोजेक्ट से जुड़ा है, जैसे साइट पर सामान खरीदना,
+      ठेकेदार भुगतान, मजदूरी या ट्रांसपोर्ट, तो सही खर्च का
+      प्रकार चुनें और संबंधित प्रोजेक्ट जरूर जोड़ें।
+    </p>
+
+    <p>
+      <strong>Hinglish:</strong> Agar expense kisi customer
+      ke solar project se related hai, toh sahi Expense Type
+      select karein aur us project ko search karke attach
+      zaroor karein.
+    </p>
+
+    <p>
+      <strong>English:</strong> For project-related expenses,
+      select the correct expense category and attach the
+      relevant customer project. Eligible approved expenses
+      will appear in the Project Ledger and Profitability report.
+    </p>
+  </div>
+
+  <p className="mt-3 font-semibold text-amber-900">
+    Project se related expense hai? Project select karna
+    zaroori hai.
+  </p>
+</div>
+
+<div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+  <label className="mb-2 block text-sm font-semibold text-gray-900">
+    Link Customer Project (Project-Related Expenses)
+  </label>
+
+  <p className="mb-3 text-xs text-gray-700">
+    प्रोजेक्ट से जुड़ा खर्च है तो प्रोजेक्ट जरूर चुनें।
+    / Project se related expense hai toh project select karein.
+    / Attach the customer project for project-related expenses.
+  </p>
+
+  <div className="relative">
+    <input
+      type="text"
+      value={expenseProjectSearch}
+      onChange={(e) => searchProjectsForExpense(e.target.value)}
+      placeholder="Search Customer Name / Project ID / K-Number"
+      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+    />
+
+    {expenseProjectLoading && (
+      <p className="mt-2 text-xs text-gray-500">
+        Searching projects...
+      </p>
+    )}
+
+    {expenseProjectResults.length > 0 && (
+      <div className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+        {expenseProjectResults.map((project: any) => (
+          <button
+            key={project.id}
+            type="button"
+            onClick={() => selectProjectForExpense(project)}
+            className="block w-full border-b px-3 py-2 text-left text-sm hover:bg-blue-50"
+          >
+            <span className="font-semibold text-gray-900">
+              #{project.id} - {project.customerName || 'Unnamed Project'}
+            </span>
+
+            {project.kNumber && (
+              <span className="block text-xs text-gray-600">
+                K-Number: {project.kNumber}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+
+  {selectedProjectId && (
+    <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-green-200 bg-green-50 p-3">
+      <span className="text-sm font-semibold text-green-800">
+        Selected: {selectedProjectName}
+      </span>
+
+      <button
+        type="button"
+        onClick={() => {
+          setSelectedProjectId(null);
+          setSelectedProjectName('');
+          setExpenseProjectSearch('');
+          setExpenseProjectResults([]);
+        }}
+        className="text-sm font-semibold text-red-600"
+      >
+        Remove
+      </button>
+    </div>
+  )}
+</div>
+
+
 
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <select
@@ -405,6 +606,14 @@ if (proofFile) {
                     <p className="font-bold text-gray-800">
                       {label(item.expenseType || 'OTHER')}
                     </p>
+
+                    {item.projectId && (
+  <p className="mt-1 text-sm font-semibold text-blue-700">
+    Linked Project: #{item.projectId}
+    {item.projectCustomerName && ` - ${item.projectCustomerName}`}
+    {item.projectKNumber && ` | K-Number: ${item.projectKNumber}`}
+  </p>
+)}
 
                     {item.purpose && (
   <p className="mt-1 text-sm font-semibold text-gray-700">

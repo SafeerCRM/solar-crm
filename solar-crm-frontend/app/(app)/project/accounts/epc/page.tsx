@@ -1462,6 +1462,13 @@ const estimatedPendingPosition =
             <td className="p-2">
   <div>
     <p>{item.expenseType}</p>
+    {item.projectId && (
+  <p className="mt-1 text-xs font-semibold text-blue-700">
+    Project #{item.projectId}
+    {item.projectCustomerName && ` - ${item.projectCustomerName}`}
+    {item.projectKNumber && ` | K-Number: ${item.projectKNumber}`}
+  </p>
+)}
     {item.expenseSubType && (
       <p className="text-xs text-gray-500">
         Type: {item.expenseSubType}
@@ -1919,7 +1926,17 @@ const estimatedPendingPosition =
             Project
           </p>
           <p className="mt-1 text-sm font-semibold">
-            {selectedExpense.projectId || '-'}
+            {selectedExpense.projectId ? (
+  <>
+    Project #{selectedExpense.projectId}
+    {selectedExpense.projectCustomerName &&
+      ` - ${selectedExpense.projectCustomerName}`}
+    {selectedExpense.projectKNumber &&
+      ` | K-Number: ${selectedExpense.projectKNumber}`}
+  </>
+) : (
+  'Not linked to a project'
+)}
           </p>
         </div>
       </div>

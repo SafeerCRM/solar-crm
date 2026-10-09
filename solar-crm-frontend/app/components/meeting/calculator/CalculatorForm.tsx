@@ -89,6 +89,40 @@ export default function CalculatorForm({
   const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
   const router = useRouter();
 
+  const [canViewFinancialDetails, setCanViewFinancialDetails] =
+  useState(false);
+
+useEffect(() => {
+  try {
+    const storedUser = localStorage.getItem('user');
+
+    if (!storedUser) {
+      setCanViewFinancialDetails(false);
+      return;
+    }
+
+    const user = JSON.parse(storedUser);
+
+    const roles = [
+      ...(Array.isArray(user.roles) ? user.roles : []),
+      user.role,
+    ]
+      .filter(Boolean)
+      .map((role: any) =>
+        typeof role === 'string'
+          ? role
+          : role?.name || role?.role || '',
+      );
+
+    setCanViewFinancialDetails(
+      roles.includes('OWNER') ||
+      roles.includes('PROJECT_MANAGER'),
+    );
+  } catch {
+    setCanViewFinancialDetails(false);
+  }
+}, []);
+
   const [saveMessage, setSaveMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [calculating, setCalculating] = useState(false);
@@ -1696,16 +1730,16 @@ onWheel={preventNumberWheelChange}
           <h2 className="text-lg font-semibold">Financial Summary</h2>
 
           <div className="rounded-2xl bg-green-100 px-5 py-4 space-y-3">
-    {/*      
+    {canViewFinancialDetails && (
   <div>
     <p className="text-sm font-medium text-green-800">
-      Laagat 
+      Laagat
     </p>
     <p className="text-xl font-bold text-green-900">
       ₹ {formatCurrency(baseCostBeforeMargin)}
     </p>
   </div>
-  */}
+)}
 
   <div>
     <p className="text-sm font-medium text-green-800">
@@ -1721,18 +1755,25 @@ onWheel={preventNumberWheelChange}
   )}
 </div>
 
-<button
-  type="button"
-  onClick={() => setShowExpectedProfit((prev) => !prev)}
-  className="rounded-xl bg-blue-600 px-5 py-3 text-white"
->
-  {showExpectedProfit ? 'Hide Expected Profit' : 'View Expected Profit'}
-</button>
+{canViewFinancialDetails && (
+  <>
+    <button
+      type="button"
+      onClick={() => setShowExpectedProfit((prev) => !prev)}
+      className="rounded-xl bg-blue-600 px-5 py-3 text-white"
+    >
+      {showExpectedProfit
+        ? 'Hide Expected Profit'
+        : 'View Expected Profit'}
+    </button>
 
-{showExpectedProfit && (
-  <div className="rounded-xl bg-blue-50 p-4 text-sm text-blue-800">
-    Expected Profit: <b>₹ {formatCurrency(expectedProfit)}</b>
-  </div>
+    {showExpectedProfit && (
+      <div className="rounded-xl bg-blue-50 p-4 text-sm text-blue-800">
+        Expected Profit:{' '}
+        <b>₹ {formatCurrency(expectedProfit)}</b>
+      </div>
+    )}
+  </>
 )}
 
 <div>
