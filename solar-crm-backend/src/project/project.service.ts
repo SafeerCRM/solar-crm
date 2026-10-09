@@ -19575,6 +19575,39 @@ const activeProjects = Math.max(
   };
 }
 
+async searchProjectsForAccountExpense(search: string) {
+  const term = String(search || '').trim();
+
+  if (term.length < 2) {
+    return { data: [] };
+  }
+
+  const qb = this.projectRepository
+    .createQueryBuilder('project')
+    .select([
+      'project.id',
+      'project.customerName',
+      'project.electricityKNumber',
+      'project.customerPhone',
+    ])
+    .where('project.isHidden = false')
+    .andWhere(
+      `(
+        LOWER(project.customerName) LIKE :search
+        OR LOWER(project.electricityKNumber) LIKE :search
+        OR project.customerPhone LIKE :search
+        OR CAST(project.id AS TEXT) LIKE :search
+      )`,
+      { search: `%${term.toLowerCase()}%` },
+    )
+    .orderBy('project.id', 'DESC')
+    .take(20);
+
+  const data = await qb.getMany();
+
+  return { data };
+}
+
 private async attachExpenseProjectDetails(
   expenses: ProjectAccountExpense[],
 ) {

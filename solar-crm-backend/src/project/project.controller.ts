@@ -1596,6 +1596,15 @@ hideAccountExpense(
   );
 }
 
+@Get('account-expenses/project-search')
+searchProjectsForAccountExpense(
+  @Query('search') search?: string,
+) {
+  return this.projectService.searchProjectsForAccountExpense(
+    search || '',
+  );
+}
+
 @Post('account-expenses/request')
 createMyAccountExpenseRequest(
   @Body() body: any,

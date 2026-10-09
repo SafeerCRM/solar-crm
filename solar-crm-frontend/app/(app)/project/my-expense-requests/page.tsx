@@ -157,7 +157,7 @@ const [uploadingProof, setUploadingProof] = useState(false);
     const token = localStorage.getItem('token');
 
     const res = await axios.get(
-      `${API_BASE_URL}/project`,
+      `${API_BASE_URL}/project/account-expenses/project-search`,
       {
         params: {
           page: 1,
