@@ -138,6 +138,9 @@ proofUrl: string;
   @Column({ nullable: true })
   projectId: number;
 
+    @Column({ type: 'integer', nullable: true })
+  contractorAssignmentId: number | null;
+
   @Column({ nullable: true })
   branchName: string;
 

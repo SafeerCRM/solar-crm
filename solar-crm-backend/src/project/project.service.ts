@@ -18841,6 +18841,11 @@ async createAccountExpense(
     paidTo: body?.paidTo || null,
 
     projectId: body?.projectId ? Number(body.projectId) : undefined,
+        contractorAssignmentId:
+      expenseType === ProjectAccountExpenseType.CONTRACTOR_PAYMENT &&
+      body?.contractorAssignmentId
+        ? Number(body.contractorAssignmentId)
+        : null,
     dealerId: body?.dealerId ? Number(body.dealerId) : undefined,
     dealerName: body?.dealerName || null,
     staffId: body?.staffId ? Number(body.staffId) : undefined,
@@ -20740,6 +20745,8 @@ async getAccountExpenseReport(query: any) {
   };
 }
 
+
+
 async approveAccountExpense(
   expenseId: number,
   body: any,
@@ -20766,6 +20773,7 @@ async approveAccountExpense(
       'Expense already approved',
     );
   }
+
 
   expense.approvalStatus =
     ProjectAccountExpenseApprovalStatus.APPROVED;
@@ -45103,6 +45111,7 @@ async updateContractorSlaSettings(
   };
 }
 
+
 async accrueContractorSlaPenalties(
   assignmentId: number,
   user: any,
@@ -45130,7 +45139,8 @@ async accrueContractorSlaPenalties(
   const manager =
     this.projectContractorAssignmentRepository.manager;
 
-  const DAY_MS = 24 * 60 * 60 * 1000;
+  const HOUR_MS = 60 * 60 * 1000;
+  const DAY_MS = 24 * HOUR_MS;
 
   return manager.transaction(async (tx) => {
     const batches = await tx.find(
@@ -45144,7 +45154,6 @@ async accrueContractorSlaPenalties(
     let newlyRecorded = 0;
 
     for (const batch of batches) {
-      // Serialize accrual for this batch.
       const lockedBatch = await tx.findOne(
         ProjectContractorSlaBatch,
         {
@@ -45176,225 +45185,250 @@ async accrueContractorSlaPenalties(
         },
       );
 
+      if (works.length === 0) continue;
+
+      const start = new Date(
+        lockedBatch.assignedAt,
+      ).getTime();
+
       const now = Date.now();
 
-      /*
-       * For each work, calculate when its active SLA clock
-       * reached the initial deadline and each subsequent
-       * 24-hour overdue threshold.
-       *
-       * Approved pauses do not consume active SLA time.
-       */
-      const chargeTimes: number[] = [];
-
-      for (const work of works) {
-        const start = new Date(work.assignedAt).getTime();
-
-        const end = Math.min(
-          now,
-          work.completedAt
-            ? new Date(work.completedAt).getTime()
-            : work.stoppedAt
-              ? new Date(work.stoppedAt).getTime()
-              : lockedBatch.closedAt
-                ? new Date(lockedBatch.closedAt).getTime()
-                : now,
+      if (!Number.isFinite(start)) {
+        throw new BadRequestException(
+          'Invalid SLA batch assignment timestamp',
         );
+      }
+
+      /*
+       * One batch finishes only when every selected
+       * activity has been completed.
+       */
+      const allCompleted = works.every(
+        (work) => work.completedAt != null,
+      );
+
+      const completionTime = allCompleted
+        ? Math.max(
+            ...works.map((work) =>
+              new Date(work.completedAt!).getTime(),
+            ),
+          )
+        : now;
+
+      /*
+       * Reassignment or closure ends the old batch's
+       * financial liability.
+       */
+      const closedTime = lockedBatch.closedAt
+        ? new Date(lockedBatch.closedAt).getTime()
+        : now;
+
+      const end = Math.min(
+        now,
+        completionTime,
+        closedTime,
+      );
+
+      if (
+        !Number.isFinite(end) ||
+        end <= start
+      ) {
+        continue;
+      }
+
+      /*
+       * Approved delays pause the BATCH, not merely
+       * the individual activity.
+       */
+      const delays = await tx.find(
+        ProjectContractorSlaDelay,
+        {
+          where: {
+            batchId: lockedBatch.id,
+            status: ContractorSlaDelayStatus.APPROVED,
+          },
+        },
+      );
+
+      const rawPauses = delays
+        .filter((delay) => delay.approvedPauseFrom)
+        .map((delay) => {
+          const pauseStart = new Date(
+            delay.approvedPauseFrom!,
+          ).getTime();
+
+          const pauseEnd = delay.resumedAt
+            ? new Date(delay.resumedAt).getTime()
+            : end;
+
+          return {
+            start: Math.max(start, pauseStart),
+            end: Math.min(end, pauseEnd),
+          };
+        })
+        .filter(
+          (pause) =>
+            Number.isFinite(pause.start) &&
+            Number.isFinite(pause.end) &&
+            pause.end > pause.start,
+        )
+        .sort((a, b) => a.start - b.start);
+
+      /*
+       * Merge overlapping pauses so simultaneous
+       * approved delays do not double-count time.
+       */
+      const pauses: Array<{
+        start: number;
+        end: number;
+      }> = [];
+
+      for (const pause of rawPauses) {
+        const previous = pauses[pauses.length - 1];
 
         if (
-          !Number.isFinite(start) ||
-          !Number.isFinite(end) ||
-          end < start
+          previous &&
+          pause.start <= previous.end
         ) {
-          continue;
-        }
-
-        const delays = await tx.find(
-          ProjectContractorSlaDelay,
-          {
-            where: {
-              workId: work.id,
-              status: ContractorSlaDelayStatus.APPROVED,
-            },
-          },
-        );
-
-        const rawPauses = delays
-          .filter((delay) => delay.approvedPauseFrom)
-          .map((delay) => ({
-            start: Math.max(
-              start,
-              new Date(delay.approvedPauseFrom!).getTime(),
-            ),
-            end: Math.min(
-              end,
-              delay.resumedAt
-                ? new Date(delay.resumedAt).getTime()
-                : end,
-            ),
-          }))
-          .filter(
-            (p) =>
-              Number.isFinite(p.start) &&
-              Number.isFinite(p.end) &&
-              p.end > p.start,
-          )
-          .sort((a, b) => a.start - b.start);
-
-        // Merge overlaps to prevent double-counted pauses.
-        const pauses: Array<{
-          start: number;
-          end: number;
-        }> = [];
-
-        for (const pause of rawPauses) {
-          const last = pauses[pauses.length - 1];
-
-          if (last && pause.start <= last.end) {
-            last.end = Math.max(last.end, pause.end);
-          } else {
-            pauses.push({ ...pause });
-          }
-        }
-
-        /*
-         * Build active-work intervals by excluding
-         * approved pause periods.
-         */
-        const activeIntervals: Array<{
-          start: number;
-          end: number;
-        }> = [];
-
-        let cursor = start;
-
-        for (const pause of pauses) {
-          if (pause.start > cursor) {
-            activeIntervals.push({
-              start: cursor,
-              end: pause.start,
-            });
-          }
-
-          cursor = Math.max(cursor, pause.end);
-        }
-
-        if (cursor < end) {
-          activeIntervals.push({
-            start: cursor,
-            end,
-          });
-        }
-
-        let activeElapsed = 0;
-        let threshold = slaHours * 60 * 60 * 1000;
-
-        for (const interval of activeIntervals) {
-          const intervalLength =
-            interval.end - interval.start;
-
-          while (
-            activeElapsed + intervalLength >= threshold
-          ) {
-            const chargeableAt =
-              interval.start +
-              (threshold - activeElapsed);
-
-            chargeTimes.push(chargeableAt);
-
-            threshold += DAY_MS;
-          }
-
-          activeElapsed += intervalLength;
+          previous.end = Math.max(
+            previous.end,
+            pause.end,
+          );
+        } else {
+          pauses.push({ ...pause });
         }
       }
 
       /*
-       * Consolidate charge events into batch-day windows.
-       * The first window starts at the original SLA
-       * deadline, with subsequent windows every 24 hours.
-       *
-       * Multiple activities reaching thresholds within
-       * the same window produce only one charge.
+       * Calculate the intervals during which the
+       * batch SLA clock was actually running.
        */
+      const activeIntervals: Array<{
+        start: number;
+        end: number;
+      }> = [];
+
+      let cursor = start;
+
+      for (const pause of pauses) {
+        if (pause.start > cursor) {
+          activeIntervals.push({
+            start: cursor,
+            end: pause.start,
+          });
+        }
+
+        cursor = Math.max(cursor, pause.end);
+      }
+
+      if (cursor < end) {
+        activeIntervals.push({
+          start: cursor,
+          end,
+        });
+      }
+
+      const activeElapsed = activeIntervals.reduce(
+        (total, interval) =>
+          total + interval.end - interval.start,
+        0,
+      );
+
+      const slaMs = slaHours * HOUR_MS;
+
       /*
- * Batch-level penalty milestones.
- *
- * Each work generates charge events after consuming its
- * configured active SLA hours, and again for every 24
- * additional active hours.
- *
- * The earliest actual charge event anchors the batch's
- * penalty-day windows. This accounts for approved pauses
- * that postpone the first effective deadline.
- *
- * Events from multiple activities in the same 24-hour
- * window produce only one batch-level charge.
- */
-const chargeByDay = new Map<number, number>();
+       * No penalty until the batch actually
+       * exceeds its permitted active SLA time.
+       */
+      if (activeElapsed <= slaMs) {
+        continue;
+      }
 
-const sortedChargeTimes = chargeTimes
-  .filter(
-    (timestamp) =>
-      Number.isFinite(timestamp) &&
-      timestamp <= now,
-  )
-  .sort((a, b) => a - b);
+      /*
+       * One penalty per started overdue 24-hour
+       * period, regardless of activity count.
+       */
+      const overdueMs = activeElapsed - slaMs;
 
-if (sortedChargeTimes.length > 0) {
-  const firstChargeAt = sortedChargeTimes[0];
+      const penaltyDays = Math.ceil(
+        overdueMs / DAY_MS,
+      );
 
-  for (const timestamp of sortedChargeTimes) {
-    const penaltyDay =
-      Math.floor(
-        (timestamp - firstChargeAt) / DAY_MS,
-      ) + 1;
+      /*
+       * Locate the real timestamp at which each
+       * chargeable threshold was crossed.
+       *
+       * The penalty-day number is anchored to the
+       * batch's active elapsed time, so it cannot
+       * shift when individual activities finish.
+       */
+      for (
+        let penaltyDay = 1;
+        penaltyDay <= penaltyDays;
+        penaltyDay++
+      ) {
+        const threshold =
+          slaMs +
+          (penaltyDay - 1) * DAY_MS +
+          1;
 
-    if (!chargeByDay.has(penaltyDay)) {
-      chargeByDay.set(penaltyDay, timestamp);
-    }
-  }
-}
+        let consumed = 0;
+        let chargeableAt: number | null = null;
 
-      for (const [penaltyDay, timestamp] of chargeByDay) {
-        /*
-         * Unique(batchId, penaltyDay) is the database
-         * safeguard against duplicate charges.
-         *
-         * Do not update existing records:
-         * an Owner waiver must remain intact.
-         */
+        for (const interval of activeIntervals) {
+          const length =
+            interval.end - interval.start;
+
+          if (consumed + length >= threshold) {
+            chargeableAt =
+              interval.start +
+              (threshold - consumed);
+            break;
+          }
+
+          consumed += length;
+        }
+
+        if (chargeableAt === null) {
+          continue;
+        }
+
         const result = await tx
-  .createQueryBuilder()
-  .insert()
-  .into(ProjectContractorSlaPenalty)
+          .createQueryBuilder()
+          .insert()
+          .into(ProjectContractorSlaPenalty)
           .values({
             batchId: lockedBatch.id,
-            assignmentId: lockedBatch.assignmentId,
-            contractorId: lockedBatch.contractorId,
+            assignmentId:
+              lockedBatch.assignmentId,
+            contractorId:
+              lockedBatch.contractorId,
             projectId: lockedBatch.projectId,
             penaltyDay,
             amount: rate.toFixed(2),
-            chargeableAt: new Date(timestamp),
+            chargeableAt:
+              new Date(chargeableAt),
             isWaived: false,
           })
           .orIgnore()
-.returning('id')
-.execute();
+          .returning('id')
+          .execute();
 
-newlyRecorded += Array.isArray(result.raw)
-  ? result.raw.length
-  : 0;
+        newlyRecorded += Array.isArray(result.raw)
+          ? result.raw.length
+          : 0;
       }
     }
 
     return {
       assignmentId,
       newlyRecorded,
-      message: 'Contractor SLA penalties reconciled',
+      message:
+        'Contractor batch SLA penalties reconciled',
     };
   });
 }
+
 
 @Cron('0 0 * * * *', {
   name: 'contractor-sla-penalty-reconciliation',
