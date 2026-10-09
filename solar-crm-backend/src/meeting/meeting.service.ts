@@ -2195,6 +2195,28 @@ return updatedMeeting;
   const targetDateIndia =
     getIndiaDateString(targetDateBase);
 
+    /*
+ * Meeting scheduledAt values are stored as UTC-equivalent
+ * timestamps without timezone.
+ *
+ * Convert the target IST calendar day into UTC boundaries
+ * before querying PostgreSQL.
+ */
+const targetDayStartUtc = new Date(
+  `${targetDateIndia}T00:00:00+05:30`,
+);
+
+const targetDayEndUtc = new Date(
+  targetDayStartUtc.getTime() +
+    24 * 60 * 60 * 1000,
+);
+
+const startOfDayUtc =
+  targetDayStartUtc.toISOString().slice(0, 19).replace('T', ' ');
+
+const endOfDayUtc =
+  targetDayEndUtc.toISOString().slice(0, 19).replace('T', ' ');
+
   /*
    * scheduledAt is timestamp without timezone in the current
    * meeting model. Query the target calendar day directly.
@@ -2215,16 +2237,15 @@ return updatedMeeting;
       },
     )
     .andWhere(
-      `meeting.scheduledAt >= :startOfDay`,
-      {
-        startOfDay:
-          `${targetDateIndia} 00:00:00`,
-      },
-    )
-    .andWhere(
-  `meeting.scheduledAt < (:targetDate::date + INTERVAL '1 day')`,
+  'meeting.scheduledAt >= :startOfDay',
   {
-    targetDate: targetDateIndia,
+    startOfDay: startOfDayUtc,
+  },
+)
+.andWhere(
+  'meeting.scheduledAt < :endOfDay',
+  {
+    endOfDay: endOfDayUtc,
   },
 )
 
@@ -2258,6 +2279,9 @@ return updatedMeeting;
   'meeting.scheduledAt',
   'ASC',
 )
+.andWhere('meeting.id = :testMeetingId', {
+  testMeetingId: 8512,
+})
 .getMany();
 
   let sent = 0;
@@ -2308,7 +2332,7 @@ if (Number.isNaN(scheduledAt.getTime())) {
 
 const appointmentDate =
   new Intl.DateTimeFormat('en-IN', {
-    timeZone: 'UTC',
+    timeZone: 'Asia/Kolkata',
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -2316,7 +2340,7 @@ const appointmentDate =
 
 const appointmentTime =
   new Intl.DateTimeFormat('en-IN', {
-    timeZone: 'UTC',
+    timeZone: 'Asia/Kolkata',
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
@@ -2423,14 +2447,11 @@ const appointmentTime =
   };
 }
 
-@Cron(
-  '0 0 9 * * *',
-  {
-    name: 'customer-appointment-reminder-whatsapp',
-    timeZone: 'Asia/Kolkata',
-    waitForCompletion: true,
-  },
-)
+@Cron('0 * * * * *', {
+  name: 'customer-appointment-reminder-whatsapp',
+  timeZone: 'Asia/Kolkata',
+  waitForCompletion: true,
+})
 async handleCustomerAppointmentReminderWhatsappCron() {
   try {
     const result =
