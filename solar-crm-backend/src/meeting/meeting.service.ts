@@ -2279,9 +2279,7 @@ const endOfDayUtc =
   'meeting.scheduledAt',
   'ASC',
 )
-.andWhere('meeting.id = :testMeetingId', {
-  testMeetingId: 8512,
-})
+
 .getMany();
 
   let sent = 0;
@@ -2447,7 +2445,7 @@ const appointmentTime =
   };
 }
 
-@Cron('0 * * * * *', {
+@Cron('0 0 9 * * *', {
   name: 'customer-appointment-reminder-whatsapp',
   timeZone: 'Asia/Kolkata',
   waitForCompletion: true,
