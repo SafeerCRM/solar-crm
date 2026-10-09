@@ -129,6 +129,14 @@ import {
   SolarMitraPayout,
 } from '../solar-mitra/solar-mitra-payout.entity';
 
+import {
+  ProjectContractorSlaBatch,
+  ProjectContractorSlaWork,
+  ProjectContractorSlaDelay,
+  ProjectContractorSlaPenalty,
+  ProjectContractorSlaSetting,
+} from './project-contractor-sla.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, 
@@ -156,7 +164,11 @@ ProjectStockMovement,
 ProjectStockFile,
 ProjectPurchaseOrderItem, ProjectProformaInvoice,
 ProjectProformaInvoiceItem, ProjectFinalInvoice, ProjectFinalInvoiceItem, ProjectEpcCustomerInvoice,
-ProjectEpcCustomerInvoiceItem, ProjectPartyLedger, ProjectContractorAssignment,
+ProjectEpcCustomerInvoiceItem, ProjectPartyLedger, ProjectContractorAssignment, ProjectContractorSlaBatch,
+ProjectContractorSlaWork,
+ProjectContractorSlaDelay,
+ProjectContractorSlaPenalty,
+ProjectContractorSlaSetting,
 ProjectContractorProof, ProjectContractorRemainingMaterial, ProjectCleaningAssignment, ProjectContractor, ProjectContractorComment, ProjectContractorRescheduleRequest, ProjectLoanCoApplicant, ProjectAccountExpense, ProjectConsumption, ProjectCustomerUpdate, ProjectDealerOrder,
 ProjectDealerOrderItem,
 ProjectDealerOrderDocument,

@@ -29,6 +29,9 @@ export class ProjectContractorProof {
   @Column()
   assignmentId: number;
 
+  @Column({ type: 'integer', nullable: true })
+slaWorkId: number | null;
+
   @Column({
     type: 'enum',
     enum: ProjectContractorProofType,

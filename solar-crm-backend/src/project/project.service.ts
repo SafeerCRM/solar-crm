@@ -10,7 +10,7 @@ import { Cron } from '@nestjs/schedule';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { In, MoreThan, Repository, DataSource, Not, EntityManager, } from 'typeorm';
+import { In, IsNull, MoreThan, Repository, DataSource, Not, EntityManager, } from 'typeorm';
 
 import PDFDocument = require('pdfkit');
 import { Response } from 'express';
@@ -335,6 +335,16 @@ import {
 } from '../solar-mitra/solar-mitra-payout.entity';
 
 import { WhatsappService } from '../whatsapp/whatsapp.service';
+
+import {
+  ProjectContractorSlaBatch,
+  ProjectContractorSlaWork,
+  ProjectContractorSlaDelay,
+  ProjectContractorSlaSetting,
+  ContractorSlaWorkStatus,
+  ContractorSlaDelayStatus,
+  ProjectContractorSlaPenalty,
+} from './project-contractor-sla.entity';
 
 @Injectable()
 export class ProjectService {
@@ -44839,8 +44849,83 @@ assignedWorkItems: Array.isArray(body?.assignedWorkItems)
     });
 
   const savedAssignment =
-  await this.projectContractorAssignmentRepository.save(
-    assignment,
+  await this.projectContractorAssignmentRepository.manager.transaction(
+    async (manager) => {
+      const saved = await manager.save(assignment);
+
+      const workItems = [
+        ...new Set(
+          (saved.assignedWorkItems || [])
+            .map((item: string) => String(item).trim())
+            .filter(Boolean),
+        ),
+      ];
+
+      // No selected activities means no SLA is started.
+      if (workItems.length === 0) {
+        return saved;
+      }
+
+      const settings = await manager.findOne(
+        ProjectContractorSlaSetting,
+        {
+          where: {},
+          order: { id: 'ASC' },
+        },
+      );
+
+      const slaHours = Number(settings?.slaHours ?? 24);
+      const penaltyPerDay = Number(
+        settings?.penaltyPerDay ?? 500,
+      );
+
+      if (
+        !Number.isFinite(slaHours) ||
+        slaHours <= 0 ||
+        !Number.isFinite(penaltyPerDay) ||
+        penaltyPerDay < 0
+      ) {
+        throw new BadRequestException(
+          'Invalid contractor SLA settings',
+        );
+      }
+
+      const assignedAt = new Date(saved.createdAt);
+
+      const batch = await manager.save(
+        ProjectContractorSlaBatch,
+        manager.create(ProjectContractorSlaBatch, {
+          assignmentId: saved.id,
+          projectId: saved.projectId,
+          contractorId: saved.contractorId,
+          assignedAt,
+          slaHours,
+          penaltyPerDay: penaltyPerDay.toFixed(2),
+        }),
+      );
+
+      const deadlineAt = new Date(
+        assignedAt.getTime() + slaHours * 60 * 60 * 1000,
+      );
+
+      const slaWorks = workItems.map((workItem) =>
+        manager.create(ProjectContractorSlaWork, {
+          batchId: batch.id,
+          assignmentId: saved.id,
+          projectId: saved.projectId,
+          contractorId: saved.contractorId,
+          workItem,
+          requiredProofTypes: [],
+          assignedAt,
+          deadlineAt,
+          status: 'RUNNING' as any,
+        }),
+      );
+
+      await manager.save(ProjectContractorSlaWork, slaWorks);
+
+      return saved;
+    },
   );
 
 const assignmentRemarks =
@@ -44906,6 +44991,1363 @@ if (assignmentRemarks) {
 }
 
 return savedAssignment;
+}
+
+async getContractorSlaSettings(user: any) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (!roles.includes('OWNER')) {
+    throw new ForbiddenException(
+      'Only Owner can access contractor SLA settings',
+    );
+  }
+
+  const manager =
+    this.projectContractorAssignmentRepository.manager;
+
+  const settings = await manager.findOne(
+    ProjectContractorSlaSetting,
+    {
+      where: { id: 1 },
+    },
+  );
+
+  return {
+    slaHours: Number(settings?.slaHours ?? 24),
+    penaltyPerDay: Number(settings?.penaltyPerDay ?? 500),
+    updatedAt: settings?.updatedAt ?? null,
+    updatedBy: settings?.updatedBy ?? null,
+  };
+}
+
+async updateContractorSlaSettings(
+  body: any,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (!roles.includes('OWNER')) {
+    throw new ForbiddenException(
+      'Only Owner can change contractor SLA settings',
+    );
+  }
+
+  const userId = Number(
+    user?.id || user?.userId || user?.sub,
+  );
+
+  const slaHours = Number(body?.slaHours);
+  const penaltyPerDay = Number(body?.penaltyPerDay);
+
+  if (
+    !Number.isSafeInteger(userId) ||
+    userId <= 0
+  ) {
+    throw new BadRequestException('Invalid Owner');
+  }
+
+  if (
+    !Number.isFinite(slaHours) ||
+    slaHours <= 0 ||
+    slaHours > 720 ||
+    !Number.isInteger(slaHours)
+  ) {
+    throw new BadRequestException(
+      'SLA hours must be a whole number between 1 and 720',
+    );
+  }
+
+  if (
+    !Number.isFinite(penaltyPerDay) ||
+    penaltyPerDay < 0 ||
+    penaltyPerDay > 100000 ||
+    Math.round(penaltyPerDay * 100) !==
+      penaltyPerDay * 100
+  ) {
+    throw new BadRequestException(
+      'Penalty must be between ₹0 and ₹1,00,000 with at most two decimal places',
+    );
+  }
+
+  const manager =
+    this.projectContractorAssignmentRepository.manager;
+
+  const saved = await manager
+    .createQueryBuilder()
+    .insert()
+    .into(ProjectContractorSlaSetting)
+    .values({
+      id: 1,
+      slaHours,
+      penaltyPerDay: penaltyPerDay.toFixed(2),
+      updatedBy: userId,
+    })
+    .orUpdate(
+      ['slaHours', 'penaltyPerDay', 'updatedBy', 'updatedAt'],
+      ['id'],
+    )
+    .returning('*')
+    .execute();
+
+  return {
+    message: 'Contractor SLA settings updated successfully',
+    settings: {
+      slaHours,
+      penaltyPerDay,
+      updatedBy: userId,
+    },
+  };
+}
+
+async accrueContractorSlaPenalties(
+  assignmentId: number,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (
+    !roles.includes('OWNER') &&
+    !roles.includes('PROJECT_MANAGER')
+  ) {
+    throw new ForbiddenException(
+      'Only management can reconcile SLA penalties',
+    );
+  }
+
+  if (
+    !Number.isSafeInteger(assignmentId) ||
+    assignmentId <= 0
+  ) {
+    throw new BadRequestException('Invalid assignment ID');
+  }
+
+  const manager =
+    this.projectContractorAssignmentRepository.manager;
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  return manager.transaction(async (tx) => {
+    const batches = await tx.find(
+      ProjectContractorSlaBatch,
+      {
+        where: { assignmentId },
+        order: { id: 'ASC' },
+      },
+    );
+
+    let newlyRecorded = 0;
+
+    for (const batch of batches) {
+      // Serialize accrual for this batch.
+      const lockedBatch = await tx.findOne(
+        ProjectContractorSlaBatch,
+        {
+          where: { id: batch.id },
+          lock: { mode: 'pessimistic_write' },
+        },
+      );
+
+      if (!lockedBatch) continue;
+
+      const rate = Number(lockedBatch.penaltyPerDay);
+      const slaHours = Number(lockedBatch.slaHours);
+
+      if (
+        !Number.isFinite(rate) ||
+        rate < 0 ||
+        !Number.isFinite(slaHours) ||
+        slaHours <= 0
+      ) {
+        throw new BadRequestException(
+          'Invalid stored SLA batch configuration',
+        );
+      }
+
+      const works = await tx.find(
+        ProjectContractorSlaWork,
+        {
+          where: { batchId: lockedBatch.id },
+        },
+      );
+
+      const now = Date.now();
+
+      /*
+       * For each work, calculate when its active SLA clock
+       * reached the initial deadline and each subsequent
+       * 24-hour overdue threshold.
+       *
+       * Approved pauses do not consume active SLA time.
+       */
+      const chargeTimes: number[] = [];
+
+      for (const work of works) {
+        const start = new Date(work.assignedAt).getTime();
+
+        const end = Math.min(
+          now,
+          work.completedAt
+            ? new Date(work.completedAt).getTime()
+            : work.stoppedAt
+              ? new Date(work.stoppedAt).getTime()
+              : lockedBatch.closedAt
+                ? new Date(lockedBatch.closedAt).getTime()
+                : now,
+        );
+
+        if (
+          !Number.isFinite(start) ||
+          !Number.isFinite(end) ||
+          end < start
+        ) {
+          continue;
+        }
+
+        const delays = await tx.find(
+          ProjectContractorSlaDelay,
+          {
+            where: {
+              workId: work.id,
+              status: ContractorSlaDelayStatus.APPROVED,
+            },
+          },
+        );
+
+        const rawPauses = delays
+          .filter((delay) => delay.approvedPauseFrom)
+          .map((delay) => ({
+            start: Math.max(
+              start,
+              new Date(delay.approvedPauseFrom!).getTime(),
+            ),
+            end: Math.min(
+              end,
+              delay.resumedAt
+                ? new Date(delay.resumedAt).getTime()
+                : end,
+            ),
+          }))
+          .filter(
+            (p) =>
+              Number.isFinite(p.start) &&
+              Number.isFinite(p.end) &&
+              p.end > p.start,
+          )
+          .sort((a, b) => a.start - b.start);
+
+        // Merge overlaps to prevent double-counted pauses.
+        const pauses: Array<{
+          start: number;
+          end: number;
+        }> = [];
+
+        for (const pause of rawPauses) {
+          const last = pauses[pauses.length - 1];
+
+          if (last && pause.start <= last.end) {
+            last.end = Math.max(last.end, pause.end);
+          } else {
+            pauses.push({ ...pause });
+          }
+        }
+
+        /*
+         * Build active-work intervals by excluding
+         * approved pause periods.
+         */
+        const activeIntervals: Array<{
+          start: number;
+          end: number;
+        }> = [];
+
+        let cursor = start;
+
+        for (const pause of pauses) {
+          if (pause.start > cursor) {
+            activeIntervals.push({
+              start: cursor,
+              end: pause.start,
+            });
+          }
+
+          cursor = Math.max(cursor, pause.end);
+        }
+
+        if (cursor < end) {
+          activeIntervals.push({
+            start: cursor,
+            end,
+          });
+        }
+
+        let activeElapsed = 0;
+        let threshold = slaHours * 60 * 60 * 1000;
+
+        for (const interval of activeIntervals) {
+          const intervalLength =
+            interval.end - interval.start;
+
+          while (
+            activeElapsed + intervalLength >= threshold
+          ) {
+            const chargeableAt =
+              interval.start +
+              (threshold - activeElapsed);
+
+            chargeTimes.push(chargeableAt);
+
+            threshold += DAY_MS;
+          }
+
+          activeElapsed += intervalLength;
+        }
+      }
+
+      /*
+       * Consolidate charge events into batch-day windows.
+       * The first window starts at the original SLA
+       * deadline, with subsequent windows every 24 hours.
+       *
+       * Multiple activities reaching thresholds within
+       * the same window produce only one charge.
+       */
+      /*
+ * Batch-level penalty milestones.
+ *
+ * Each work generates charge events after consuming its
+ * configured active SLA hours, and again for every 24
+ * additional active hours.
+ *
+ * The earliest actual charge event anchors the batch's
+ * penalty-day windows. This accounts for approved pauses
+ * that postpone the first effective deadline.
+ *
+ * Events from multiple activities in the same 24-hour
+ * window produce only one batch-level charge.
+ */
+const chargeByDay = new Map<number, number>();
+
+const sortedChargeTimes = chargeTimes
+  .filter(
+    (timestamp) =>
+      Number.isFinite(timestamp) &&
+      timestamp <= now,
+  )
+  .sort((a, b) => a - b);
+
+if (sortedChargeTimes.length > 0) {
+  const firstChargeAt = sortedChargeTimes[0];
+
+  for (const timestamp of sortedChargeTimes) {
+    const penaltyDay =
+      Math.floor(
+        (timestamp - firstChargeAt) / DAY_MS,
+      ) + 1;
+
+    if (!chargeByDay.has(penaltyDay)) {
+      chargeByDay.set(penaltyDay, timestamp);
+    }
+  }
+}
+
+      for (const [penaltyDay, timestamp] of chargeByDay) {
+        /*
+         * Unique(batchId, penaltyDay) is the database
+         * safeguard against duplicate charges.
+         *
+         * Do not update existing records:
+         * an Owner waiver must remain intact.
+         */
+        const result = await tx
+  .createQueryBuilder()
+  .insert()
+  .into(ProjectContractorSlaPenalty)
+          .values({
+            batchId: lockedBatch.id,
+            assignmentId: lockedBatch.assignmentId,
+            contractorId: lockedBatch.contractorId,
+            projectId: lockedBatch.projectId,
+            penaltyDay,
+            amount: rate.toFixed(2),
+            chargeableAt: new Date(timestamp),
+            isWaived: false,
+          })
+          .orIgnore()
+.returning('id')
+.execute();
+
+newlyRecorded += Array.isArray(result.raw)
+  ? result.raw.length
+  : 0;
+      }
+    }
+
+    return {
+      assignmentId,
+      newlyRecorded,
+      message: 'Contractor SLA penalties reconciled',
+    };
+  });
+}
+
+@Cron('0 0 * * * *', {
+  name: 'contractor-sla-penalty-reconciliation',
+  timeZone: 'Asia/Kolkata',
+  waitForCompletion: true,
+})
+async handleContractorSlaPenaltyCron() {
+  // Penalty posting is disabled unless explicitly enabled.
+  // This prevents automatic financial charges during development.
+  if (
+    process.env.CONTRACTOR_SLA_PENALTY_CRON_ENABLED !== 'true'
+  ) {
+    return {
+      skipped: true,
+      reason: 'Contractor SLA penalty automation is disabled',
+    };
+  }
+
+  const manager =
+    this.projectContractorAssignmentRepository.manager;
+
+  let processed = 0;
+  let recorded = 0;
+  let failed = 0;
+
+  try {
+    const batches = await manager
+      .createQueryBuilder(
+        ProjectContractorSlaBatch,
+        'batch',
+      )
+      .select('batch.assignmentId', 'assignmentId')
+      .where('batch.closedAt IS NULL')
+      .orWhere(
+        'batch.closedAt >= :recent',
+        {
+          recent: new Date(
+            Date.now() - 30 * 24 * 60 * 60 * 1000,
+          ),
+        },
+      )
+      .distinct(true)
+      .getRawMany<{ assignmentId: number }>();
+
+    for (const batch of batches) {
+      try {
+        const result =
+          await this.accrueContractorSlaPenalties(
+            Number(batch.assignmentId),
+            { roles: ['OWNER'] },
+          );
+
+        processed++;
+        recorded += result.newlyRecorded;
+      } catch (error) {
+        failed++;
+
+        this.logger.error(
+          `Contractor SLA reconciliation failed for assignment ${batch.assignmentId}`,
+          error instanceof Error
+            ? error.stack
+            : String(error),
+        );
+      }
+    }
+
+    if (recorded > 0 || failed > 0) {
+      this.logger.log(
+        `Contractor SLA reconciliation: processed=${processed}, recorded=${recorded}, failed=${failed}`,
+      );
+    }
+
+    return { processed, recorded, failed };
+  } catch (error) {
+    this.logger.error(
+      'Contractor SLA scheduled reconciliation failed',
+      error instanceof Error
+        ? error.stack
+        : String(error),
+    );
+
+    return { processed, recorded, failed: failed + 1 };
+  }
+}
+
+async getContractorSlaPenalties(
+  assignmentId: number,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const userId = Number(
+    user?.id || user?.userId || user?.sub,
+  );
+
+  if (
+    !Number.isSafeInteger(assignmentId) ||
+    assignmentId <= 0
+  ) {
+    throw new BadRequestException('Invalid assignment ID');
+  }
+
+  const assignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: { id: assignmentId },
+    });
+
+  if (!assignment) {
+    throw new NotFoundException(
+      'Contractor assignment not found',
+    );
+  }
+
+  const canManage =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER');
+
+  if (
+    !canManage &&
+    Number(assignment.contractorId) !== userId
+  ) {
+    throw new ForbiddenException(
+      'You cannot view these penalties',
+    );
+  }
+
+  const manager =
+    this.projectContractorAssignmentRepository.manager;
+
+  const penalties = await manager.find(
+    ProjectContractorSlaPenalty,
+    {
+      where: { assignmentId },
+      order: {
+        chargeableAt: 'ASC',
+        id: 'ASC',
+      },
+    },
+  );
+
+  const totalRecorded = penalties.reduce(
+    (sum, item) => sum + Number(item.amount),
+    0,
+  );
+
+  const totalWaived = penalties.reduce(
+    (sum, item) =>
+      sum + (item.isWaived ? Number(item.amount) : 0),
+    0,
+  );
+
+  return {
+    assignmentId,
+    contractorId: assignment.contractorId,
+    originalAmount: Number(assignment.amount || 0),
+    totalRecorded,
+    totalWaived,
+    totalDeductible: Math.max(
+      0,
+      totalRecorded - totalWaived,
+    ),
+    penalties,
+  };
+}
+
+async waiveContractorSlaPenalty(
+  penaltyId: number,
+  body: any,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (!roles.includes('OWNER')) {
+    throw new ForbiddenException(
+      'Only Owner can waive contractor penalties',
+    );
+  }
+
+  const userId = Number(
+    user?.id || user?.userId || user?.sub,
+  );
+
+  const reason = String(
+    body?.reason || '',
+  ).trim();
+
+  if (
+    !Number.isSafeInteger(penaltyId) ||
+    penaltyId <= 0
+  ) {
+    throw new BadRequestException('Invalid penalty ID');
+  }
+
+  if (
+    !Number.isSafeInteger(userId) ||
+    userId <= 0
+  ) {
+    throw new BadRequestException('Invalid Owner');
+  }
+
+  if (reason.length < 5) {
+    throw new BadRequestException(
+      'A meaningful waiver reason is required',
+    );
+  }
+
+  const manager =
+    this.projectContractorAssignmentRepository.manager;
+
+  return manager.transaction(async (tx) => {
+    const penalty = await tx.findOne(
+      ProjectContractorSlaPenalty,
+      {
+        where: { id: penaltyId },
+        lock: { mode: 'pessimistic_write' },
+      },
+    );
+
+    if (!penalty) {
+      throw new NotFoundException(
+        'Contractor penalty not found',
+      );
+    }
+
+    if (penalty.isWaived) {
+      throw new BadRequestException(
+        'This penalty has already been waived',
+      );
+    }
+
+    penalty.isWaived = true;
+    penalty.waivedBy = userId;
+    penalty.waiverReason = reason;
+    penalty.waivedAt = new Date();
+
+    await tx.save(
+      ProjectContractorSlaPenalty,
+      penalty,
+    );
+
+    return {
+      message: 'Contractor penalty waived successfully',
+      penalty,
+    };
+  });
+}
+
+async getContractorSlaSummary(
+  assignmentId: number,
+  user: any,
+) {
+  const manager =
+    this.projectContractorAssignmentRepository.manager;
+
+  const assignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: { id: assignmentId },
+    });
+
+  if (!assignment) {
+    throw new NotFoundException(
+      'Contractor assignment not found',
+    );
+  }
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const currentUserId = Number(
+    user?.id || user?.userId || user?.sub,
+  );
+
+  const canManage =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER');
+
+  const isContractor =
+    Number(assignment.contractorId) === currentUserId;
+
+  if (!canManage && !isContractor) {
+    throw new ForbiddenException(
+      'You cannot view this contractor SLA',
+    );
+  }
+
+  const batches = await manager.find(
+    ProjectContractorSlaBatch,
+    {
+      where: { assignmentId },
+      order: { id: 'ASC' },
+    },
+  );
+
+  const now = new Date();
+
+  const results: Array<{
+  batchId: number;
+  assignmentId: number;
+  assignedAt: Date;
+  slaHours: number;
+  penaltyPerDay: number;
+  chargeableDays: number;
+  calculatedPenalty: number;
+  recordedPenalty: number;
+waivedPenalty: number;
+deductiblePenalty: number;
+  works: Array<{
+    workId: number;
+    workItem: string;
+    status: ContractorSlaWorkStatus;
+    assignedAt: Date;
+    originalDeadline: Date;
+    effectiveDeadline: Date;
+    completedAt: Date | null;
+    approvedPauseMilliseconds: number;
+    chargeableDays: number;
+    isOverdue: boolean;
+  }>;
+}> = [];
+
+  for (const batch of batches) {
+    const works = await manager.find(
+      ProjectContractorSlaWork,
+      {
+        where: { batchId: batch.id },
+        order: { id: 'ASC' },
+      },
+    );
+
+    const workResults: (typeof results)[number]['works'] = [];
+
+    for (const work of works) {
+      const delays = await manager.find(
+        ProjectContractorSlaDelay,
+        {
+          where: {
+            workId: work.id,
+            status: ContractorSlaDelayStatus.APPROVED,
+          },
+          order: { id: 'ASC' },
+        },
+      );
+
+      const baseDeadline = new Date(
+        work.deadlineAt,
+      ).getTime();
+
+      const completedAt =
+        work.completedAt
+          ? new Date(work.completedAt)
+          : null;
+
+      const isCompleted =
+        work.status ===
+          ContractorSlaWorkStatus.COMPLETED &&
+        completedAt !== null;
+
+      const isClosed =
+        work.status ===
+          ContractorSlaWorkStatus.STOPPED ||
+        work.status ===
+          ContractorSlaWorkStatus.REASSIGNED;
+
+      const evaluationEnd =
+        completedAt ||
+        (work.stoppedAt
+          ? new Date(work.stoppedAt)
+          : now);
+
+      /*
+       * Approved pause intervals extend the deadline.
+       * Each interval contributes only the duration that
+       * overlaps the period after work assignment.
+       */
+      const intervals = delays
+        .filter((delay) => delay.approvedPauseFrom)
+        .map((delay) => ({
+          start: new Date(
+            delay.approvedPauseFrom!,
+          ).getTime(),
+          end: delay.resumedAt
+            ? new Date(delay.resumedAt).getTime()
+            : evaluationEnd.getTime(),
+        }))
+        .filter(
+          (interval) =>
+            Number.isFinite(interval.start) &&
+            Number.isFinite(interval.end) &&
+            interval.end > interval.start,
+        )
+        .sort((a, b) => a.start - b.start);
+
+      /*
+       * Merge overlapping approved intervals so
+       * overlapping requests cannot double-extend
+       * the deadline.
+       */
+      const merged: Array<{
+        start: number;
+        end: number;
+      }> = [];
+
+      for (const interval of intervals) {
+        const last = merged[merged.length - 1];
+
+        if (last && interval.start <= last.end) {
+          last.end = Math.max(
+            last.end,
+            interval.end,
+          );
+        } else {
+          merged.push({ ...interval });
+        }
+      }
+
+      const assignedAt = new Date(
+        work.assignedAt,
+      ).getTime();
+
+      const pauseMilliseconds = merged.reduce(
+        (total, interval) => {
+          const start = Math.max(
+            interval.start,
+            assignedAt,
+          );
+
+          const end = Math.min(
+            interval.end,
+            evaluationEnd.getTime(),
+          );
+
+          return total + Math.max(0, end - start);
+        },
+        0,
+      );
+
+      const effectiveDeadline =
+        baseDeadline + pauseMilliseconds;
+
+      const activePause =
+        work.status ===
+          ContractorSlaWorkStatus.PAUSED;
+
+      const chargeableUntil =
+        evaluationEnd.getTime();
+
+      /*
+       * First penalty at the 24-hour deadline.
+       * Next penalty at each subsequent 24-hour
+       * overdue boundary.
+       */
+      const overdueMilliseconds =
+        chargeableUntil - effectiveDeadline;
+
+      const chargeableDays =
+  overdueMilliseconds < 0
+    ? 0
+    : Math.floor(
+        overdueMilliseconds /
+          (24 * 60 * 60 * 1000),
+      ) + 1;
+
+      workResults.push({
+        workId: work.id,
+        workItem: work.workItem,
+        status: work.status,
+        assignedAt: work.assignedAt,
+        originalDeadline: work.deadlineAt,
+        effectiveDeadline:
+          new Date(effectiveDeadline),
+        completedAt: work.completedAt,
+        approvedPauseMilliseconds:
+          pauseMilliseconds,
+        chargeableDays,
+        isOverdue:
+          chargeableDays > 0,
+      });
+    }
+
+    /*
+     * Batch-wise penalty:
+     * Use the highest overdue-day count across
+     * activities, not the sum of all activities.
+     */
+    const batchChargeableDays =
+      workResults.reduce(
+        (maximum, work) =>
+          Math.max(
+            maximum,
+            work.chargeableDays,
+          ),
+        0,
+      );
+
+    const penaltyPerDay = Number(
+      batch.penaltyPerDay || 0,
+    );
+
+    const calculatedPenalty =
+      batchChargeableDays * penaltyPerDay;
+
+      const recordedCharges = await manager.find(
+  ProjectContractorSlaPenalty,
+  {
+    where: { batchId: batch.id },
+    order: { chargeableAt: 'ASC' },
+  },
+);
+
+const recordedPenalty = recordedCharges.reduce(
+  (total, charge) => total + Number(charge.amount),
+  0,
+);
+
+const waivedPenalty = recordedCharges.reduce(
+  (total, charge) =>
+    total + (
+      charge.isWaived ? Number(charge.amount) : 0
+    ),
+  0,
+);
+
+const deductiblePenalty = Math.max(
+  0,
+  recordedPenalty - waivedPenalty,
+);
+
+    results.push({
+  batchId: batch.id,
+  assignmentId: batch.assignmentId,
+  assignedAt: batch.assignedAt,
+  slaHours: batch.slaHours,
+  penaltyPerDay,
+  chargeableDays: batchChargeableDays,
+  calculatedPenalty,
+  recordedPenalty,
+  waivedPenalty,
+  deductiblePenalty,
+  works: workResults,
+});
+  }
+
+  return {
+    assignmentId,
+    contractorId: assignment.contractorId,
+    originalAmount: Number(
+      assignment.amount || 0,
+    ),
+    // Provisional estimate, not used for deductions.
+totalCalculatedPenalty:
+  results.reduce(
+    (sum, batch) =>
+      sum + batch.calculatedPenalty,
+    0,
+  ),
+
+totalRecordedPenalty:
+  results.reduce(
+    (sum, batch) =>
+      sum + batch.recordedPenalty,
+    0,
+  ),
+
+totalWaivedPenalty:
+  results.reduce(
+    (sum, batch) =>
+      sum + batch.waivedPenalty,
+    0,
+  ),
+
+// Authoritative amount from persisted penalty records.
+totalDeductiblePenalty:
+  results.reduce(
+    (sum, batch) =>
+      sum + batch.deductiblePenalty,
+    0,
+  ),
+    batches: results,
+  };
+}
+
+async requestContractorSlaDelay(
+  body: any,
+  user: any,
+) {
+  const workId = Number(body?.workId);
+  const reason = String(body?.reason || '').trim();
+  const userId = Number(
+    user?.id || user?.userId || user?.sub,
+  );
+
+  if (!Number.isSafeInteger(workId) || workId <= 0) {
+    throw new BadRequestException('Valid SLA work ID is required');
+  }
+
+  if (!reason) {
+    throw new BadRequestException('Delay reason is required');
+  }
+
+  const manager =
+    this.projectContractorAssignmentRepository.manager;
+
+  return manager.transaction(async (tx) => {
+    const work = await tx.findOne(ProjectContractorSlaWork, {
+      where: { id: workId },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (!work) {
+      throw new NotFoundException('SLA work not found');
+    }
+
+    if (Number(work.contractorId) !== userId) {
+      throw new ForbiddenException('This work is not assigned to you');
+    }
+
+    if (work.status !== ContractorSlaWorkStatus.RUNNING) {
+      throw new BadRequestException(
+        'Only running work can request a delay',
+      );
+    }
+
+    const assignment = await tx.findOne(
+      ProjectContractorAssignment,
+      { where: { id: work.assignmentId } },
+    );
+
+    if (
+      !assignment ||
+      assignment.status === ProjectContractorWorkStatus.REASSIGNED
+    ) {
+      throw new BadRequestException('Assignment is no longer active');
+    }
+
+    const existing = await tx.findOne(ProjectContractorSlaDelay, {
+      where: {
+        workId,
+        status: ContractorSlaDelayStatus.PENDING,
+      },
+    });
+
+    if (existing) {
+      throw new BadRequestException(
+        'A delay request is already pending for this work',
+      );
+    }
+
+    return tx.save(
+      ProjectContractorSlaDelay,
+      tx.create(ProjectContractorSlaDelay, {
+        workId: work.id,
+        batchId: work.batchId,
+        contractorId: userId,
+        reason,
+        status: ContractorSlaDelayStatus.PENDING,
+        requestedPauseFrom: new Date(),
+      }),
+    );
+  });
+}
+
+async getPendingContractorSlaDelays(user: any) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (
+    !roles.includes('OWNER') &&
+    !roles.includes('PROJECT_MANAGER')
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Project Manager can view SLA delay requests',
+    );
+  }
+
+  const manager =
+    this.projectContractorAssignmentRepository.manager;
+
+  const delays = await manager.find(
+    ProjectContractorSlaDelay,
+    {
+      where: {
+        status: ContractorSlaDelayStatus.PENDING,
+      },
+      order: {
+        createdAt: 'ASC',
+      },
+      take: 200,
+    },
+  );
+
+  if (!delays.length) {
+    return [];
+  }
+
+  const workIds = [...new Set(delays.map((delay) => delay.workId))];
+
+  const works = await manager.find(
+    ProjectContractorSlaWork,
+    {
+      where: {
+        id: In(workIds),
+      },
+    },
+  );
+
+  const assignmentIds = [
+    ...new Set(works.map((work) => work.assignmentId)),
+  ];
+
+  const assignments = assignmentIds.length
+    ? await manager.find(ProjectContractorAssignment, {
+        where: {
+          id: In(assignmentIds),
+        },
+      })
+    : [];
+
+  const workById = new Map(
+    works.map((work) => [work.id, work]),
+  );
+
+  const assignmentById = new Map(
+    assignments.map((assignment) => [
+      assignment.id,
+      assignment,
+    ]),
+  );
+
+  return delays.map((delay) => {
+    const work = workById.get(delay.workId);
+    const assignment = work
+      ? assignmentById.get(work.assignmentId)
+      : null;
+
+    return {
+      id: delay.id,
+      workId: delay.workId,
+      batchId: delay.batchId,
+      contractorId: delay.contractorId,
+      reason: delay.reason,
+      status: delay.status,
+      requestedAt: delay.createdAt,
+      workItem: work?.workItem ?? null,
+      projectId: work?.projectId ?? null,
+      assignmentId: work?.assignmentId ?? null,
+      deadlineAt: work?.deadlineAt ?? null,
+      workStatus: work?.status ?? null,
+      contractorName:
+        assignment?.contractorName ?? null,
+    };
+  });
+}
+
+async reviewContractorSlaDelay(
+  delayId: number,
+  body: any,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (
+    !roles.includes('OWNER') &&
+    !roles.includes('PROJECT_MANAGER')
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Project Manager can review delays',
+    );
+  }
+
+  const approved = body?.approved === true;
+  const reviewNote = String(body?.reviewNote || '').trim();
+
+  if (!Number.isSafeInteger(delayId) || delayId <= 0) {
+    throw new BadRequestException('Invalid delay ID');
+  }
+
+  const manager =
+    this.projectContractorAssignmentRepository.manager;
+
+  return manager.transaction(async (tx) => {
+    const delay = await tx.findOne(ProjectContractorSlaDelay, {
+      where: { id: delayId },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (!delay) {
+      throw new NotFoundException('Delay request not found');
+    }
+
+    if (delay.status !== ContractorSlaDelayStatus.PENDING) {
+      throw new BadRequestException(
+        'Delay request has already been reviewed',
+      );
+    }
+
+    const work = await tx.findOne(ProjectContractorSlaWork, {
+      where: { id: delay.workId },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (
+      !work ||
+      work.status !== ContractorSlaWorkStatus.RUNNING
+    ) {
+      throw new BadRequestException(
+        'This work is no longer running',
+      );
+    }
+
+    const assignment = await tx.findOne(
+      ProjectContractorAssignment,
+      { where: { id: work.assignmentId } },
+    );
+
+    if (
+      !assignment ||
+      assignment.status === ProjectContractorWorkStatus.REASSIGNED
+    ) {
+      throw new BadRequestException(
+        'Assignment is no longer active',
+      );
+    }
+
+    const now = new Date();
+
+    delay.status = approved
+      ? ContractorSlaDelayStatus.APPROVED
+      : ContractorSlaDelayStatus.REJECTED;
+
+    delay.reviewedAt = now;
+    delay.reviewedBy = Number(
+      user?.id || user?.userId || user?.sub,
+    );
+    delay.reviewedByName = String(
+      user?.name || user?.email || '',
+    );
+    delay.reviewNote = reviewNote || null;
+
+    if (approved) {
+      delay.approvedPauseFrom = now;
+      work.status = ContractorSlaWorkStatus.PAUSED;
+      work.pausedAt = now;
+      await tx.save(ProjectContractorSlaWork, work);
+    }
+
+    await tx.save(ProjectContractorSlaDelay, delay);
+
+    return {
+      message: approved
+        ? 'Work-specific SLA pause approved'
+        : 'SLA delay request rejected',
+      delay,
+      workStatus: work.status,
+    };
+  });
+}
+
+async resumeContractorSlaWork(
+  workId: number,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const userId = Number(
+    user?.id || user?.userId || user?.sub,
+  );
+
+  if (!Number.isSafeInteger(workId) || workId <= 0) {
+    throw new BadRequestException('Invalid SLA work ID');
+  }
+
+  const manager =
+    this.projectContractorAssignmentRepository.manager;
+
+  return manager.transaction(async (tx) => {
+    const work = await tx.findOne(ProjectContractorSlaWork, {
+      where: { id: workId },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (!work) {
+      throw new NotFoundException('SLA work not found');
+    }
+
+    const canManage =
+      roles.includes('OWNER') ||
+      roles.includes('PROJECT_MANAGER');
+
+    if (
+      !canManage &&
+      Number(work.contractorId) !== userId
+    ) {
+      throw new ForbiddenException(
+        'You cannot resume this work',
+      );
+    }
+
+    if (work.status !== ContractorSlaWorkStatus.PAUSED) {
+      throw new BadRequestException(
+        'This work is not currently paused',
+      );
+    }
+
+    const activeDelay = await tx.findOne(
+      ProjectContractorSlaDelay,
+      {
+        where: {
+          workId,
+          status: ContractorSlaDelayStatus.APPROVED,
+          resumedAt: IsNull(),
+        },
+        order: { id: 'DESC' },
+      },
+    );
+
+    if (!activeDelay || !activeDelay.approvedPauseFrom) {
+      throw new BadRequestException(
+        'No active approved pause found',
+      );
+    }
+
+    const now = new Date();
+    const pauseDuration =
+      now.getTime() -
+      new Date(activeDelay.approvedPauseFrom).getTime();
+
+    activeDelay.resumedAt = now;
+    activeDelay.resumedBy = userId;
+    activeDelay.resumeReason = 'Work resumed';
+
+    work.status = ContractorSlaWorkStatus.RUNNING;
+    work.pausedAt = null;
+
+    await tx.save(ProjectContractorSlaDelay, activeDelay);
+    await tx.save(ProjectContractorSlaWork, work);
+
+    return {
+      message: 'SLA work resumed',
+      workId,
+      resumedAt: now,
+      pauseDurationMilliseconds: pauseDuration,
+    };
+  });
 }
 
 async getProjectContractorAssignments(projectId: number) {
@@ -47123,9 +48565,7 @@ async reassignContractorAssignment(
     .filter(Boolean)
     .join('\n');
 
-  await this.projectContractorAssignmentRepository.save(
-    oldAssignment,
-  );
+  
 
   /*
    * Create fresh assignment for new contractor.
@@ -47188,9 +48628,201 @@ async reassignContractorAssignment(
     });
 
   const savedNewAssignment =
-    await this.projectContractorAssignmentRepository.save(
-      newAssignment,
-    );
+  await this.projectContractorAssignmentRepository.manager.transaction(
+    async (tx) => {
+      const lockedOldAssignment = await tx.findOne(
+        ProjectContractorAssignment,
+        {
+          where: { id: oldAssignment.id },
+          lock: { mode: 'pessimistic_write' },
+        },
+      );
+
+      if (!lockedOldAssignment) {
+        throw new NotFoundException(
+          'Original contractor assignment not found',
+        );
+      }
+
+      if (
+        lockedOldAssignment.status ===
+          ProjectContractorWorkStatus.REASSIGNED ||
+        lockedOldAssignment.status ===
+          ProjectContractorWorkStatus.COMPLETED
+      ) {
+        throw new BadRequestException(
+          'This assignment can no longer be reassigned',
+        );
+      }
+
+      const reassignedAt = new Date();
+
+      // Preserve the old assignment and its historical records.
+      lockedOldAssignment.status =
+        ProjectContractorWorkStatus.REASSIGNED;
+
+      lockedOldAssignment.remarks = oldAssignment.remarks;
+
+      await tx.save(
+        ProjectContractorAssignment,
+        lockedOldAssignment,
+      );
+
+      const oldBatches = await tx.find(
+        ProjectContractorSlaBatch,
+        {
+          where: { assignmentId: oldAssignment.id },
+        },
+      );
+
+      for (const batch of oldBatches) {
+        const oldWorks = await tx.find(
+          ProjectContractorSlaWork,
+          {
+            where: { batchId: batch.id },
+          },
+        );
+
+        for (const work of oldWorks) {
+          if (
+            work.status === ContractorSlaWorkStatus.COMPLETED ||
+            work.status === ContractorSlaWorkStatus.STOPPED ||
+            work.status === ContractorSlaWorkStatus.REASSIGNED
+          ) {
+            continue;
+          }
+
+          if (work.status === ContractorSlaWorkStatus.PAUSED) {
+            const activeDelay = await tx.findOne(
+              ProjectContractorSlaDelay,
+              {
+                where: {
+                  workId: work.id,
+                  status: ContractorSlaDelayStatus.APPROVED,
+                  resumedAt: IsNull(),
+                },
+                order: { id: 'DESC' },
+              },
+            );
+
+            if (activeDelay) {
+              activeDelay.resumedAt = reassignedAt;
+              activeDelay.resumedBy = currentUserId;
+              activeDelay.resumeReason =
+                'Closed because contractor was reassigned';
+
+              await tx.save(
+                ProjectContractorSlaDelay,
+                activeDelay,
+              );
+            }
+          }
+
+          work.status =
+            ContractorSlaWorkStatus.REASSIGNED;
+
+          work.stoppedAt = reassignedAt;
+          work.stopReason =
+            `Contractor reassigned: ${reason}`;
+
+          work.pausedAt = null;
+
+          await tx.save(
+            ProjectContractorSlaWork,
+            work,
+          );
+        }
+
+        batch.closedAt = reassignedAt;
+        batch.closeReason =
+          `Contractor reassigned: ${reason}`;
+
+        await tx.save(
+          ProjectContractorSlaBatch,
+          batch,
+        );
+      }
+
+      // Create a genuinely new assignment.
+      const saved = await tx.save(
+        ProjectContractorAssignment,
+        newAssignment,
+      );
+
+      const workItems = [
+        ...new Set(
+          (saved.assignedWorkItems || [])
+            .map((item: string) => String(item).trim())
+            .filter(Boolean),
+        ),
+      ];
+
+      if (workItems.length > 0) {
+        const settings = await tx.findOne(
+          ProjectContractorSlaSetting,
+          {
+            where: {},
+            order: { id: 'ASC' },
+          },
+        );
+
+        const slaHours = Number(
+          settings?.slaHours ?? 24,
+        );
+
+        const penaltyPerDay = Number(
+          settings?.penaltyPerDay ?? 500,
+        );
+
+        if (
+          !Number.isFinite(slaHours) ||
+          slaHours <= 0 ||
+          !Number.isFinite(penaltyPerDay) ||
+          penaltyPerDay < 0
+        ) {
+          throw new BadRequestException(
+            'Invalid contractor SLA settings',
+          );
+        }
+
+        const newBatch = await tx.save(
+          ProjectContractorSlaBatch,
+          tx.create(ProjectContractorSlaBatch, {
+            assignmentId: saved.id,
+            projectId: saved.projectId,
+            contractorId: saved.contractorId,
+            assignedAt: reassignedAt,
+            slaHours,
+            penaltyPerDay: penaltyPerDay.toFixed(2),
+          }),
+        );
+
+        const deadlineAt = new Date(
+          reassignedAt.getTime() +
+            slaHours * 60 * 60 * 1000,
+        );
+
+        await tx.save(
+          ProjectContractorSlaWork,
+          workItems.map((workItem) =>
+            tx.create(ProjectContractorSlaWork, {
+              batchId: newBatch.id,
+              assignmentId: saved.id,
+              projectId: saved.projectId,
+              contractorId: saved.contractorId,
+              workItem,
+              requiredProofTypes: [],
+              assignedAt: reassignedAt,
+              deadlineAt,
+              status: ContractorSlaWorkStatus.RUNNING,
+            }),
+          ),
+        );
+      }
+
+      return saved;
+    },
+  );
 
   return {
     message:
@@ -47226,8 +48858,14 @@ async uploadContractorProofs(
     });
 
   if (!assignment) {
-    throw new NotFoundException('Contractor assignment not found');
-  }
+  throw new NotFoundException('Contractor assignment not found');
+}
+
+if (Number(assignment.projectId) !== projectId) {
+  throw new BadRequestException(
+    'Project does not belong to this contractor assignment',
+  );
+}
 
   const roles = Array.isArray(user?.roles) ? user.roles : [];
   const currentUserId = Number(user?.id || user?.userId || user?.sub);
@@ -47240,6 +48878,106 @@ async uploadContractorProofs(
   if (!isAllowed) {
     throw new ForbiddenException('You are not allowed to upload proof for this work');
   }
+
+  /*
+ * SLA proof validation.
+ * This mapping applies only to SLA-tagged uploads.
+ * Existing historical and untagged uploads remain unaffected.
+ */
+const slaAllowedProofTypes: Record<string, string[]> = {
+  STRUCTURE_WORK: [
+    'STRUCTURE_PHOTO',
+  ],
+  STRUCTURE_INSPECTION: [
+    'STRUCTURE_PHOTO',
+  ],
+  PILLAR_WORK: [
+    'PILLAR_PHOTO',
+  ],
+  PILLAR_INSPECTION: [
+    'PILLAR_PHOTO',
+  ],
+  PANEL_INSTALLATION: [
+    'PANEL_SERIAL_NUMBER_PHOTO',
+    'PANEL_WITH_CLIENT_PHOTO',
+  ],
+  INVERTER_INSTALLATION: [
+    'INVERTER_PHOTO',
+  ],
+  WIRING: [
+    'OTHER',
+  ],
+  EARTHING: [
+    'EARTHING_WITH_CLIENT_PHOTO',
+  ],
+  SOLAR_METER_WORK: [
+    'SOLAR_METER_PHOTO',
+  ],
+  NET_METER_WORK: [
+    'NET_METER_PHOTO',
+  ],
+  GENERATION_WORK: [
+    'OTHER',
+  ],
+  OTHER: [
+    'OTHER',
+  ],
+};
+
+const rawSlaWorkId = body?.slaWorkId;
+let slaWorkId: number | null = null;
+
+if (
+  rawSlaWorkId !== undefined &&
+  rawSlaWorkId !== null &&
+  String(rawSlaWorkId).trim() !== ''
+) {
+  slaWorkId = Number(rawSlaWorkId);
+
+  if (!Number.isSafeInteger(slaWorkId) || slaWorkId <= 0) {
+    throw new BadRequestException('Invalid SLA work ID');
+  }
+
+  const slaWork = await this.projectContractorAssignmentRepository.manager.findOne(
+    ProjectContractorSlaWork,
+    { where: { id: slaWorkId } },
+  );
+
+  if (
+  !slaWork ||
+  Number(assignment.projectId) !== projectId ||
+  slaWork.assignmentId !== assignmentId ||
+  slaWork.projectId !== projectId ||
+  slaWork.contractorId !== Number(assignment.contractorId) ||
+  assignment.status === ProjectContractorWorkStatus.REASSIGNED ||
+  !['RUNNING', 'PAUSED'].includes(slaWork.status)
+) {
+  throw new BadRequestException(
+    'SLA work does not belong to this active contractor assignment',
+  );
+}
+
+/*
+ * Verify that the uploaded proof type belongs to
+ * the selected contractor activity.
+ */
+const selectedProofType = String(
+  body?.proofType || ProjectContractorProofType.OTHER,
+).trim();
+
+const allowedProofTypes =
+  slaAllowedProofTypes[String(slaWork.workItem)] || [];
+
+if (
+  allowedProofTypes.length === 0 ||
+  !allowedProofTypes.includes(selectedProofType)
+) {
+  throw new BadRequestException(
+    `Invalid proof type "${selectedProofType}" for work "${slaWork.workItem}". ` +
+      `Allowed proof types: ${allowedProofTypes.join(', ') || 'none'}`,
+  );
+}
+}
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -47284,8 +49022,9 @@ async uploadContractorProofs(
     const publicUrlResult = supabase.storage.from(bucket).getPublicUrl(filePath);
 
     const proof = this.projectContractorProofRepository.create({
-      projectId,
-      assignmentId,
+  projectId,
+  assignmentId,
+  slaWorkId,
       proofType:
         body?.proofType || ProjectContractorProofType.OTHER,
       fileUrl: publicUrlResult.data.publicUrl,
@@ -47308,6 +49047,88 @@ async uploadContractorProofs(
 );
 
 uploadedProofs.push(saved);
+  }
+
+    /*
+   * SLA completion:
+   * A contractor-uploaded proof for the specific work item
+   * stops only that work item's timer.
+   *
+   * Management uploads do not complete contractor SLA work.
+   * Untagged historical proofs remain unaffected.
+   */
+  if (
+    slaWorkId !== null &&
+    Number(assignment.contractorId) === currentUserId
+  ) {
+    const validProofs = uploadedProofs.filter(
+      (proof) =>
+        Number(proof.slaWorkId) === slaWorkId &&
+        Number(proof.uploadedBy) === currentUserId &&
+        !proof.isHidden,
+    );
+
+    if (validProofs.length > 0) {
+      const completedAt = validProofs
+        .map((proof) => new Date(proof.createdAt))
+        .sort((a, b) => a.getTime() - b.getTime())[0];
+
+      await this.projectContractorAssignmentRepository.manager.transaction(
+  async (tx) => {
+    const work = await tx.findOne(ProjectContractorSlaWork, {
+      where: { id: slaWorkId },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (
+      !work ||
+      work.assignmentId !== assignmentId ||
+      work.projectId !== projectId ||
+      work.contractorId !== currentUserId ||
+      ![
+        ContractorSlaWorkStatus.RUNNING,
+        ContractorSlaWorkStatus.PAUSED,
+      ].includes(work.status)
+    ) {
+      return;
+    }
+
+    if (work.status === ContractorSlaWorkStatus.PAUSED) {
+      const activeDelay = await tx.findOne(
+        ProjectContractorSlaDelay,
+        {
+          where: {
+            workId: work.id,
+            status: ContractorSlaDelayStatus.APPROVED,
+            resumedAt: IsNull(),
+          },
+          order: { id: 'DESC' },
+          lock: { mode: 'pessimistic_write' },
+        },
+      );
+
+      if (!activeDelay) {
+        throw new BadRequestException(
+          'Paused SLA work has no active approved delay',
+        );
+      }
+
+      activeDelay.resumedAt = completedAt;
+      activeDelay.resumedBy = currentUserId;
+      activeDelay.resumeReason =
+        'Automatically closed by contractor completion proof';
+
+      await tx.save(ProjectContractorSlaDelay, activeDelay);
+    }
+
+    work.status = ContractorSlaWorkStatus.COMPLETED;
+    work.completedAt = completedAt;
+    work.pausedAt = null;
+
+    await tx.save(ProjectContractorSlaWork, work);
+  },
+);
+    }
   }
 
   return {
@@ -47553,12 +49374,15 @@ async replaceContractorProof(
       .getPublicUrl(filePath);
 
   const replacementProof =
-    this.projectContractorProofRepository.create({
-      projectId:
-        Number(oldProof.projectId),
+  this.projectContractorProofRepository.create({
+    projectId:
+      Number(oldProof.projectId),
 
-      assignmentId:
-        Number(oldProof.assignmentId),
+    assignmentId:
+      Number(oldProof.assignmentId),
+
+    slaWorkId:
+      oldProof.slaWorkId ?? null,
 
       proofType:
         oldProof.proofType,

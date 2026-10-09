@@ -1266,6 +1266,121 @@ createManualFinalInvoice(
   );
 }
 
+@Roles('PROJECT_CONTRACTOR')
+@Post('contractor-sla/delay/request')
+requestContractorSlaDelay(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.requestContractorSlaDelay(
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Get('contractor-sla/delay/pending')
+getPendingContractorSlaDelays(
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getPendingContractorSlaDelays(
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('contractor-sla/delay/:id/review')
+reviewContractorSlaDelay(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.reviewContractorSlaDelay(
+    id,
+    body,
+    user,
+  );
+}
+
+@Roles('PROJECT_CONTRACTOR', 'OWNER', 'PROJECT_MANAGER')
+@Patch('contractor-sla/work/:id/resume')
+resumeContractorSlaWork(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.resumeContractorSlaWork(
+    id,
+    user,
+  );
+}
+
+@Roles('OWNER')
+@Get('contractor-sla/settings')
+getContractorSlaSettings(
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getContractorSlaSettings(user);
+}
+
+@Roles('OWNER')
+@Patch('contractor-sla/settings')
+updateContractorSlaSettings(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.updateContractorSlaSettings(
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_CONTRACTOR')
+@Get('contractor-sla/assignment/:id/penalties')
+getContractorSlaPenalties(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getContractorSlaPenalties(
+    id,
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Post('contractor-sla/assignment/:id/accrue')
+accrueContractorSlaPenalties(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.accrueContractorSlaPenalties(
+    id,
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_CONTRACTOR')
+@Get('contractor-sla/assignment/:id/summary')
+getContractorSlaSummary(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getContractorSlaSummary(id, user);
+}
+
+@Roles('OWNER')
+@Patch('contractor-sla/penalty/:id/waive')
+waiveContractorSlaPenalty(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.waiveContractorSlaPenalty(
+    id,
+    body,
+    user,
+  );
+}
+
 @Roles('OWNER', 'PROJECT_MANAGER', 'SOLAR_FRANCHISE')
 @Post('contractor/assign')
 assignContractorToProject(
