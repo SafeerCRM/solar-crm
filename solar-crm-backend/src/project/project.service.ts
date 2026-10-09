@@ -16761,7 +16761,12 @@ projectOwnerName: string;
 totalProjectCost: number;
       amountReceived: number;
       pendingAmount: number;
-      paymentReceivedPercentage: number;
+            paymentReceivedPercentage: number;
+      projectWorkState: string;
+      currentExecutionActivity: string;
+      loanActivity: string;
+      subsidyActivity: string;
+      electricityActivity: string;
     }
   >();
 
@@ -16830,7 +16835,31 @@ projectOwnerName:
 totalProjectCost,
       amountReceived,
       pendingAmount,
-      paymentReceivedPercentage,
+            paymentReceivedPercentage,
+
+      projectWorkState:
+        String(row?.projectWorkState || '').trim(),
+
+      currentExecutionActivity:
+        String(row?.currentExecutionActivity || '').trim(),
+
+      loanActivity:
+        String(
+          row?.departmentStatusSummary?.loanStatus ||
+          ''
+        ).trim(),
+
+      subsidyActivity:
+        String(
+          row?.departmentStatusSummary?.subsidyStatus ||
+          ''
+        ).trim(),
+
+      electricityActivity:
+        String(
+          row?.departmentStatusSummary?.electricityStatus ||
+          ''
+        ).trim(),
     });
   }
 
@@ -16869,33 +16898,43 @@ totalProjectCost,
     )}"`;
   };
 
-  const headers = [
-  'Project Name',
-  'Contact Number',
-  'Branch of Project',
-  'Project Owner',
-  'Total Project Cost',
-  'Amount Received',
-  'Pending Amount',
-  'Payment Received %',
-];
+    const headers = [
+    'Project Name',
+    'Contact Number',
+    'Branch of Project',
+    'Project Owner',
+    'Total Project Cost',
+    'Amount Received',
+    'Pending Amount',
+    'Payment Received %',
+    'Project Work State',
+    'Current Execution Activity',
+    'Loan Activity',
+    'Subsidy Activity',
+    'Electricity Activity',
+  ];
 
   const csvRows = [
     headers
       .map(escapeCsvCell)
       .join(','),
 
-    ...projectRows.map((row) =>
+        ...projectRows.map((row) =>
       [
-  row.projectName,
-  row.contactNumber,
-  row.branchName,
-  row.projectOwnerName,
-  row.totalProjectCost,
-  row.amountReceived,
-  row.pendingAmount,
-  `${row.paymentReceivedPercentage}%`,
-]
+        row.projectName,
+        row.contactNumber,
+        row.branchName,
+        row.projectOwnerName,
+        row.totalProjectCost,
+        row.amountReceived,
+        row.pendingAmount,
+        `${row.paymentReceivedPercentage}%`,
+        row.projectWorkState,
+        row.currentExecutionActivity,
+        row.loanActivity,
+        row.subsidyActivity,
+        row.electricityActivity,
+      ]
         .map(escapeCsvCell)
         .join(','),
     ),
