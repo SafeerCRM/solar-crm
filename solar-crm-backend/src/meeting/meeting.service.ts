@@ -2152,12 +2152,20 @@ return updatedMeeting;
   );
 
   const getIndiaDateString = (
-    date: Date,
-  ): string => {
-    return date.toLocaleDateString('en-CA', {
-      timeZone: 'Asia/Kolkata',
-    });
-  };
+  date: Date,
+): string => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const getPart = (type: string) =>
+    parts.find((part) => part.type === type)?.value || '';
+
+  return `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
+};
 
   const now = new Date();
 
@@ -2271,39 +2279,48 @@ return updatedMeeting;
           meeting.customerName || 'Customer',
         ).trim() || 'Customer';
 
-      const scheduledAt =
-        new Date(meeting.scheduledAt);
+      /*
+ * Meeting scheduledAt is stored as a timestamp
+ * without timezone. Preserve its wall-clock
+ * date/time without shifting it to another zone.
+ */
+/*
+ * scheduledAt is stored as PostgreSQL
+ * timestamp without time zone.
+ *
+ * TypeORM/pg returns a Date object. Its UTC
+ * components preserve the stored wall-clock
+ * values when parsed in a UTC environment.
+ */
+const rawScheduledAt = meeting.scheduledAt;
 
-      if (
-        Number.isNaN(
-          scheduledAt.getTime(),
-        )
-      ) {
-        skipped += 1;
-        continue;
-      }
+if (!rawScheduledAt) {
+  skipped += 1;
+  continue;
+}
 
-      const appointmentDate =
-        scheduledAt.toLocaleDateString(
-          'en-IN',
-          {
-            timeZone: 'Asia/Kolkata',
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-          },
-        );
+const scheduledAt = new Date(rawScheduledAt);
 
-      const appointmentTime =
-        scheduledAt.toLocaleTimeString(
-          'en-IN',
-          {
-            timeZone: 'Asia/Kolkata',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true,
-          },
-        );
+if (Number.isNaN(scheduledAt.getTime())) {
+  skipped += 1;
+  continue;
+}
+
+const appointmentDate =
+  new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'UTC',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(scheduledAt);
+
+const appointmentTime =
+  new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'UTC',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(scheduledAt);
 
       const appointmentType =
         meeting.meetingType ===
