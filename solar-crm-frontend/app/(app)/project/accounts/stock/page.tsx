@@ -49,6 +49,17 @@ const [selectedProject, setSelectedProject] =
   useState<any | null>(null);
 
 const [receiveLoading, setReceiveLoading] = useState(false);
+const [incomingVendors, setIncomingVendors] =
+  useState<any[]>([]);
+
+const [incomingVendorSearch, setIncomingVendorSearch] =
+  useState('');
+
+const [incomingVendorsLoading, setIncomingVendorsLoading] =
+  useState(false);
+
+const [incomingVendorError, setIncomingVendorError] =
+  useState('');
 
 const [issueLoading, setIssueLoading] = useState(false);
 
@@ -121,6 +132,7 @@ const [receiveForm, setReceiveForm] = useState({
   quantity: '',
   rate: '',
   sourceType: 'MANUAL',
+  vendorId: '',
   remarks: '',
 });
 
@@ -967,6 +979,62 @@ const selectProjectForStockIssue = (
   setProjectSearchResults([]);
 };
 
+useEffect(() => {
+  if (receiveForm.sourceType !== 'VENDOR') {
+    return;
+  }
+
+  let cancelled = false;
+
+  const loadIncomingVendors = async () => {
+    setIncomingVendorsLoading(true);
+    setIncomingVendorError('');
+
+    try {
+      const token = localStorage.getItem('token');
+
+      const response = await axios.get(
+        `${API_BASE_URL}/project/vendor`,
+        {
+          params: { activeOnly: 'true' },
+          headers: token
+            ? { Authorization: `Bearer ${token}` }
+            : {},
+        },
+      );
+
+      if (cancelled) return;
+
+      setIncomingVendors(
+        Array.isArray(response.data)
+          ? response.data.filter(
+              (vendor: any) =>
+                vendor.isActive === true &&
+                vendor.isHidden !== true,
+            )
+          : [],
+      );
+    } catch (error) {
+      console.error('Failed to load incoming vendors:', error);
+
+      if (!cancelled) {
+        setIncomingVendors([]);
+        setIncomingVendorError('Unable to load vendors');
+      }
+    } finally {
+      if (!cancelled) {
+        setIncomingVendorsLoading(false);
+      }
+    }
+  };
+
+  void loadIncomingVendors();
+
+  return () => {
+    cancelled = true;
+  };
+}, [receiveForm.sourceType]);
+
 const receiveStock = async () => {
   if (!receiveForm.materialId) {
     alert('Please select material');
@@ -975,6 +1043,17 @@ const receiveStock = async () => {
 
   if (!receiveForm.quantity) {
     alert('Please enter quantity');
+    return;
+  }
+
+    if (
+    receiveForm.sourceType === 'VENDOR' &&
+    !incomingVendors.some(
+      (vendor: any) =>
+        String(vendor.id) === receiveForm.vendorId,
+    )
+  ) {
+    alert('Please select a valid vendor');
     return;
   }
 
@@ -996,7 +1075,11 @@ const receiveStock = async () => {
         branchName: selectedBranch?.name || '',
         quantity: receiveForm.quantity,
         rate: receiveForm.rate || 0,
-        sourceType: receiveForm.sourceType,
+                sourceType: receiveForm.sourceType,
+        sourceId:
+          receiveForm.sourceType === 'VENDOR'
+            ? Number(receiveForm.vendorId)
+            : undefined,
         remarks: receiveForm.remarks,
       },
       {
@@ -1010,14 +1093,17 @@ const receiveStock = async () => {
 
     alert('Stock received successfully');
 
-    setReceiveForm({
+        setReceiveForm({
       materialId: '',
       branchId: '',
       quantity: '',
       rate: '',
       sourceType: 'MANUAL',
+      vendorId: '',
       remarks: '',
     });
+
+    setIncomingVendorSearch('');
 
     await loadStockItems(1);
     await loadSelectableStockItems();
@@ -2639,22 +2725,119 @@ const filteredIncomingMaterials =
       ))}
     </select>
 
-    <select
+        <select
       value={receiveForm.sourceType}
-      onChange={(e) =>
-        setReceiveForm({
-          ...receiveForm,
+      onChange={(e) => {
+        setReceiveForm((prev) => ({
+          ...prev,
           sourceType: e.target.value,
-        })
-      }
+          vendorId: '',
+        }));
+
+        setIncomingVendorSearch('');
+      }}
       className="rounded-xl border p-3 text-sm"
     >
       <option value="MANUAL">Manual</option>
       <option value="OPENING_STOCK">Opening Stock</option>
       <option value="PURCHASE_ORDER">Purchase Order</option>
+      <option value="VENDOR">Vendor</option>
       <option value="RETURN">Return</option>
       <option value="ADJUSTMENT">Adjustment</option>
     </select>
+
+        {receiveForm.sourceType === 'VENDOR' && (
+      <div className="relative md:col-span-3">
+        <label className="mb-1 block text-sm font-semibold text-gray-700">
+          Select Vendor *
+        </label>
+
+        <input
+          type="text"
+          placeholder="Search vendor by name, phone or contact person"
+          value={incomingVendorSearch}
+          onChange={(e) => {
+            setIncomingVendorSearch(e.target.value);
+
+            setReceiveForm((prev) => ({
+              ...prev,
+              vendorId: '',
+            }));
+          }}
+          className="w-full rounded-xl border p-3 text-sm"
+        />
+
+        {incomingVendorsLoading && (
+          <p className="mt-1 text-xs text-gray-500">
+            Loading vendors...
+          </p>
+        )}
+
+        {incomingVendorError && (
+          <p className="mt-1 text-xs text-red-600">
+            {incomingVendorError}
+          </p>
+        )}
+
+        {receiveForm.vendorId && (
+          <p className="mt-1 text-xs font-medium text-green-700">
+            Vendor selected
+          </p>
+        )}
+
+        {incomingVendorSearch.trim() &&
+          !receiveForm.vendorId &&
+          !incomingVendorsLoading && (
+            <div className="mt-1 max-h-56 overflow-y-auto rounded-xl border bg-white shadow">
+              {incomingVendors
+                .filter((vendor: any) =>
+                  [
+                    vendor.vendorName,
+                    vendor.contactPerson,
+                    vendor.phone,
+                  ]
+                    .some((value) =>
+                      String(value || '')
+                        .toLowerCase()
+                        .includes(
+                          incomingVendorSearch
+                            .trim()
+                            .toLowerCase(),
+                        ),
+                    ),
+                )
+                .slice(0, 30)
+                .map((vendor: any) => (
+                  <button
+                    key={vendor.id}
+                    type="button"
+                    onClick={() => {
+                      setReceiveForm((prev) => ({
+                        ...prev,
+                        vendorId: String(vendor.id),
+                      }));
+
+                      setIncomingVendorSearch(
+                        vendor.vendorName,
+                      );
+                    }}
+                    className="block w-full border-b px-3 py-3 text-left text-sm hover:bg-blue-50"
+                  >
+                    <span className="font-semibold">
+                      {vendor.vendorName}
+                    </span>
+
+                    {vendor.phone && (
+                      <span className="ml-2 text-gray-500">
+                        {vendor.phone}
+                      </span>
+                    )}
+                  </button>
+                ))}
+            </div>
+          )}
+      </div>
+    )}
 
     <input
       type="number"

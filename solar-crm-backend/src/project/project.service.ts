@@ -55289,6 +55289,35 @@ async receiveStock(body: any, user: any) {
   const materialId = Number(body?.materialId || 0);
   const quantity = Number(body?.quantity || 0);
   const rate = Number(body?.rate || 0);
+    const sourceType = String(
+    body?.sourceType || 'MANUAL',
+  ).trim();
+
+  let vendorId: number | null = null;
+  let vendorName = '';
+
+  if (sourceType === 'VENDOR') {
+    vendorId = Number(body?.sourceId);
+
+    if (!Number.isSafeInteger(vendorId) || vendorId <= 0) {
+      throw new BadRequestException('Please select a valid vendor');
+    }
+
+    const vendor = await this.projectVendorRepository.findOne({
+      where: {
+        id: vendorId,
+        isActive: true,
+      },
+    });
+
+    if (!vendor || vendor.isHidden) {
+      throw new BadRequestException(
+        'Selected vendor is unavailable',
+      );
+    }
+
+    vendorName = vendor.vendorName;
+  }
 
   if (!materialId) {
     throw new BadRequestException('Material is required');
@@ -55373,9 +55402,23 @@ movement.movementType = ProjectStockMovementType.RECEIVE;
 movement.quantity = quantity;
 movement.rate = rate;
 movement.totalAmount = receivedValue;
-movement.sourceType = body?.sourceType || 'MANUAL_STOCK_RECEIVE';
-movement.sourceId = body?.sourceId ? Number(body.sourceId) : undefined as any;
-movement.remarks = body?.remarks || '';
+movement.sourceType = sourceType;
+
+movement.sourceId =
+  sourceType === 'VENDOR'
+    ? vendorId!
+    : body?.sourceId
+      ? Number(body.sourceId)
+      : undefined as any;
+
+movement.remarks =
+  sourceType === 'VENDOR'
+    ? `Vendor: ${vendorName}${
+        String(body?.remarks || '').trim()
+          ? ` | ${String(body.remarks).trim()}`
+          : ''
+      }`
+    : body?.remarks || '';
 movement.createdBy = Number(user?.id || user?.userId || user?.sub || 0);
 movement.createdByName = user?.name || user?.email || '';
 
