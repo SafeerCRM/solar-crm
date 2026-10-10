@@ -55581,6 +55581,317 @@ movement.createdByName = user?.name || user?.email || '';
   };
 }
 
+
+async bulkIssueDealerOrderStock(body: any, user: any) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException(
+      'You are not allowed to manage stock',
+    );
+  }
+
+  const dealerOrderId = Number(body?.dealerOrderId);
+  const dealerId = Number(body?.dealerId);
+  const submittedItems = body?.items;
+
+  if (
+    !Number.isSafeInteger(dealerOrderId) ||
+    dealerOrderId <= 0 ||
+    !Number.isSafeInteger(dealerId) ||
+    dealerId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid dealer and dealer order are required',
+    );
+  }
+
+  if (
+    !Array.isArray(submittedItems) ||
+    submittedItems.length < 1 ||
+    submittedItems.length > 200
+  ) {
+    throw new BadRequestException(
+      'Provide between 1 and 200 material rows',
+    );
+  }
+
+  const rows = submittedItems.map((item: any) => ({
+    stockItemId: Number(item?.stockItemId),
+    quantity: Number(item?.quantity),
+    deductFrom: String(
+      item?.deductFrom || 'AVAILABLE',
+    ).trim().toUpperCase(),
+    remarks: String(item?.remarks || '').trim(),
+  }));
+
+  for (const row of rows) {
+    if (
+      !Number.isSafeInteger(row.stockItemId) ||
+      row.stockItemId <= 0 ||
+      !Number.isFinite(row.quantity) ||
+      row.quantity <= 0
+    ) {
+      throw new BadRequestException(
+        'Every row needs a valid stock item and positive quantity',
+      );
+    }
+
+    if (row.deductFrom !== 'AVAILABLE') {
+      throw new BadRequestException(
+        'DO bulk issue currently supports Available stock only. Reserved stock must be handled through the existing DO reservation workflow.',
+      );
+    }
+  }
+
+  // Merge duplicate stock rows before checking availability.
+  const grouped = new Map<
+    number,
+    {
+      stockItemId: number;
+      quantity: number;
+      remarks: string[];
+    }
+  >();
+
+  for (const row of rows) {
+    const existing = grouped.get(row.stockItemId);
+
+    if (existing) {
+      existing.quantity += row.quantity;
+      if (row.remarks) {
+        existing.remarks.push(row.remarks);
+      }
+    } else {
+      grouped.set(row.stockItemId, {
+        stockItemId: row.stockItemId,
+        quantity: row.quantity,
+        remarks: row.remarks ? [row.remarks] : [],
+      });
+    }
+  }
+
+  const groupedRows = [...grouped.values()].sort(
+    (a, b) => a.stockItemId - b.stockItemId,
+  );
+
+  return this.dataSource.transaction(async (manager) => {
+    const orderRepo = manager.getRepository(
+      ProjectDealerOrder,
+    );
+    const orderItemRepo = manager.getRepository(
+      ProjectDealerOrderItem,
+    );
+    const stockRepo = manager.getRepository(
+      ProjectStockItem,
+    );
+    const movementRepo = manager.getRepository(
+      ProjectStockMovement,
+    );
+    const dealerRepo = manager.getRepository(
+      ProjectVendor,
+    );
+
+    // Serializes competing bulk requests for this DO.
+    const order = await orderRepo
+      .createQueryBuilder('ord')
+      .setLock('pessimistic_write')
+      .where('ord.id = :dealerOrderId', {
+        dealerOrderId,
+      })
+      .getOne();
+
+    if (!order || order.isHidden) {
+      throw new NotFoundException(
+        'Dealer order not found',
+      );
+    }
+
+    if (Number(order.dealerId) !== dealerId) {
+      throw new BadRequestException(
+        'Selected dealer does not match the DO',
+      );
+    }
+
+    const dealer = await dealerRepo.findOne({
+      where: {
+        id: dealerId,
+        isActive: true,
+        isHidden: false,
+      },
+    });
+
+    if (
+      !dealer ||
+      !(
+        ['DEALER', 'BOTH'].includes(
+          String(dealer.partyType || '').toUpperCase(),
+        ) ||
+        dealer.canBuyFromUs === true
+      )
+    ) {
+      throw new BadRequestException(
+        'Selected dealer is unavailable',
+      );
+    }
+
+    if (
+      ![
+        'SUBMITTED',
+        'ACCEPTED',
+        'PARTIALLY_ACCEPTED',
+      ].includes(String(order.status))
+    ) {
+      throw new BadRequestException(
+        'DO status is not eligible for bulk issue',
+      );
+    }
+
+    const orderItems = await orderItemRepo.find({
+      where: { dealerOrderId },
+    });
+
+    if (!orderItems.length) {
+      throw new BadRequestException(
+        'Dealer order has no material records',
+      );
+    }
+
+    if (
+      orderItems.some(
+        (item) =>
+          Number(item.reservedQuantity || 0) > 0 ||
+          Number(item.dispatchedQuantity || 0) > 0,
+      )
+    ) {
+      throw new BadRequestException(
+        'This DO already has reserved or dispatched material. Use the existing DO dispatch workflow.',
+      );
+    }
+
+    // Detect earlier DO-related stock movements.
+    // This check runs while the DO row is locked.
+    const existingMovement = await movementRepo
+      .createQueryBuilder('movement')
+      .where('movement.sourceId = :dealerOrderId', {
+        dealerOrderId,
+      })
+      .andWhere(
+        'movement.sourceType IN (:...sourceTypes)',
+        {
+          sourceTypes: [
+            'DEALER_ORDER_BULK',
+            'DEALER_ORDER',
+          ],
+        },
+      )
+      .getOne();
+
+    if (existingMovement) {
+      throw new BadRequestException(
+        'Stock has already been issued against this DO',
+      );
+    }
+
+    const stockIds = groupedRows.map(
+      (row) => row.stockItemId,
+    );
+
+    const stockItems = await stockRepo
+      .createQueryBuilder('stock')
+      .setLock('pessimistic_write')
+      .where('stock.id IN (:...stockIds)', {
+        stockIds,
+      })
+      .orderBy('stock.id', 'ASC')
+      .getMany();
+
+    const stockMap = new Map(
+      stockItems.map((item) => [item.id, item]),
+    );
+
+    const movements: ProjectStockMovement[] = [];
+
+    for (const row of groupedRows) {
+      const stock = stockMap.get(row.stockItemId);
+
+      if (!stock || stock.isHidden) {
+        throw new BadRequestException(
+          `Stock item ${row.stockItemId} is unavailable`,
+        );
+      }
+
+      const current = Number(
+        stock.currentQuantity || 0,
+      );
+      const reserved = Number(
+        stock.reservedQuantity || 0,
+      );
+      const available = current - reserved;
+
+      if (available < row.quantity) {
+        throw new BadRequestException(
+          `Insufficient available stock for ${stock.materialName}. Available: ${available}, Required: ${row.quantity}`,
+        );
+      }
+
+      stock.currentQuantity = current - row.quantity;
+      stock.stockValue =
+        stock.currentQuantity *
+        Number(stock.averageRate || 0);
+
+      const rate = Number(stock.averageRate || 0);
+
+      movements.push(
+        movementRepo.create({
+          stockItemId: stock.id,
+          materialId: stock.materialId,
+          materialName: stock.materialName,
+          branchId: stock.branchId,
+          branchName: stock.branchName,
+          movementType:
+            ProjectStockMovementType.ISSUE_FROM_AVAILABLE,
+          quantity: row.quantity,
+          rate,
+          totalAmount: row.quantity * rate,
+          sourceType: 'DEALER_ORDER_BULK',
+          sourceId: dealerOrderId,
+          dealerId,
+          dealerName: dealer.vendorName,
+          dealerPhone: String(
+            dealer.phone || order.dealerPhone || '',
+          ),
+          remarks: [
+            `DO: ${order.orderNumber || dealerOrderId}`,
+            ...row.remarks,
+          ].join(' | '),
+          createdBy: Number(
+            user?.id || user?.userId || user?.sub || 0,
+          ),
+          createdByName:
+            user?.name || user?.email || '',
+        }),
+      );
+    }
+
+    await stockRepo.save(stockItems);
+    const savedMovements =
+      await movementRepo.save(movements);
+
+    return {
+      message:
+        'Dealer order materials issued successfully',
+      dealerOrderId,
+      dealerId,
+      issuedRows: savedMovements.length,
+      movements: savedMovements.map((movement) => ({
+        id: movement.id,
+        stockItemId: movement.stockItemId,
+        quantity: movement.quantity,
+      })),
+    };
+  });
+}
+
+
 async issueStock(body: any, user: any) {
   if (!this.canManageStock(user)) {
     throw new ForbiddenException('You are not allowed to manage stock');

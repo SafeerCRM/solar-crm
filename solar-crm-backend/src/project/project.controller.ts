@@ -6138,6 +6138,23 @@ issueStock(
   return this.projectService.issueStock(body, user);
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+)
+@Post('stock/dealer-order/bulk-issue')
+bulkIssueDealerOrderStock(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.bulkIssueDealerOrderStock(
+    body,
+    user,
+  );
+}
+
 @Patch(':id/hide')
 hideProject(
   @Param('id', ParseIntPipe) id: number,

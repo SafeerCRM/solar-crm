@@ -70,6 +70,15 @@ const [issueDORows, setIssueDORows] =
 
 const [issueDOLoading, setIssueDOLoading] =
   useState(false);
+
+  const [issueDOBulkLoading, setIssueDOBulkLoading] =
+  useState(false);
+
+const [issueDOStockOptions, setIssueDOStockOptions] =
+  useState<Record<string, any[]>>({});
+
+const [issueDOStockLoading, setIssueDOStockLoading] =
+  useState<Record<string, boolean>>({});
 const [selectedProject, setSelectedProject] =
   useState<any | null>(null);
 
@@ -1301,6 +1310,56 @@ useEffect(() => {
   };
 }, [issueForm.sourceType, issueForm.dealerId]);
 
+
+const searchDOStockItems = async (
+  rowId: string,
+  search: string,
+) => {
+  setIssueDOStockLoading((prev) => ({
+    ...prev,
+    [rowId]: true,
+  }));
+
+  try {
+    const token = localStorage.getItem('token');
+
+    const response = await axios.get(
+      `${API_BASE_URL}/project/stock/items`,
+      {
+        params: {
+          page: 1,
+          limit: 100,
+          material: search.trim() || undefined,
+          showHidden: 'false',
+        },
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    setIssueDOStockOptions((prev) => ({
+      ...prev,
+      [rowId]: Array.isArray(response.data?.data)
+        ? response.data.data
+        : [],
+    }));
+  } catch (error) {
+    console.error('DO stock search failed:', error);
+
+    setIssueDOStockOptions((prev) => ({
+      ...prev,
+      [rowId]: [],
+    }));
+  } finally {
+    setIssueDOStockLoading((prev) => ({
+      ...prev,
+      [rowId]: false,
+    }));
+  }
+};
+
+
 const selectDOForStockIssue = async (orderId: string) => {
   setSelectedIssueDO(null);
   setIssueDORows([]);
@@ -1335,18 +1394,21 @@ const selectDOForStockIssue = async (orderId: string) => {
     setSelectedIssueDO(order);
 
     setIssueDORows(
-      items.map((item: any) => ({
-        rowId: item.id,
-        materialId: String(item.materialId || ''),
-        materialName: item.materialName || '',
-        stockItemId: item.stockItemId
-          ? String(item.stockItemId)
-          : '',
-        quantity: String(item.quantity || ''),
-        deductFrom: 'AVAILABLE',
-        remarks: '',
-      })),
-    );
+  items.map((item: any) => ({
+    rowId: `do-${item.id}`,
+    materialId: String(item.materialId || ''),
+    materialName: item.materialName || '',
+    stockItemId: item.stockItemId
+      ? String(item.stockItemId)
+      : '',
+    quantity: String(item.quantity || ''),
+    deductFrom: 'AVAILABLE',
+    remarks: '',
+    stockSearch: item.materialName || '',
+  })),
+);
+setIssueDOStockOptions({});
+setIssueDOStockLoading({});
   } catch (error) {
     console.error('Failed to load DO materials:', error);
     alert('Unable to load materials for this DO');
@@ -1354,6 +1416,135 @@ const selectDOForStockIssue = async (orderId: string) => {
     setIssueDOLoading(false);
   }
 };
+
+
+const bulkIssueDOStock = async () => {
+  if (issueDOBulkLoading) return;
+
+  if (!selectedIssueDO || !issueForm.dealerId) {
+    alert('Please select a dealer and DO');
+    return;
+  }
+
+  if (issueDORows.length === 0) {
+    alert('Please add at least one material');
+    return;
+  }
+
+  const items = issueDORows.map((row: any) => ({
+    stockItemId: Number(row.stockItemId),
+    quantity: Number(row.quantity),
+    deductFrom: 'AVAILABLE',
+    remarks: String(row.remarks || '').trim(),
+  }));
+
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+
+    if (
+      !Number.isSafeInteger(item.stockItemId) ||
+      item.stockItemId <= 0
+    ) {
+      alert(
+        `Row ${index + 1}: Please select an actual stock item`,
+      );
+      return;
+    }
+
+    if (
+      !Number.isFinite(item.quantity) ||
+      item.quantity <= 0
+    ) {
+      alert(
+        `Row ${index + 1}: Enter a valid quantity`,
+      );
+      return;
+    }
+  }
+
+  const quantities = new Map<number, number>();
+
+  for (const item of items) {
+    quantities.set(
+      item.stockItemId,
+      (quantities.get(item.stockItemId) || 0) +
+        item.quantity,
+    );
+  }
+
+  const summary = [
+    `Dealer: ${issueForm.dealerName}`,
+    `DO: ${selectedIssueDO.orderNumber || selectedIssueDO.id}`,
+    `Material rows: ${items.length}`,
+    '',
+    'Deduction source: Available Stock',
+    '',
+    'This will deduct stock immediately.',
+    'The original DO quantities and status will not change.',
+    '',
+    'Confirm bulk stock issue?',
+  ].join('\n');
+
+  if (!window.confirm(summary)) return;
+
+  try {
+    setIssueDOBulkLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const response = await axios.post(
+      `${API_BASE_URL}/project/stock/dealer-order/bulk-issue`,
+      {
+        dealerOrderId: Number(selectedIssueDO.id),
+        dealerId: Number(issueForm.dealerId),
+        items,
+      },
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    alert(
+      response.data?.message ||
+        'DO stock issued successfully',
+    );
+
+    setSelectedIssueDO(null);
+    setIssueDealerOrders((prev) =>
+  prev.filter(
+    (order: any) =>
+      Number(order.id) !==
+      Number(selectedIssueDO.id),
+  ),
+);
+    setIssueDORows([]);
+    setIssueDOStockOptions({});
+    setIssueDOStockLoading({});
+
+    await Promise.all([
+      loadStockItems(1),
+      loadSelectableStockItems(),
+      loadStockMovements(1),
+      loadBranchWiseStock(),
+      loadMaterialSummary(),
+    ]);
+  } catch (error: any) {
+    console.error('DO bulk issue failed:', error);
+
+    const message = error?.response?.data?.message;
+
+    alert(
+      Array.isArray(message)
+        ? message.join('\n')
+        : message || 'Failed to issue DO materials',
+    );
+  } finally {
+    setIssueDOBulkLoading(false);
+  }
+};
+
 
 const issueStock = async () => {
     if (
@@ -1365,7 +1556,7 @@ const issueStock = async () => {
     );
     return;
   }
-  
+
   if (!issueForm.stockItemId) {
     alert('Please select stock item');
     return;
@@ -3411,80 +3602,260 @@ const filteredIncomingMaterials =
             Materials for {selectedIssueDO.orderNumber}
           </p>
 
-          {issueDORows.map((row: any, index: number) => (
-            <div
-              key={row.rowId}
-              className="grid gap-2 rounded-xl border p-3 md:grid-cols-4"
-            >
-              <div className="md:col-span-2">
-                <label className="text-xs text-gray-500">
-                  Material
-                </label>
-                <input
-                  value={row.materialName}
-                  onChange={(e) =>
-                    setIssueDORows((prev) =>
-                      prev.map((item, i) =>
-                        i === index
-                          ? {
-                              ...item,
-                              materialName: e.target.value,
-                              materialId: '',
-                              stockItemId: '',
-                            }
-                          : item,
-                      ),
-                    )
-                  }
-                  className="w-full rounded-lg border p-2 text-sm"
-                />
-              </div>
+          
+{issueDORows.map((row: any, index: number) => {
+  const rowKey = String(row.rowId);
+  const options = issueDOStockOptions[rowKey] || [];
 
-              <div>
-                <label className="text-xs text-gray-500">
-                  Quantity
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={row.quantity}
-                  onChange={(e) =>
-                    setIssueDORows((prev) =>
-                      prev.map((item, i) =>
-                        i === index
-                          ? {
-                              ...item,
-                              quantity: e.target.value,
-                            }
-                          : item,
-                      ),
-                    )
-                  }
-                  className="w-full rounded-lg border p-2 text-sm"
-                />
-              </div>
+  const selectedStock =
+    options.find(
+      (item: any) =>
+        String(item.id) === String(row.stockItemId),
+    ) ||
+    selectableStockItems.find(
+      (item: any) =>
+        String(item.id) === String(row.stockItemId),
+    );
 
-              <div className="flex items-end">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setIssueDORows((prev) =>
-                      prev.filter((_, i) => i !== index),
-                    )
-                  }
-                  className="rounded-lg border px-3 py-2 text-sm text-red-600"
-                >
-                  Remove Row
-                </button>
-              </div>
-            </div>
-          ))}
+  return (
+    <div
+      key={rowKey}
+      className="space-y-3 rounded-xl border p-3"
+    >
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs text-gray-600">
+            Search Stock Item
+          </label>
 
-          <p className="text-xs text-amber-700">
-            DO materials are loaded for review only.
-            Bulk dispatch is not yet enabled.
+          <input
+            type="text"
+            placeholder="Search material, brand or branch"
+            value={row.stockSearch || ''}
+            onChange={(e) => {
+              const value = e.target.value;
+
+              setIssueDORows((prev) =>
+                prev.map((item, i) =>
+                  i === index
+                    ? {
+                        ...item,
+                        stockSearch: value,
+                        stockItemId: '',
+                      }
+                    : item,
+                ),
+              );
+
+              void searchDOStockItems(rowKey, value);
+            }}
+            className="w-full rounded-lg border p-2 text-sm"
+          />
+
+          <select
+            value={row.stockItemId || ''}
+            onFocus={() => {
+              void searchDOStockItems(
+                rowKey,
+                row.stockSearch || '',
+              );
+            }}
+            onChange={(e) => {
+              const selected = options.find(
+                (item: any) =>
+                  String(item.id) === e.target.value,
+              );
+
+              setIssueDORows((prev) =>
+                prev.map((item, i) =>
+                  i === index
+                    ? {
+                        ...item,
+                        stockItemId: e.target.value,
+                        materialId: selected
+                          ? String(selected.materialId)
+                          : item.materialId,
+                        materialName:
+                          selected?.materialName ||
+                          item.materialName,
+                      }
+                    : item,
+                ),
+              );
+            }}
+            className="mt-2 w-full rounded-lg border p-2 text-sm"
+          >
+            <option value="">
+              Select actual stock item
+            </option>
+
+            {row.stockItemId &&
+              !options.some(
+                (item: any) =>
+                  String(item.id) ===
+                  String(row.stockItemId),
+              ) && (
+                <option value={row.stockItemId}>
+                  {selectedStock?.materialName ||
+                    row.materialName ||
+                    `Stock #${row.stockItemId}`}
+                  {' — '}
+                  Stock #{row.stockItemId}
+                </option>
+              )}
+
+            {options.map((item: any) => {
+              const available =
+                Number(item.currentQuantity || 0) -
+                Number(item.reservedQuantity || 0);
+
+              return (
+                <option key={item.id} value={item.id}>
+                  {item.materialName}
+                  {item.brand ? ` | ${item.brand}` : ''}
+                  {item.branchName
+                    ? ` | ${item.branchName}`
+                    : ''}
+                  {` | Available: ${available}`}
+                  {` | ID: ${item.id}`}
+                </option>
+              );
+            })}
+          </select>
+
+          {issueDOStockLoading[rowKey] && (
+            <p className="mt-1 text-xs text-gray-500">
+              Searching stock...
+            </p>
+          )}
+
+          {selectedStock && (
+            <p className="mt-1 text-xs text-green-700">
+              Available:{' '}
+              {Number(
+                selectedStock.currentQuantity || 0,
+              ) -
+                Number(
+                  selectedStock.reservedQuantity || 0,
+                )}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs text-gray-600">
+            Quantity
+          </label>
+
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={row.quantity}
+            onChange={(e) =>
+              setIssueDORows((prev) =>
+                prev.map((item, i) =>
+                  i === index
+                    ? {
+                        ...item,
+                        quantity: e.target.value,
+                      }
+                    : item,
+                ),
+              )
+            }
+            className="w-full rounded-lg border p-2 text-sm"
+          />
+
+          <p className="mt-2 text-xs text-gray-500">
+            Deduct from: Available Stock
           </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          placeholder="Remarks (optional)"
+          value={row.remarks || ''}
+          onChange={(e) =>
+            setIssueDORows((prev) =>
+              prev.map((item, i) =>
+                i === index
+                  ? {
+                      ...item,
+                      remarks: e.target.value,
+                    }
+                  : item,
+              ),
+            )
+          }
+          className="min-w-0 flex-1 rounded-lg border p-2 text-sm"
+        />
+
+        <button
+          type="button"
+          onClick={() =>
+            setIssueDORows((prev) =>
+              prev.filter((_, i) => i !== index),
+            )
+          }
+          disabled={issueDOBulkLoading}
+          className="rounded-lg border px-3 py-2 text-sm text-red-600"
+        >
+          Remove
+        </button>
+      </div>
+    </div>
+  );
+})}
+
+<div className="flex flex-wrap gap-3">
+  <button
+    type="button"
+    disabled={issueDOBulkLoading}
+    onClick={() =>
+      setIssueDORows((prev) => [
+        ...prev,
+        {
+          rowId: `extra-${Date.now()}-${prev.length}`,
+          materialId: '',
+          materialName: '',
+          stockItemId: '',
+          quantity: '',
+          deductFrom: 'AVAILABLE',
+          remarks: '',
+          stockSearch: '',
+        },
+      ])
+    }
+    className="rounded-xl border px-4 py-2 text-sm font-semibold"
+  >
+    + Add Material
+  </button>
+
+  <button
+    type="button"
+    disabled={
+      issueDOBulkLoading ||
+      issueDOLoading ||
+      issueDORows.length === 0
+    }
+    onClick={() => void bulkIssueDOStock()}
+    className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+  >
+    {issueDOBulkLoading
+      ? 'Issuing Materials...'
+      : `Issue All Materials (${issueDORows.length})`}
+  </button>
+</div>
+
+<p className="text-xs text-amber-700">
+  Available stock only. DOs with existing reservations or
+  dispatches are rejected by the backend. This records
+  stock movements but does not update the DO dispatch status.
+</p>
+
         </div>
       )}
     </div>
