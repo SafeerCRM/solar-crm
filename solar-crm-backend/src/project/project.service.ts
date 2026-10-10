@@ -21115,34 +21115,30 @@ async processCustomerPaymentDueWhatsapp() {
    * Keep all reminder-date calculations aligned
    * with the CRM's Asia/Kolkata business date.
    */
-  const todayIndia =
-    new Date().toLocaleDateString(
-      'en-CA',
-      {
-        timeZone: 'Asia/Kolkata',
-      },
-    );
+  const getIndiaDateString = (date: Date): string => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
 
-  const today =
-    new Date(
-      `${todayIndia}T00:00:00+05:30`,
-    );
+  const getPart = (type: string) =>
+    parts.find((part) => part.type === type)?.value || '';
 
-  const upcomingDate =
-    new Date(today);
+  return `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
+};
 
-  upcomingDate.setDate(
-    upcomingDate.getDate() +
-      triggerOffsetDays,
-  );
+const todayIndia = getIndiaDateString(new Date());
 
-  const upcomingDateIndia =
-    upcomingDate.toLocaleDateString(
-      'en-CA',
-      {
-        timeZone: 'Asia/Kolkata',
-      },
-    );
+const today = new Date(`${todayIndia}T00:00:00+05:30`);
+
+const upcomingDate = new Date(
+  today.getTime() +
+    triggerOffsetDays * 24 * 60 * 60 * 1000,
+);
+
+const upcomingDateIndia = getIndiaDateString(upcomingDate);
 
   /*
    * Production launch policy:
@@ -21186,6 +21182,11 @@ async processCustomerPaymentDueWhatsapp() {
       .where(
         'payment.pendingAmount > 0',
       )
+      // TEMPORARY: WhatsApp payment reminder test only.
+// REMOVE after testing.
+.andWhere('payment.id = :testInstallmentId', {
+  testInstallmentId: 2042,
+})
       .andWhere(
         'payment.isHidden = false',
       )
@@ -21272,14 +21273,7 @@ async processCustomerPaymentDueWhatsapp() {
         continue;
       }
 
-      const dueDate =
-        dueDateValue.toLocaleDateString(
-          'en-CA',
-          {
-            timeZone:
-              'Asia/Kolkata',
-          },
-        );
+      const dueDate = getIndiaDateString(dueDateValue);
 
       let reminderStage:
         | 'UPCOMING'
@@ -21424,17 +21418,13 @@ async processCustomerPaymentDueWhatsapp() {
 }
 
 
-@Cron(
-  '0 10 9 * * *',
-  {
-    name:
-      'customer-payment-due-whatsapp',
-    timeZone:
-      'Asia/Kolkata',
-    waitForCompletion:
-      true,
-  },
-)
+// TEMPORARY: WhatsApp payment reminder testing.
+// Restore daily 9:10 AM IST after testing.
+@Cron('0 * * * * *', {
+  name: 'customer-payment-due-whatsapp',
+  timeZone: 'Asia/Kolkata',
+  waitForCompletion: true,
+})
 
 async handleCustomerPaymentDueWhatsappCron() {
   try {
