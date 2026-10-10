@@ -10959,8 +10959,9 @@ async listProjectStockMovements(query: any) {
     material,
     branch,
     movementType,
-    projectSearch,
+        projectSearch,
     dealerName,
+    doNumber,
     showHidden,
   } = query || {};
 
@@ -11071,6 +11072,23 @@ if (projectSearch?.trim()) {
     );
   }
 }
+
+  if (String(doNumber || '').trim()) {
+    const value = String(doNumber).trim();
+
+    qb.andWhere(
+      `movement.sourceType = :doSourceType
+       AND movement.sourceId IN (
+         SELECT do_filter.id
+         FROM project_dealer_order do_filter
+         WHERE do_filter."orderNumber" ILIKE :doNumber
+       )`,
+      {
+        doSourceType: 'DEALER_ORDER_BULK',
+        doNumber: `%${value}%`,
+      },
+    );
+  }
 
   const [data, total] =
     await qb.getManyAndCount();
@@ -50855,6 +50873,8 @@ async getDealerOrders(query: any) {
   const search = String(query?.search || '').trim().toLowerCase();
   const status = String(query?.status || '').trim();
   const dealerId = Number(query?.dealerId || 0);
+    const excludeBulkIssued =
+    String(query?.excludeBulkIssued || 'false') === 'true';
   const showHidden =
   String(query?.showHidden || 'false') === 'true';
 
@@ -50885,6 +50905,20 @@ async getDealerOrders(query: any) {
       )`,
       {
         search: `%${search}%`,
+      },
+    );
+  }
+
+    if (excludeBulkIssued) {
+    qb.andWhere(
+      `NOT EXISTS (
+        SELECT 1
+        FROM project_stock_movement issued_movement
+        WHERE issued_movement."sourceType" = :bulkSourceType
+          AND issued_movement."sourceId" = dealerOrder.id
+      )`,
+      {
+        bulkSourceType: 'DEALER_ORDER_BULK',
       },
     );
   }

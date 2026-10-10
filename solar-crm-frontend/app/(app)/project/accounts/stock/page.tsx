@@ -209,6 +209,7 @@ const [movementFilters, setMovementFilters] = useState({
   movementType: '',
   projectSearch: '',
   dealerName: '',
+  doNumber: '',
   showHidden: false,
 });
 
@@ -459,6 +460,7 @@ setPagination({
   movementType: string;
   projectSearch: string;
   dealerName: string;
+  doNumber: string;
   showHidden: boolean;
 },
 ) => {
@@ -488,6 +490,9 @@ setPagination({
 
   dealerName:
     activeFilters.dealerName.trim() || undefined,
+
+    doNumber:
+  activeFilters.doNumber.trim() || undefined,
 
   showHidden:
     activeFilters.showHidden ? 'true' : 'false',
@@ -1251,10 +1256,11 @@ useEffect(() => {
           `${API_BASE_URL}/project/dealer-orders`,
           {
             params: {
-              dealerId: Number(dealerId),
-              page,
-              limit: 100,
-            },
+  dealerId: Number(dealerId),
+  page,
+  limit: 100,
+  excludeBulkIssued: 'true',
+},
             headers: token
               ? { Authorization: `Bearer ${token}` }
               : {},
@@ -6029,6 +6035,7 @@ const filteredIncomingMaterials =
   movementType: '',
   projectSearch: '',
   dealerName: '',
+  doNumber: '',
   showHidden: false,
 };
 
@@ -6069,6 +6076,20 @@ const filteredIncomingMaterials =
   }
   className="rounded-xl border p-3 text-sm"
 />
+
+<input
+  type="text"
+  placeholder="DO Number"
+  value={movementFilters.doNumber}
+  onChange={(e) =>
+    setMovementFilters((prev) => ({
+      ...prev,
+      doNumber: e.target.value,
+    }))
+  }
+  className="w-full rounded-xl border border-gray-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+/>
+
     <input
       type="text"
       placeholder="Material"
