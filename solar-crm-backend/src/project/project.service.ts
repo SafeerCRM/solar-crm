@@ -21182,11 +21182,7 @@ const upcomingDateIndia = getIndiaDateString(upcomingDate);
       .where(
         'payment.pendingAmount > 0',
       )
-      // TEMPORARY: WhatsApp payment reminder test only.
-// REMOVE after testing.
-.andWhere('payment.id = :testInstallmentId', {
-  testInstallmentId: 2042,
-})
+      
       .andWhere(
         'payment.isHidden = false',
       )
@@ -21418,9 +21414,7 @@ const upcomingDateIndia = getIndiaDateString(upcomingDate);
 }
 
 
-// TEMPORARY: WhatsApp payment reminder testing.
-// Restore daily 9:10 AM IST after testing.
-@Cron('0 * * * * *', {
+@Cron('0 10 9 * * *', {
   name: 'customer-payment-due-whatsapp',
   timeZone: 'Asia/Kolkata',
   waitForCompletion: true,
