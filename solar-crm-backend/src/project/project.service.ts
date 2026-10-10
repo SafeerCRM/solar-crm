@@ -50915,7 +50915,7 @@ async getDealerOrders(query: any) {
         SELECT 1
         FROM project_stock_movement issued_movement
         WHERE issued_movement."sourceType" = :bulkSourceType
-          AND issued_movement."sourceId" = dealerOrder.id
+          AND issued_movement."sourceId" = "dealerOrder"."id"
       )`,
       {
         bulkSourceType: 'DEALER_ORDER_BULK',
