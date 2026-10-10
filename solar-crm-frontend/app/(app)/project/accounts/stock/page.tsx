@@ -56,6 +56,20 @@ const [issueDealerLoading, setIssueDealerLoading] =
 
 const [selectedIssueDealer, setSelectedIssueDealer] =
   useState<any | null>(null);
+  const [issueDealerOrders, setIssueDealerOrders] =
+  useState<any[]>([]);
+
+const [issueDealerOrdersLoading, setIssueDealerOrdersLoading] =
+  useState(false);
+
+const [selectedIssueDO, setSelectedIssueDO] =
+  useState<any | null>(null);
+
+const [issueDORows, setIssueDORows] =
+  useState<any[]>([]);
+
+const [issueDOLoading, setIssueDOLoading] =
+  useState(false);
 const [selectedProject, setSelectedProject] =
   useState<any | null>(null);
 
@@ -1199,7 +1213,159 @@ const selectDealerForStockIssue = (dealer: any) => {
   setIssueDealerResults([]);
 };
 
+useEffect(() => {
+  const dealerId =
+    issueForm.sourceType === 'DEALER'
+      ? issueForm.dealerId
+      : '';
+
+  setIssueDealerOrders([]);
+  setSelectedIssueDO(null);
+  setIssueDORows([]);
+
+  if (!dealerId) return;
+
+  let cancelled = false;
+
+  const loadOrders = async () => {
+    setIssueDealerOrdersLoading(true);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      const orders: any[] = [];
+      let page = 1;
+      let totalPages = 1;
+
+      do {
+        const response = await axios.get(
+          `${API_BASE_URL}/project/dealer-orders`,
+          {
+            params: {
+              dealerId: Number(dealerId),
+              page,
+              limit: 100,
+            },
+            headers: token
+              ? { Authorization: `Bearer ${token}` }
+              : {},
+          },
+        );
+
+        if (cancelled) return;
+
+        orders.push(
+          ...(Array.isArray(response.data?.data)
+            ? response.data.data
+            : []),
+        );
+
+        totalPages = Number(
+          response.data?.totalPages || 1,
+        );
+
+        page++;
+      } while (page <= totalPages && page <= 100);
+
+      if (!cancelled) {
+        setIssueDealerOrders(
+          orders.filter(
+            (order: any) =>
+              order.isHidden !== true &&
+              ![
+                'CANCELLED',
+                'DISPATCHED',
+                'DELIVERED',
+                'STOCK_OUT',
+              ].includes(order.status),
+          ),
+        );
+      }
+    } catch (error) {
+      console.error('Failed to load dealer orders:', error);
+
+      if (!cancelled) {
+        setIssueDealerOrders([]);
+      }
+    } finally {
+      if (!cancelled) {
+        setIssueDealerOrdersLoading(false);
+      }
+    }
+  };
+
+  void loadOrders();
+
+  return () => {
+    cancelled = true;
+  };
+}, [issueForm.sourceType, issueForm.dealerId]);
+
+const selectDOForStockIssue = async (orderId: string) => {
+  setSelectedIssueDO(null);
+  setIssueDORows([]);
+
+  if (!orderId) return;
+
+  try {
+    setIssueDOLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const response = await axios.get(
+      `${API_BASE_URL}/project/dealer-order/${orderId}`,
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    const order = response.data?.order;
+    const items = response.data?.items;
+
+    if (
+      !order ||
+      String(order.dealerId) !== issueForm.dealerId ||
+      !Array.isArray(items)
+    ) {
+      throw new Error('Invalid dealer order');
+    }
+
+    setSelectedIssueDO(order);
+
+    setIssueDORows(
+      items.map((item: any) => ({
+        rowId: item.id,
+        materialId: String(item.materialId || ''),
+        materialName: item.materialName || '',
+        stockItemId: item.stockItemId
+          ? String(item.stockItemId)
+          : '',
+        quantity: String(item.quantity || ''),
+        deductFrom: 'AVAILABLE',
+        remarks: '',
+      })),
+    );
+  } catch (error) {
+    console.error('Failed to load DO materials:', error);
+    alert('Unable to load materials for this DO');
+  } finally {
+    setIssueDOLoading(false);
+  }
+};
+
 const issueStock = async () => {
+    if (
+    issueForm.sourceType === 'DEALER' &&
+    selectedIssueDO
+  ) {
+    alert(
+      'DO bulk dispatch is not enabled yet. No stock has been deducted.',
+    );
+    return;
+  }
+  
   if (!issueForm.stockItemId) {
     alert('Please select stock item');
     return;
@@ -3201,6 +3367,128 @@ const filteredIncomingMaterials =
         )}
       </div>
     )}
+
+    {issueForm.sourceType === 'DEALER' &&
+  issueForm.dealerId && (
+    <div className="md:col-span-3 space-y-3 rounded-xl border p-4">
+      <label className="block text-sm font-semibold">
+        Dealer Order (DO Number)
+      </label>
+
+      <select
+        value={selectedIssueDO?.id || ''}
+        onChange={(e) =>
+          void selectDOForStockIssue(e.target.value)
+        }
+        className="w-full rounded-xl border p-3 text-sm"
+      >
+        <option value="">Select DO Number</option>
+
+        {issueDealerOrders.map((order: any) => (
+          <option key={order.id} value={order.id}>
+            {order.orderNumber || `DO #${order.id}`}
+            {' — '}
+            {order.status}
+          </option>
+        ))}
+      </select>
+
+      {issueDealerOrdersLoading && (
+        <p className="text-xs text-gray-500">
+          Loading dealer orders...
+        </p>
+      )}
+
+      {issueDOLoading && (
+        <p className="text-xs text-gray-500">
+          Loading order materials...
+        </p>
+      )}
+
+      {selectedIssueDO && (
+        <div className="space-y-3">
+          <p className="text-sm font-semibold">
+            Materials for {selectedIssueDO.orderNumber}
+          </p>
+
+          {issueDORows.map((row: any, index: number) => (
+            <div
+              key={row.rowId}
+              className="grid gap-2 rounded-xl border p-3 md:grid-cols-4"
+            >
+              <div className="md:col-span-2">
+                <label className="text-xs text-gray-500">
+                  Material
+                </label>
+                <input
+                  value={row.materialName}
+                  onChange={(e) =>
+                    setIssueDORows((prev) =>
+                      prev.map((item, i) =>
+                        i === index
+                          ? {
+                              ...item,
+                              materialName: e.target.value,
+                              materialId: '',
+                              stockItemId: '',
+                            }
+                          : item,
+                      ),
+                    )
+                  }
+                  className="w-full rounded-lg border p-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500">
+                  Quantity
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={row.quantity}
+                  onChange={(e) =>
+                    setIssueDORows((prev) =>
+                      prev.map((item, i) =>
+                        i === index
+                          ? {
+                              ...item,
+                              quantity: e.target.value,
+                            }
+                          : item,
+                      ),
+                    )
+                  }
+                  className="w-full rounded-lg border p-2 text-sm"
+                />
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIssueDORows((prev) =>
+                      prev.filter((_, i) => i !== index),
+                    )
+                  }
+                  className="rounded-lg border px-3 py-2 text-sm text-red-600"
+                >
+                  Remove Row
+                </button>
+              </div>
+            </div>
+          ))}
+
+          <p className="text-xs text-amber-700">
+            DO materials are loaded for review only.
+            Bulk dispatch is not yet enabled.
+          </p>
+        </div>
+      )}
+    </div>
+  )}
 
     <input
       type="number"
