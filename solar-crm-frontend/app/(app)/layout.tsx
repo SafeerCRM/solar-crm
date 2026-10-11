@@ -234,6 +234,12 @@ const navItems = [
 },
 
 {
+  name: 'WhatsApp Automation',
+  href: '/whatsapp-automation',
+  roles: ['OWNER'],
+},
+
+{
   name: 'Solar Mitra',
   href: '/solar-mitra',
 },
