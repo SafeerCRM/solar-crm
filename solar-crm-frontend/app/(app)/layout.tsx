@@ -223,6 +223,17 @@ const navItems = [
 },
 
 {
+  name: 'Customer Feedback',
+  href: '/project/customer-feedback',
+  roles: [
+    'OWNER',
+    'PROJECT_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'CUSTOMER_MANAGER',
+  ],
+},
+
+{
   name: 'Solar Mitra',
   href: '/solar-mitra',
 },
