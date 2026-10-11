@@ -28,6 +28,34 @@ export class WhatsappController {
     private readonly whatsappService: WhatsappService,
   ) {}
 
+    @Get('automation-management/messages')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  async getAutomationManagementMessages(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('direction') direction?: string,
+    @Query('status') status?: string,
+    @Query('automationKey') automationKey?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.whatsappService.getAutomationManagementMessages({
+      page,
+      limit,
+      direction,
+      status,
+      automationKey,
+      search,
+    });
+  }
+
+    @Get('automation-management/overview')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  async getAutomationManagementOverview() {
+    return this.whatsappService.getAutomationManagementOverview();
+  }
+
   @Get('customer-feedback')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(

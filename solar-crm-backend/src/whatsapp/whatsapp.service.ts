@@ -185,6 +185,213 @@ async onModuleInit() {
   await this.ensureDefaultAutomations();
 }
 
+async getAutomationManagementMessages(query: {
+  page?: string;
+  limit?: string;
+  direction?: string;
+  status?: string;
+  automationKey?: string;
+  search?: string;
+}) {
+  const page = Math.max(
+    1,
+    Math.floor(Number(query.page) || 1),
+  );
+
+  const limit = Math.min(
+    100,
+    Math.max(1, Math.floor(Number(query.limit) || 20)),
+  );
+
+  const qb = this.messageRepository
+    .createQueryBuilder('message');
+
+  const allowedDirections = ['INBOUND', 'OUTBOUND'];
+
+  if (
+    query.direction &&
+    allowedDirections.includes(query.direction)
+  ) {
+    qb.andWhere('message.direction = :direction', {
+      direction: query.direction,
+    });
+  }
+
+  const allowedStatuses = [
+    'PENDING',
+    'SENT',
+    'DELIVERED',
+    'READ',
+    'FAILED',
+    'RECEIVED',
+    'SKIPPED',
+  ];
+
+  if (
+    query.status &&
+    allowedStatuses.includes(query.status)
+  ) {
+    qb.andWhere('message.status = :status', {
+      status: query.status,
+    });
+  }
+
+  if (query.automationKey?.trim()) {
+    qb.andWhere('message.automationKey = :automationKey', {
+      automationKey: query.automationKey.trim(),
+    });
+  }
+
+  if (query.search?.trim()) {
+    const search = `%${query.search.trim()}%`;
+
+    qb.andWhere(
+      `(
+        message.recipientPhone ILIKE :search
+        OR message.recipientName ILIKE :search
+        OR message.referenceId ILIKE :search
+        OR message.metaMessageId ILIKE :search
+      )`,
+      { search },
+    );
+  }
+
+  const [messages, total] = await qb
+    .orderBy('message.createdAt', 'DESC')
+    .addOrderBy('message.id', 'DESC')
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getManyAndCount();
+
+  return {
+    data: messages.map((message) => ({
+      id: message.id,
+      direction: message.direction,
+      recipientType: message.recipientType,
+      recipientPhone: message.recipientPhone,
+      recipientName: message.recipientName,
+      messageType: message.messageType,
+      templateName: message.templateName,
+      messageBody: message.messageBody,
+      status: message.status,
+      automationKey: message.automationKey,
+      referenceType: message.referenceType,
+      referenceId: message.referenceId,
+      errorCode: message.errorCode,
+      errorMessage: message.errorMessage,
+      createdAt: message.createdAt,
+      sentAt: message.sentAt,
+      deliveredAt: message.deliveredAt,
+      readAt: message.readAt,
+      failedAt: message.failedAt,
+    })),
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+}
+
+async getAutomationManagementOverview() {
+  const automations = await this.automationRepository.find({
+    order: {
+      name: 'ASC',
+    },
+  });
+
+  const statusCounts = await this.messageRepository
+    .createQueryBuilder('message')
+    .select('message.direction', 'direction')
+    .addSelect('message.status', 'status')
+    .addSelect('COUNT(*)', 'count')
+    .groupBy('message.direction')
+    .addGroupBy('message.status')
+    .getRawMany<{
+      direction: string;
+      status: string;
+      count: string;
+    }>();
+
+  const summary = {
+    outbound: 0,
+    inbound: 0,
+    pending: 0,
+    sent: 0,
+    delivered: 0,
+    read: 0,
+    failed: 0,
+    received: 0,
+    skipped: 0,
+  };
+
+  for (const row of statusCounts) {
+    const count = Number(row.count) || 0;
+
+    if (row.direction === 'OUTBOUND') {
+      summary.outbound += count;
+    }
+
+    if (row.direction === 'INBOUND') {
+      summary.inbound += count;
+    }
+
+    switch (row.status) {
+      case 'PENDING':
+        summary.pending += count;
+        break;
+      case 'SENT':
+        summary.sent += count;
+        break;
+      case 'DELIVERED':
+        summary.delivered += count;
+        break;
+      case 'READ':
+        summary.read += count;
+        break;
+      case 'FAILED':
+        summary.failed += count;
+        break;
+      case 'RECEIVED':
+        summary.received += count;
+        break;
+      case 'SKIPPED':
+        summary.skipped += count;
+        break;
+    }
+  }
+
+  return {
+    configuration: {
+      globalAutomationsEnabled: this.automationsEnabled,
+      sendMode: this.sendMode,
+      productionCredentialsConfigured: Boolean(
+        this.accessToken && this.phoneNumberId,
+      ),
+      testCredentialsConfigured: Boolean(
+        this.testAccessToken && this.testPhoneNumberId,
+      ),
+    },
+    summary,
+    automations: automations.map((automation) => ({
+      id: automation.id,
+      automationKey: automation.automationKey,
+      name: automation.name,
+      description: automation.description,
+      triggerType: automation.triggerType,
+      recipientType: automation.recipientType,
+      isEnabled: automation.isEnabled,
+      effectiveEnabled:
+        this.automationsEnabled && automation.isEnabled,
+      templateName: automation.templateName,
+      templateLanguage: automation.templateLanguage,
+      triggerOffsetMinutes: automation.triggerOffsetMinutes,
+      repeatAfterMinutes: automation.repeatAfterMinutes,
+      maxRepeatCount: automation.maxRepeatCount,
+      updatedAt: automation.updatedAt,
+    })),
+  };
+}
+
 async getAutomation(
   automationKey: string,
 ): Promise<WhatsappAutomation | null> {
