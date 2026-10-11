@@ -224,7 +224,7 @@ const navItems = [
 
 {
   name: 'Customer Feedback',
-  href: '/project/customer-feedback',
+  href: '/customer-feedback',
   roles: [
     'OWNER',
     'PROJECT_MANAGER',
