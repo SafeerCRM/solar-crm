@@ -6,8 +6,9 @@ import {
   Query,
   Req,
   Res,
-  HttpCode,
+    HttpCode,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 
 import type { RawBodyRequest } from '@nestjs/common';
@@ -17,7 +18,9 @@ import { createHmac, timingSafeEqual } from 'crypto';
 
 import { WhatsappService } from './whatsapp.service';
 
-
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('webhooks/whatsapp')
 export class WhatsappController {
@@ -25,6 +28,27 @@ export class WhatsappController {
     private readonly whatsappService: WhatsappService,
   ) {}
 
+  @Get('customer-feedback')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    'OWNER',
+    'PROJECT_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'CUSTOMER_MANAGER',
+  )
+  async getCustomerFeedback(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('rating') rating?: string,
+    @Query('activityType') activityType?: string,
+  ) {
+    return this.whatsappService.getCustomerExecutionRatings({
+      page,
+      limit,
+      rating,
+      activityType,
+    });
+  }
 
   @Get()
   verifyWebhook(
@@ -139,9 +163,17 @@ export class WhatsappController {
             message?.type || 'unknown';
 
           const messageBody =
-            messageType === 'text'
-              ? message?.text?.body || ''
-              : null;
+  messageType === 'text'
+    ? message?.text?.body || ''
+    : messageType === 'button'
+      ? message?.button?.text ||
+        message?.button?.payload ||
+        ''
+      : messageType === 'interactive'
+        ? message?.interactive?.button_reply?.title ||
+          message?.interactive?.button_reply?.id ||
+          ''
+        : null;
 
           if (messageType === 'text') {
             console.log(
@@ -173,6 +205,34 @@ export class WhatsappController {
               payload: message,
             },
           );
+
+          try {
+  await this.whatsappService.processCustomerProjectConfirmationReply({
+    from: message?.from || '',
+    messageId: message?.id || '',
+    messageBody,
+    payload: message,
+  });
+} catch (error) {
+  console.error(
+    'Customer project confirmation reply processing failed:',
+    error,
+  );
+}
+
+try {
+  await this.whatsappService.processCustomerExecutionRatingReply({
+    from: message.from,
+    messageId: message.id,
+    messageBody,
+    payload: message,
+  });
+} catch (error) {
+  console.error(
+    'WhatsApp customer execution rating processing failed:',
+    error,
+  );
+}
         }
 
         /*

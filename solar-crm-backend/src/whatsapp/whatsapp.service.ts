@@ -3,7 +3,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 import {
   WhatsappMessage,
@@ -17,6 +17,16 @@ import {
   WhatsappAutomation,
   WhatsappAutomationTriggerType,
 } from './whatsapp-automation.entity';
+
+import {
+  ProjectCustomerConfirmation,
+  ProjectCustomerConfirmationStatus,
+} from '../project/project-customer-confirmation.entity';
+
+import {
+  ProjectCustomerConfirmationHistory,
+  ProjectCustomerConfirmationEventType,
+} from '../project/project-customer-confirmation-history.entity';
 
 export interface WhatsappSendContext {
   recipientType?: WhatsappRecipientType;
@@ -73,6 +83,19 @@ export class WhatsappService
     description:
       'Send a WhatsApp reminder when a customer project payment is due.',
   },
+  {
+  automationKey: 'CUSTOMER_PROJECT_CONFIRMATION',
+  name: 'Customer Project Confirmation',
+  triggerType: WhatsappAutomationTriggerType.EVENT,
+  recipientType: WhatsappRecipientType.CUSTOMER,
+  templateName: 'customer_project_confirmation',
+  templateLanguage: 'en',
+  triggerOffsetMinutes: null,
+  repeatAfterMinutes: null,
+  maxRepeatCount: null,
+  description:
+    'Request customer confirmation of agreed solar project details before physical installation begins.',
+},
   {
     automationKey: 'CUSTOMER_PROJECT_UPDATE',
     name: 'Customer Project Update',
@@ -140,11 +163,22 @@ private readonly testPhoneNumberId =
     process.env.WHATSAPP_GRAPH_API_VERSION || 'v23.0';
 
   constructor(
+
+    private readonly dataSource: DataSource,
+
   @InjectRepository(WhatsappMessage)
   private readonly messageRepository: Repository<WhatsappMessage>,
 
   @InjectRepository(WhatsappAutomation)
   private readonly automationRepository: Repository<WhatsappAutomation>,
+
+  @InjectRepository(ProjectCustomerConfirmation)
+private readonly projectCustomerConfirmationRepository:
+  Repository<ProjectCustomerConfirmation>,
+
+@InjectRepository(ProjectCustomerConfirmationHistory)
+private readonly projectCustomerConfirmationHistoryRepository:
+  Repository<ProjectCustomerConfirmationHistory>,
 ) {}
 
 async onModuleInit() {
@@ -670,7 +704,20 @@ private async callConfiguredMessagesApi(
       failedAt: null,
     });
 
-    await this.messageRepository.save(log);
+    try {
+  await this.messageRepository.save(log);
+} catch (error: any) {
+  if (
+    error?.code === '23505' &&
+    context.deduplicationKey
+  ) {
+    throw new Error(
+      `WHATSAPP_DUPLICATE_AUTOMATION:${context.deduplicationKey}`,
+    );
+  }
+
+  throw error;
+}
 
     try {
       const template: Record<string, unknown> = {
@@ -861,6 +908,433 @@ async sendTestTemplateMessage(to: string) {
 
     return this.messageRepository.save(log);
   }
+
+  async getCustomerExecutionRatings(query: {
+  page?: string;
+  limit?: string;
+  rating?: string;
+  activityType?: string;
+}) {
+  const page = Math.max(1, Number(query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+
+  const qb = this.messageRepository
+    .createQueryBuilder('message')
+    .where('message.direction = :direction', {
+      direction: WhatsappMessageDirection.INBOUND,
+    })
+    .andWhere('message.automationKey = :automationKey', {
+      automationKey: 'CUSTOMER_EXECUTION_RATING',
+    })
+    .andWhere('message.referenceType = :referenceType', {
+      referenceType: 'EXECUTION_ACTIVITY',
+    })
+    .andWhere('message.messageBody IN (:...ratings)', {
+      ratings: ['1', '2', '3', '4', '5'],
+    });
+
+  if (/^[1-5]$/.test(String(query.rating || ''))) {
+    qb.andWhere('message.messageBody = :rating', {
+      rating: String(query.rating),
+    });
+  }
+
+  qb.innerJoin(
+  'project_execution_activity',
+  'activity',
+  'activity.id = CAST(message.referenceId AS integer)',
+);
+
+qb.andWhere('activity.activityType IN (:...allowedTypes)', {
+  allowedTypes: [
+    'STRUCTURE_WORK',
+    'PANEL_INSTALLED',
+    'INVERTER_INSTALLED',
+  ],
+});
+
+if (
+  [
+    'STRUCTURE_WORK',
+    'PANEL_INSTALLED',
+    'INVERTER_INSTALLED',
+  ].includes(String(query.activityType || ''))
+) {
+  qb.andWhere('activity.activityType = :activityType', {
+    activityType: query.activityType,
+  });
+}
+
+  const [messages, total] = await qb
+    .orderBy('message.createdAt', 'DESC')
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getManyAndCount();
+
+  const activityIds = [
+  ...new Set(
+    messages
+      .map((message) => Number(message.referenceId))
+      .filter((id) => Number.isSafeInteger(id) && id > 0),
+  ),
+];
+
+const activities = activityIds.length
+  ? await this.dataSource.query(
+      `
+      SELECT id, "projectId", "activityType"
+      FROM project_execution_activity
+      WHERE id = ANY($1::integer[])
+      `,
+      [activityIds],
+    )
+  : [];
+
+const projectIds = [
+  ...new Set(
+    activities.map((activity: any) => Number(activity.projectId)),
+  ),
+];
+
+const projects = projectIds.length
+  ? await this.dataSource.query(
+      `
+      SELECT
+        id,
+        "customerName",
+        "customerPhone",
+        "electricityKNumber",
+        "projectOwnerId",
+        "projectOwnerName",
+        "projectOwnerRole"
+      FROM project
+      WHERE id = ANY($1::integer[])
+      `,
+      [projectIds],
+    )
+  : [];
+
+const activityMap = new Map<number, any>(
+  activities.map((activity: any) => [
+    Number(activity.id),
+    activity,
+  ]),
+);
+
+const projectMap = new Map<number, any>(
+  projects.map((project: any) => [
+    Number(project.id),
+    project,
+  ]),
+);
+
+return {
+  data: messages.map((message) => {
+    const activityId = Number(message.referenceId);
+    const activity = activityMap.get(activityId);
+    const project = activity
+      ? projectMap.get(Number(activity.projectId))
+      : null;
+
+    return {
+      id: message.id,
+      activityId,
+      activityType: activity?.activityType || null,
+      projectId: project?.id || null,
+      customerName: project?.customerName || '',
+      customerPhone: project?.customerPhone || '',
+      kNumber: project?.electricityKNumber || '',
+      projectOwnerId: project?.projectOwnerId || null,
+      projectOwnerName: project?.projectOwnerName || '',
+      projectOwnerRole: project?.projectOwnerRole || '',
+      rating: Number(message.messageBody),
+      submittedAt: message.createdAt,
+    };
+  }),
+  total,
+  page,
+  limit,
+  totalPages: Math.ceil(total / limit),
+};
+}
+
+
+async processCustomerExecutionRatingReply(params: {
+  from: string;
+  messageId: string;
+  messageBody: string | null;
+  payload: Record<string, any>;
+}): Promise<void> {
+  const response = String(params.messageBody || '').trim();
+
+  // Accept only a single rating from 1 to 5.
+  if (!/^[1-5]$/.test(response)) {
+    return;
+  }
+
+  const phone = this.normalizePhone(params.from);
+  const incomingMessageId = String(params.messageId || '').trim();
+  const originalMessageId = String(
+    params.payload?.context?.id || '',
+  ).trim();
+
+  // A standalone rating must never be assigned automatically.
+  if (!phone || !incomingMessageId || !originalMessageId) {
+    return;
+  }
+
+  const outgoing = await this.messageRepository.findOne({
+    where: {
+      metaMessageId: originalMessageId,
+      direction: WhatsappMessageDirection.OUTBOUND,
+      automationKey: 'CUSTOMER_PROJECT_UPDATE',
+      referenceType: 'EXECUTION_ACTIVITY',
+      recipientPhone: phone,
+    },
+  });
+
+  if (!outgoing) {
+    return;
+  }
+
+  if (
+    ![
+      WhatsappMessageStatus.SENT,
+      WhatsappMessageStatus.DELIVERED,
+      WhatsappMessageStatus.READ,
+    ].includes(outgoing.status)
+  ) {
+    return;
+  }
+
+  const activityId = Number(outgoing.referenceId);
+
+  if (!Number.isSafeInteger(activityId) || activityId <= 0) {
+    return;
+  }
+
+  // Only the three execution activities with scheduling automation.
+  const allowedActivityTypes = [
+    'STRUCTURE_WORK',
+    'PANEL_INSTALLED',
+    'INVERTER_INSTALLED',
+  ];
+
+  const occurrenceKey = String(
+    outgoing.deduplicationKey || '',
+  ).split(':').slice(3).join(':');
+
+  const allowed = allowedActivityTypes.some(
+    (type) => occurrenceKey === `execution-${type}-${activityId}`,
+  );
+
+  if (!allowed) {
+    return;
+  }
+
+  await this.messageRepository.manager.transaction(
+    async (manager) => {
+      // Serialize feedback processing for this activity.
+      await manager.query(
+        'SELECT pg_advisory_xact_lock($1, $2)',
+        [87421, activityId],
+      );
+
+      const messages = manager.getRepository(WhatsappMessage);
+
+      const alreadyRated = await messages.findOne({
+        where: {
+          direction: WhatsappMessageDirection.INBOUND,
+          automationKey: 'CUSTOMER_EXECUTION_RATING',
+          referenceType: 'EXECUTION_ACTIVITY',
+          referenceId: String(activityId),
+        },
+      });
+
+      if (alreadyRated) {
+        return;
+      }
+
+      const incoming = await messages.findOne({
+        where: {
+          metaMessageId: incomingMessageId,
+          direction: WhatsappMessageDirection.INBOUND,
+          recipientPhone: phone,
+        },
+      });
+
+      if (!incoming || incoming.automationKey) {
+        return;
+      }
+
+      incoming.automationKey = 'CUSTOMER_EXECUTION_RATING';
+      incoming.referenceType = 'EXECUTION_ACTIVITY';
+      incoming.referenceId = String(activityId);
+
+      await messages.save(incoming);
+
+      console.log('Customer execution activity rating recorded:', {
+        activityId,
+        rating: Number(response),
+        messageId: incomingMessageId,
+      });
+    },
+  );
+}
+
+
+  async processCustomerProjectConfirmationReply(params: {
+  from: string;
+  messageId: string;
+  messageBody: string | null;
+  payload: Record<string, any>;
+}): Promise<void> {
+  const response = String(params.messageBody || '')
+    .trim()
+    .toUpperCase();
+
+  if (response !== 'YES' && response !== 'CORRECTION') {
+    return;
+  }
+
+  const incomingMessageId = String(params.messageId || '').trim();
+  const phone = this.normalizePhone(params.from);
+
+  const originalMessageId = String(
+    params.payload?.context?.id || '',
+  ).trim();
+
+  // Never accept a generic YES without a reply
+  // referencing the original confirmation message.
+  if (!phone || !incomingMessageId || !originalMessageId) {
+    return;
+  }
+
+  // Verify the original message was sent by this CRM
+  // specifically for project confirmation.
+  const outgoingMessage = await this.messageRepository.findOne({
+    where: {
+      metaMessageId: originalMessageId,
+      direction: WhatsappMessageDirection.OUTBOUND,
+      automationKey: 'CUSTOMER_PROJECT_CONFIRMATION',
+      recipientPhone: phone,
+    },
+  });
+
+  if (!outgoingMessage || outgoingMessage.referenceType !== 'PROJECT') {
+    return;
+  }
+
+  if (
+    ![
+      WhatsappMessageStatus.SENT,
+      WhatsappMessageStatus.DELIVERED,
+      WhatsappMessageStatus.READ,
+    ].includes(outgoingMessage.status)
+  ) {
+    return;
+  }
+
+  const projectId = Number(outgoingMessage.referenceId);
+
+  if (!Number.isSafeInteger(projectId) || projectId <= 0) {
+    return;
+  }
+
+  const nextStatus =
+    response === 'YES'
+      ? ProjectCustomerConfirmationStatus.CONFIRMED
+      : ProjectCustomerConfirmationStatus.CORRECTION_REQUESTED;
+
+  const phoneVariants = [
+  phone,
+  phone.startsWith('91') && phone.length === 12
+    ? phone.slice(2)
+    : phone,
+  `0${phone}`,
+];
+
+const processed = await this.projectCustomerConfirmationRepository.manager.transaction(
+  async (manager) => {
+    const confirmationRepository =
+      manager.getRepository(ProjectCustomerConfirmation);
+
+    const historyRepository =
+      manager.getRepository(ProjectCustomerConfirmationHistory);
+
+    // Only one response can transition a pending request.
+    const result = await confirmationRepository
+      .createQueryBuilder()
+      .update(ProjectCustomerConfirmation)
+      .set({
+        status: nextStatus,
+        responseMessageId: incomingMessageId,
+        responseText: response,
+        respondedAt: new Date(),
+      })
+      .where('"projectId" = :projectId', { projectId })
+      .andWhere('"status" = :pending', {
+        pending: ProjectCustomerConfirmationStatus.PENDING,
+      })
+      .andWhere('"requestMessageId" = :originalMessageId', {
+        originalMessageId,
+      })
+      .andWhere('"requestedAt" IS NOT NULL')
+      .andWhere(
+        `REGEXP_REPLACE("customerPhone", '[^0-9]', '', 'g') IN (:...phoneVariants)`,
+        { phoneVariants },
+      )
+      .execute();
+
+    if (result.affected !== 1) {
+      return false;
+    }
+
+    const confirmation = await confirmationRepository.findOne({
+      where: { projectId },
+    });
+
+    if (!confirmation) {
+      throw new Error(
+        `Confirmation record missing after update for project ${projectId}`,
+      );
+    }
+
+    const eventType =
+      response === 'YES'
+        ? ProjectCustomerConfirmationEventType.CUSTOMER_CONFIRMED
+        : ProjectCustomerConfirmationEventType.CORRECTION_REQUESTED;
+
+    await historyRepository.save(
+      historyRepository.create({
+        projectId,
+        confirmationId: confirmation.id,
+        eventType,
+        previousStatus:
+          ProjectCustomerConfirmationStatus.PENDING,
+        newStatus: nextStatus,
+        requestMessageId: originalMessageId,
+        responseMessageId: incomingMessageId,
+        responseText: response,
+        customerPhone: confirmation.customerPhone,
+        projectSnapshot: confirmation.projectSnapshot,
+        performedBy: null,
+        remarks: null,
+      }),
+    );
+
+    return true;
+  },
+);
+
+if (processed) {
+  console.log('Customer project confirmation response:', {
+    projectId,
+    status: nextStatus,
+    messageId: incomingMessageId,
+  });
+}
+}
 
   async updateMessageStatus(params: {
     messageId: string;

@@ -346,6 +346,16 @@ import {
   ProjectContractorSlaPenalty,
 } from './project-contractor-sla.entity';
 
+import {
+  ProjectCustomerConfirmation,
+  ProjectCustomerConfirmationStatus,
+} from './project-customer-confirmation.entity';
+
+import {
+  ProjectCustomerConfirmationHistory,
+  ProjectCustomerConfirmationEventType,
+} from './project-customer-confirmation-history.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -2450,7 +2460,15 @@ private formatInsuranceDate(
   DataSource,
 
     @InjectRepository(Project)
-    private readonly projectRepository: Repository<Project>,
+private readonly projectRepository: Repository<Project>,
+
+@InjectRepository(ProjectCustomerConfirmation)
+private readonly projectCustomerConfirmationRepository:
+  Repository<ProjectCustomerConfirmation>,
+
+  @InjectRepository(ProjectCustomerConfirmationHistory)
+private readonly projectCustomerConfirmationHistoryRepository:
+  Repository<ProjectCustomerConfirmationHistory>,
 
     @InjectRepository(ProjectInspection)
 private readonly projectInspectionRepository:
@@ -2732,10 +2750,478 @@ private readonly whatsappService: WhatsappService,
 
 ) {}
 
+private buildCustomerConfirmationSnapshot(
+  project: Project,
+): Record<string, unknown> {
+  const value = (input: unknown) =>
+    input === undefined || input === null || input === ''
+      ? null
+      : input;
+
+  return {
+    snapshotVersion: 1,
+    capturedAt: new Date().toISOString(),
+
+    projectId: project.id,
+
+    customer: {
+      name: value(project.customerName),
+      phone: value(project.customerPhone),
+      kNumber: value(project.electricityKNumber),
+      address: value(project.address),
+      city: value(project.city),
+      zone: value(project.zone),
+    },
+
+    solarSystem: {
+      capacity: value(project.projectSize),
+      panelBrand: value(project.panelBrand),
+      dcrPanelCount: value(project.dcrPanelCount),
+      nonDcrPanelCount: value(project.nonDcrPanelCount),
+      inverterBrand: value(project.converterBrand),
+      inverterCapacity: value(project.converterCapacity),
+      inverterPhase: value(project.converterPhase),
+      structureType: value(project.structureType),
+      structureCapacityKw: value(project.structureCapacityKw),
+    },
+
+    financial: {
+      projectType: value(project.projectType),
+      finalCost: value(project.finalCost),
+      projectCost: value(project.projectCost),
+      netAmount: value(project.netAmount),
+      loanAmount: value(project.loanAmount),
+      subsidyAmount: value(project.subsidy),
+      subsidyType: value(project.subsidyType),
+      subsidyCategory: value(project.subsidyCategory),
+    },
+  };
+}
+
+private async sendCustomerProjectConfirmationWhatsapp(
+  project: Project,
+  resendReservationId?: string,
+): Promise<boolean> {
+  try {
+        // Never send the generic TEST template as a real
+    // customer confirmation request.
+    if (
+      process.env.WHATSAPP_SEND_MODE !== 'PRODUCTION' ||
+      process.env.WHATSAPP_AUTOMATIONS_ENABLED !== 'true'
+    ) {
+      return false;
+    }
+
+    const confirmation =
+      await this.projectCustomerConfirmationRepository.findOne({
+        where: { projectId: Number(project.id) },
+      });
+
+    if (!confirmation) {
+      return false;
+    }
+
+    const isResend = Boolean(resendReservationId);
+
+    if (isResend) {
+      if (
+        confirmation.status !==
+          ProjectCustomerConfirmationStatus.CORRECTION_REQUESTED ||
+        confirmation.resendReservationId !== resendReservationId ||
+        !confirmation.resendReservedAt
+      ) {
+        return false;
+      }
+    } else {
+      if (
+        confirmation.status !==
+          ProjectCustomerConfirmationStatus.PENDING ||
+        confirmation.requestMessageId ||
+        confirmation.requestedAt ||
+        confirmation.resendReservationId
+      ) {
+        return false;
+      }
+    }
+
+    const snapshot = confirmation.projectSnapshot;
+
+    if (!snapshot) {
+      console.warn(
+        `[Customer Confirmation] Missing snapshot for project ${project.id}`,
+      );
+      return false;
+    }
+
+    const customer = snapshot.customer as
+      | Record<string, unknown>
+      | undefined;
+
+    const solar = snapshot.solarSystem as
+      | Record<string, unknown>
+      | undefined;
+
+    const financial = snapshot.financial as
+      | Record<string, unknown>
+      | undefined;
+
+    const phone = String(
+      confirmation.customerPhone || '',
+    ).trim();
+
+    const name = String(
+      customer?.name || project.customerName || '',
+    ).trim();
+
+    if (!phone || !name || !solar || !financial) {
+      console.warn(
+        `[Customer Confirmation] Incomplete details for project ${project.id}`,
+      );
+      return false;
+    }
+
+    const details = [
+      `K-Number: ${customer?.kNumber || 'Not provided'}`,
+      `System: ${solar.capacity || 'Not provided'}`,
+      `Panel: ${solar.panelBrand || 'Not provided'}`,
+      `DCR Panels: ${solar.dcrPanelCount ?? 'Not provided'}`,
+      `Non-DCR Panels: ${solar.nonDcrPanelCount ?? 'Not provided'}`,
+      `Inverter: ${solar.inverterBrand || 'Not provided'}`,
+      `Inverter Capacity: ${solar.inverterCapacity || 'Not provided'}`,
+      `Structure: ${solar.structureType || 'Not provided'}`,
+      `Project Type: ${financial.projectType || 'Not provided'}`,
+      `Final Cost: ${financial.finalCost ?? 'Not provided'}`,
+      `Installation Address: ${customer?.address || 'Not provided'}`,
+    ].join('\n');
+
+    const attemptNumber = isResend
+      ? Number(confirmation.resendAttemptNumber) + 1
+      : 1;
+
+    if (
+      !Number.isInteger(attemptNumber) ||
+      attemptNumber < 1
+    ) {
+      console.error(
+        `[Customer Confirmation] Invalid attempt number for project ${project.id}`,
+      );
+      return false;
+    }
+
+    const occurrenceKey =
+      `confirmation-${confirmation.id}-attempt-${attemptNumber}`;
+
+    const result =
+      await this.whatsappService.executeAutomation({
+        automationKey: 'CUSTOMER_PROJECT_CONFIRMATION',
+        recipientPhone: phone,
+        recipientName: name,
+        referenceType: 'PROJECT',
+        referenceId: project.id,
+        occurrenceKey,
+        components: [
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: name },
+              { type: 'text', text: details },
+            ],
+          },
+        ],
+      });
+
+        if (!result.sent) {
+      console.log(
+        `[Customer Confirmation] Project ${project.id}: ${result.reason}`,
+      );
+      return false;
+    }
+
+    /*
+     * Record that the send operation was submitted.
+     * This does NOT mark customer confirmation.
+     */
+    const metaMessageId = result.result?.messages?.[0]?.id;
+
+    if (!metaMessageId) {
+      console.warn(
+        `Customer confirmation WhatsApp sent without Meta message ID for project ${project.id}`,
+      );
+      return false;
+    }
+
+    const recorded = await this.projectCustomerConfirmationRepository.manager.transaction(
+      async (manager): Promise<boolean> => {
+        const confirmationRepository =
+          manager.getRepository(ProjectCustomerConfirmation);
+
+        const historyRepository =
+          manager.getRepository(ProjectCustomerConfirmationHistory);
+
+        const requestedAt = new Date();
+
+        if (isResend) {
+          const updateResult = await confirmationRepository
+            .createQueryBuilder()
+            .update(ProjectCustomerConfirmation)
+            .set({
+              status: ProjectCustomerConfirmationStatus.PENDING,
+              requestMessageId: String(metaMessageId),
+              requestedAt,
+              responseMessageId: null,
+              responseText: null,
+              respondedAt: null,
+              resendReservationId: null,
+              resendReservedAt: null,
+            })
+            .where('"id" = :confirmationId', {
+              confirmationId: confirmation.id,
+            })
+            .andWhere('"status" = :status', {
+              status:
+                ProjectCustomerConfirmationStatus.CORRECTION_REQUESTED,
+            })
+            .andWhere('"resendReservationId" = :reservationId', {
+              reservationId: resendReservationId,
+            })
+            .andWhere('"resendAttemptNumber" = :attemptNumber', {
+              attemptNumber: Number(confirmation.resendAttemptNumber),
+            })
+            .execute();
+
+          if (updateResult.affected !== 1) {
+            throw new Error(
+              `Resend reservation changed for project ${project.id}; manual reconciliation required`,
+            );
+          }
+
+          await historyRepository.save(
+            historyRepository.create({
+              projectId: Number(project.id),
+              confirmationId: confirmation.id,
+              eventType:
+                ProjectCustomerConfirmationEventType.REQUEST_SENT,
+              previousStatus:
+                ProjectCustomerConfirmationStatus.CORRECTION_REQUESTED,
+              newStatus:
+                ProjectCustomerConfirmationStatus.PENDING,
+              requestMessageId: String(metaMessageId),
+              responseMessageId: null,
+              responseText: null,
+              customerPhone: confirmation.customerPhone,
+              projectSnapshot: confirmation.projectSnapshot,
+              performedBy: null,
+              remarks:
+                `CORRECTION_RESEND:ATTEMPT_${confirmation.resendAttemptNumber}`,
+            }),
+          );
+
+          return true;
+        }
+
+        const updateResult = await confirmationRepository
+          .createQueryBuilder()
+          .update(ProjectCustomerConfirmation)
+          .set({
+            requestedAt,
+            requestMessageId: String(metaMessageId),
+          })
+          .where('"id" = :confirmationId', {
+            confirmationId: confirmation.id,
+          })
+          .andWhere('"status" = :pending', {
+            pending: ProjectCustomerConfirmationStatus.PENDING,
+          })
+          .andWhere('"requestMessageId" IS NULL')
+          .andWhere('"requestedAt" IS NULL')
+          .execute();
+
+        if (updateResult.affected !== 1) {
+          console.warn(
+            `[Customer Confirmation] Request already recorded for project ${project.id}`,
+          );
+          return false;
+        }
+
+        await historyRepository.save(
+          historyRepository.create({
+            projectId: Number(project.id),
+            confirmationId: confirmation.id,
+            eventType:
+              ProjectCustomerConfirmationEventType.REQUEST_SENT,
+            previousStatus:
+              ProjectCustomerConfirmationStatus.PENDING,
+            newStatus:
+              ProjectCustomerConfirmationStatus.PENDING,
+            requestMessageId: String(metaMessageId),
+            responseMessageId: null,
+            responseText: null,
+            customerPhone: confirmation.customerPhone,
+            projectSnapshot: confirmation.projectSnapshot,
+            performedBy: null,
+            remarks: null,
+          }),
+        );
+
+        return true;
+      },
+    );
+
+    return recorded;
+  } catch (error) {
+    console.error(
+      `[Customer Confirmation] Send failed for project ${project.id}`,
+      error,
+    );
+    return false;
+  }
+}
+
+private async sendCustomerExecutionScheduleWhatsapp(
+  activity: ProjectExecutionActivity,
+): Promise<void> {
+  try {
+    // Never send the generic Meta test template
+    // as a real customer scheduling notification.
+    if (
+      process.env.WHATSAPP_SEND_MODE !== 'PRODUCTION' ||
+      process.env.WHATSAPP_AUTOMATIONS_ENABLED !== 'true'
+    ) {
+      return;
+    }
+
+    const activityNames: Partial<
+      Record<ProjectExecutionActivityType, string>
+    > = {
+      [ProjectExecutionActivityType.STRUCTURE_WORK]:
+        'Solar Structure Work',
+
+      [ProjectExecutionActivityType.PANEL_INSTALLED]:
+        'Solar Panel Installation',
+
+      [ProjectExecutionActivityType.INVERTER_INSTALLED]:
+        'Solar Inverter Installation',
+    };
+
+    const activityType =
+      activity.activityType as ProjectExecutionActivityType;
+
+    const activityName = activityNames[activityType];
+
+    if (!activityName || !activity.scheduledDate) {
+      return;
+    }
+
+    const project = await this.projectRepository.findOne({
+      where: {
+        id: Number(activity.projectId),
+      },
+    });
+
+    if (!project) {
+      return;
+    }
+
+    const customerPhone = String(
+      project.customerPhone || '',
+    ).trim();
+
+    const customerName =
+      String(project.customerName || '').trim() ||
+      'Customer';
+
+    if (!customerPhone) {
+      return;
+    }
+
+    const scheduledDate = new Date(
+      activity.scheduledDate,
+    );
+
+    if (Number.isNaN(scheduledDate.getTime())) {
+      return;
+    }
+
+    const formattedDate = new Intl.DateTimeFormat(
+      'en-IN',
+      {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      },
+    ).format(scheduledDate);
+
+    // The same activity and scheduled date must not
+    // generate duplicate customer notifications.
+    const dateKey = new Intl.DateTimeFormat(
+      'en-CA',
+      {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      },
+    ).format(scheduledDate);
+
+    const occurrenceKey =
+  `execution-schedule-${activity.id}-${dateKey}-${new Date(
+    activity.updatedAt || activity.createdAt,
+  ).getTime()}`;
+
+    const result =
+      await this.whatsappService.executeAutomation({
+        automationKey: 'CUSTOMER_EXECUTION_SCHEDULE',
+
+        recipientPhone: customerPhone,
+
+        recipientName: customerName,
+
+        referenceType: 'PROJECT',
+
+        referenceId: Number(project.id),
+
+        occurrenceKey,
+
+        components: [
+          {
+            type: 'body',
+            parameters: [
+              {
+                type: 'text',
+                text: customerName,
+              },
+              {
+                type: 'text',
+                text: activityName,
+              },
+              {
+                type: 'text',
+                text: formattedDate,
+              },
+            ],
+          },
+        ],
+      });
+
+    if (!result.sent) {
+      console.log(
+        `[WhatsApp Schedule] Project ${project.id}, activity ${activity.id}: ${result.reason}`,
+      );
+    }
+  } catch (error) {
+    console.error(
+      `[WhatsApp Schedule] Failed for activity ${activity.id}`,
+      error,
+    );
+  }
+}
+
 private async sendCustomerProjectUpdateWhatsapp(
   project: Project,
   updateText: string,
   occurrenceKey: string,
+  executionActivityId?: number,
 ): Promise<void> {
   try {
     const customerPhone = String(
@@ -2766,9 +3252,11 @@ private async sendCustomerProjectUpdateWhatsapp(
 
         recipientName: customerName,
 
-        referenceType: 'PROJECT',
+        referenceType: executionActivityId
+  ? 'EXECUTION_ACTIVITY'
+  : 'PROJECT',
 
-        referenceId: project.id,
+referenceId: executionActivityId || project.id,
 
         occurrenceKey,
 
@@ -2974,6 +3462,23 @@ private async sendCustomerExecutionMilestoneWhatsapp(
   let updateText = '';
 
   switch (activity.activityType) {
+
+
+  case ProjectExecutionActivityType.STRUCTURE_WORK:
+    updateText =
+      'Solar structure work has been completed. Please rate the completed work from 1 to 5 stars by replying to this message.';
+    break;
+
+  case ProjectExecutionActivityType.PANEL_INSTALLED:
+    updateText =
+      'Solar panel installation has been completed. Please rate the completed work from 1 to 5 stars by replying to this message.';
+    break;
+
+  case ProjectExecutionActivityType.INVERTER_INSTALLED:
+    updateText =
+      'Solar inverter installation has been completed. Please rate the completed work from 1 to 5 stars by replying to this message.';
+    break;
+
   case ProjectExecutionActivityType.GENERATION_STARTED:
     updateText =
       'Power generation has started for your solar project.';
@@ -3000,10 +3505,17 @@ private async sendCustomerExecutionMilestoneWhatsapp(
   }
 
   await this.sendCustomerProjectUpdateWhatsapp(
-    project,
-    updateText,
-    `execution-${activity.activityType}-${activity.id}`,
-  );
+  project,
+  updateText,
+  `execution-${activity.activityType}-${activity.id}`,
+  [
+    ProjectExecutionActivityType.STRUCTURE_WORK,
+    ProjectExecutionActivityType.PANEL_INSTALLED,
+    ProjectExecutionActivityType.INVERTER_INSTALLED,
+  ].includes(activity.activityType)
+    ? activity.id
+    : undefined,
+);
 }
 
   private async buildProjectJourneySnapshot(
@@ -6381,6 +6893,190 @@ if (
 }
 
 return updatedProject;
+}
+
+async resendCustomerConfirmation(
+  projectId: number,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (!roles.includes('OWNER')) {
+    throw new ForbiddenException(
+      'Only Owner can resend customer confirmation',
+    );
+  }
+
+  if (!Number.isInteger(projectId) || projectId <= 0) {
+    throw new BadRequestException(
+      'Invalid project ID',
+    );
+  }
+
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  const confirmation =
+    await this.projectCustomerConfirmationRepository.findOne({
+      where: { projectId },
+    });
+
+  if (!confirmation) {
+    throw new NotFoundException(
+      'Customer confirmation record not found',
+    );
+  }
+
+  if (
+    confirmation.status !==
+    ProjectCustomerConfirmationStatus.CORRECTION_REQUESTED
+  ) {
+    throw new BadRequestException(
+      'Resend is allowed only after customer requests correction',
+    );
+  }
+
+  if (
+  process.env.WHATSAPP_SEND_MODE !== 'PRODUCTION' ||
+  process.env.WHATSAPP_AUTOMATIONS_ENABLED !== 'true'
+) {
+  throw new BadRequestException(
+    'Customer confirmation WhatsApp sending is not enabled',
+  );
+}
+
+  const reservationId = randomUUID();
+
+  const correctedSnapshot =
+  this.buildCustomerConfirmationSnapshot(project);
+
+const correctedPhone = String(
+  project.customerPhone || '',
+).trim();
+
+if (!correctedPhone) {
+  throw new BadRequestException(
+    'Customer phone is required before resending confirmation',
+  );
+}
+
+const reservedConfirmation =
+  await this.projectCustomerConfirmationRepository.manager.transaction(
+    async (manager) => {
+      const confirmationRepo =
+        manager.getRepository(ProjectCustomerConfirmation);
+
+      const historyRepo =
+        manager.getRepository(ProjectCustomerConfirmationHistory);
+
+      const reservationResult = await confirmationRepo
+        .createQueryBuilder()
+        .update(ProjectCustomerConfirmation)
+        .set({
+          resendReservationId: reservationId,
+          resendReservedAt: new Date(),
+          resendAttemptNumber: () =>
+            '"resendAttemptNumber" + 1',
+          projectSnapshot: correctedSnapshot as any,
+          customerPhone: correctedPhone,
+        })
+        .where('"id" = :confirmationId', {
+          confirmationId: confirmation.id,
+        })
+        .andWhere('"status" = :status', {
+          status:
+            ProjectCustomerConfirmationStatus.CORRECTION_REQUESTED,
+        })
+        .andWhere('"resendReservationId" IS NULL')
+        .execute();
+
+      if (reservationResult.affected !== 1) {
+        throw new BadRequestException(
+          'A resend is already reserved or the confirmation status has changed',
+        );
+      }
+
+      const reserved = await confirmationRepo.findOne({
+        where: {
+          id: confirmation.id,
+          resendReservationId: reservationId,
+        },
+      });
+
+      if (!reserved) {
+        throw new Error(
+          'Customer confirmation resend reservation could not be verified',
+        );
+      }
+
+      await historyRepo.save(
+        historyRepo.create({
+          projectId,
+          confirmationId: confirmation.id,
+          eventType:
+            ProjectCustomerConfirmationEventType.CORRECTION_RESENT,
+          previousStatus:
+            ProjectCustomerConfirmationStatus.CORRECTION_REQUESTED,
+          newStatus:
+            ProjectCustomerConfirmationStatus.CORRECTION_REQUESTED,
+          requestMessageId: null,
+          responseMessageId: confirmation.responseMessageId,
+          responseText: confirmation.responseText,
+          customerPhone: correctedPhone,
+          projectSnapshot: correctedSnapshot,
+          performedBy:
+            Number(
+              user?.id || user?.userId || user?.sub || 0,
+            ) || null,
+          remarks:
+            `RESEND_RESERVED:${reservationId}:ATTEMPT_${reserved.resendAttemptNumber}`,
+        }),
+      );
+
+      return reserved;
+    },
+  );
+
+const sent =
+  await this.sendCustomerProjectConfirmationWhatsapp(
+    project,
+    reservationId,
+  );
+
+if (!sent) {
+  return {
+    projectId,
+    confirmationId: confirmation.id,
+    status: reservedConfirmation.status,
+    sent: false,
+    reservationId,
+    attemptNumber:
+      reservedConfirmation.resendAttemptNumber,
+    requiresReconciliation: true,
+    message:
+      'WhatsApp resend could not be confirmed. The reservation has been retained to prevent duplicate sending. Review the WhatsApp message record before retrying.',
+  };
+}
+
+return {
+  projectId,
+  confirmationId: confirmation.id,
+  status: ProjectCustomerConfirmationStatus.PENDING,
+  sent: true,
+  reservationId,
+  attemptNumber:
+    reservedConfirmation.resendAttemptNumber,
+  requiresReconciliation: false,
+  message:
+    'Corrected project confirmation submitted to WhatsApp successfully. Awaiting customer response.',
+};
 }
 
 async uploadGlobalDocumentVaultFile(
@@ -24445,6 +25141,30 @@ async createExecutionActivity(
     .projectExecutionActivityRepository
     .save(activity);
 
+// Notify the customer when one of the three
+// installation activities is scheduled.
+if (
+  savedActivity.scheduledDate &&
+  [
+    ProjectExecutionActivityType.STRUCTURE_WORK,
+    ProjectExecutionActivityType.PANEL_INSTALLED,
+    ProjectExecutionActivityType.INVERTER_INSTALLED,
+  ].includes(
+    savedActivity.activityType as ProjectExecutionActivityType,
+  )
+) {
+  try {
+    await this.sendCustomerExecutionScheduleWhatsapp(
+      savedActivity,
+    );
+  } catch (error) {
+    console.error(
+      `[WhatsApp Schedule] Failed for activity ${savedActivity.id}`,
+      error,
+    );
+  }
+}
+
 if (
   savedActivity.status ===
     ProjectExecutionActivityStatus.COMPLETED
@@ -24597,6 +25317,10 @@ async updateExecutionActivity(
   const previousExecutionStatus =
   activity.status;
 
+  const previousScheduledDate = activity.scheduledDate
+  ? new Date(activity.scheduledDate).getTime()
+  : null;
+
   const inspectionTypes = [
   ProjectExecutionActivityType.STRUCTURE_INSPECTION,
   ProjectExecutionActivityType.PILLAR_INSPECTION,
@@ -24637,6 +25361,38 @@ if (
   await this
     .projectExecutionActivityRepository
     .save(activity);
+
+const currentScheduledDate = savedActivity.scheduledDate
+  ? new Date(savedActivity.scheduledDate).getTime()
+  : null;
+
+const scheduleChanged =
+  currentScheduledDate !== previousScheduledDate;
+
+const isCustomerScheduleActivity = [
+  ProjectExecutionActivityType.STRUCTURE_WORK,
+  ProjectExecutionActivityType.PANEL_INSTALLED,
+  ProjectExecutionActivityType.INVERTER_INSTALLED,
+].includes(
+  savedActivity.activityType as ProjectExecutionActivityType,
+);
+
+if (
+  isCustomerScheduleActivity &&
+  scheduleChanged &&
+  currentScheduledDate !== null
+) {
+  try {
+    await this.sendCustomerExecutionScheduleWhatsapp(
+      savedActivity,
+    );
+  } catch (error) {
+    console.error(
+      `[WhatsApp Schedule] Rescheduling notification failed for activity ${savedActivity.id}`,
+      error,
+    );
+  }
+}
 
 if (
   savedActivity.status ===
@@ -27745,6 +28501,60 @@ private async deactivateAutomaticProjectProcurement(
     await this.projectRepository.save(
       project,
     );
+
+    /*
+ * Create customer confirmation only when the Owner
+ * approves a project for the first time.
+ *
+ * Existing confirmation records are never reset.
+ * WhatsApp sending and execution blocking remain disabled.
+ */
+if (
+  approvalStatus === ProjectApprovalStatus.APPROVED
+) {
+  try {
+    const existingConfirmation =
+      await this.projectCustomerConfirmationRepository.findOne({
+        where: {
+          projectId: Number(savedProject.id),
+        },
+      });
+
+    if (!existingConfirmation) {
+  const confirmationSnapshot =
+    this.buildCustomerConfirmationSnapshot(savedProject);
+
+  await this.projectCustomerConfirmationRepository
+    .createQueryBuilder()
+    .insert()
+    .values({
+      projectId: Number(savedProject.id),
+      customerPhone:
+        String(savedProject.customerPhone || '').trim() || null,
+      projectSnapshot: confirmationSnapshot as any,
+    })
+    .orIgnore()
+    .execute();
+}
+    } catch (error) {
+    console.error(
+      `[Customer Confirmation] Failed to initialize project ${savedProject.id}`,
+      error,
+    );
+  }
+}
+
+// Request customer confirmation after Owner approval.
+// The sender independently checks production mode,
+// automation settings, and existing request status.
+if (
+  approvalStatus ===
+  ProjectApprovalStatus.APPROVED
+) {
+  await this.sendCustomerProjectConfirmationWhatsapp(
+    savedProject,
+  );
+}
 
   if (
     approvalStatus ===

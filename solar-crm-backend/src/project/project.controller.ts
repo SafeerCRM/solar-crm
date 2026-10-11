@@ -6470,6 +6470,18 @@ update(
   );
 }
 
+@Roles('OWNER')
+@Post(':id/customer-confirmation/resend')
+resendCustomerConfirmation(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.resendCustomerConfirmation(
+    Number(id),
+    user,
+  );
+}
+
   @Post('document')
   addDocument(@Body() body: any) {
     return this.projectService.addDocument(body);

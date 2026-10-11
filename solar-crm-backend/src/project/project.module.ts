@@ -136,6 +136,8 @@ import {
   ProjectContractorSlaPenalty,
   ProjectContractorSlaSetting,
 } from './project-contractor-sla.entity';
+import { ProjectCustomerConfirmation } from './project-customer-confirmation.entity';
+import { ProjectCustomerConfirmationHistory } from './project-customer-confirmation-history.entity';
 
 @Module({
   imports: [
@@ -181,7 +183,8 @@ TelecallingContact,
 ProjectTimelineRule,
 ProjectTimelineEvent,
 ProjectTimelineDelayNote,
-ProjectTimelineDelayProof, User, StaffMember, ProjectStaffNotification,]),
+ProjectTimelineDelayProof, User, StaffMember, ProjectStaffNotification, ProjectCustomerConfirmation,
+ProjectCustomerConfirmationHistory,]),
     JwtModule.register({
     secret: process.env.JWT_SECRET,
   }),
