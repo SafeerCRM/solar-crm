@@ -189,6 +189,7 @@ const navItems = [
 'MAINTENANCE_MANAGER',
 'FRANCHISE_MANAGER',
 'FRANCHISE_HEAD',
+'HR_MANAGER',
   ],
 },
 

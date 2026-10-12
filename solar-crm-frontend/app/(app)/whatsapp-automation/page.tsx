@@ -63,6 +63,23 @@ type MessageResponse = {
   totalPages: number;
 };
 
+type AutomationAudit = {
+  id: number;
+  automationKey: string;
+  previousEnabled: boolean;
+  newEnabled: boolean;
+  changedBy: number;
+  createdAt: string;
+};
+
+type AutomationAuditResponse = {
+  data: AutomationAudit[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
 const statusOptions = ['PENDING', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'RECEIVED', 'SKIPPED'];
 
 function formatDate(value: string | null) {
@@ -98,6 +115,14 @@ export default function WhatsappAutomationPage() {
   const [error, setError] = useState('');
 
     const [updatingAutomationKey, setUpdatingAutomationKey] = useState('');
+
+    const [auditRecords, setAuditRecords] = useState<AutomationAudit[]>([]);
+const [auditTotal, setAuditTotal] = useState(0);
+const [auditTotalPages, setAuditTotalPages] = useState(0);
+const [auditPage, setAuditPage] = useState(1);
+const [auditAutomationKey, setAuditAutomationKey] = useState('');
+const [auditLoading, setAuditLoading] = useState(false);
+const [auditError, setAuditError] = useState('');
   const [automationActionError, setAutomationActionError] = useState('');
 
   useEffect(() => {
@@ -145,6 +170,70 @@ export default function WhatsappAutomationPage() {
   }, [authorized, page, direction, status, automationKey, search]);
 
   useEffect(() => { void loadData(); }, [loadData]);
+
+  const loadAuditHistory = useCallback(async () => {
+  if (!authorized) return;
+
+  setAuditLoading(true);
+  setAuditError('');
+
+  try {
+    if (!API_BASE_URL) {
+      throw new Error('Backend API URL is not configured.');
+    }
+
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      throw new Error('Please log in again.');
+    }
+
+    const params = new URLSearchParams({
+      page: String(auditPage),
+      limit: '20',
+    });
+
+    if (auditAutomationKey) {
+      params.set('automationKey', auditAutomationKey);
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}${ROOT}/audit-history?${params.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: 'no-store',
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        response.status === 403
+          ? 'OWNER permission is required.'
+          : `Unable to load audit history (${response.status}).`,
+      );
+    }
+
+    const result: AutomationAuditResponse = await response.json();
+
+    setAuditRecords(Array.isArray(result.data) ? result.data : []);
+    setAuditTotal(Number(result.total) || 0);
+    setAuditTotalPages(Number(result.totalPages) || 0);
+  } catch (err) {
+    setAuditError(
+      err instanceof Error
+        ? err.message
+        : 'Unable to load audit history.',
+    );
+  } finally {
+    setAuditLoading(false);
+  }
+}, [authorized, auditPage, auditAutomationKey]);
+
+useEffect(() => {
+  void loadAuditHistory();
+}, [loadAuditHistory]);
 
     const updateAutomation = async (
     item: Automation,
@@ -348,6 +437,163 @@ export default function WhatsappAutomationPage() {
           {overview && overview.automations.length === 0 && <p className="text-sm text-gray-500">No automation definitions found.</p>}
         </div>
       </section>
+
+      <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+  <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
+    <div>
+      <h2 className="font-semibold text-gray-900">
+        Automation Audit History
+      </h2>
+      <p className="mt-1 text-xs text-gray-500">
+        {auditTotal} recorded changes · OWNER actions · Permanent history
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={() => void loadAuditHistory()}
+      disabled={auditLoading}
+      className="rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+    >
+      {auditLoading ? 'Loading...' : 'Refresh history'}
+    </button>
+  </div>
+
+  <div className="border-b p-4">
+    <div className="max-w-sm">
+      <label
+        htmlFor="auditAutomationFilter"
+        className="mb-2 block text-xs font-semibold text-gray-600"
+      >
+        Filter by automation
+      </label>
+
+      <select
+        id="auditAutomationFilter"
+        value={auditAutomationKey}
+        onChange={(event) => {
+          setAuditAutomationKey(event.target.value);
+          setAuditPage(1);
+        }}
+        className={selectClass}
+      >
+        <option value="">All automations</option>
+        {(overview?.automations || []).map((item) => (
+          <option key={item.automationKey} value={item.automationKey}>
+            {item.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  </div>
+
+  {auditError && (
+    <div className="m-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      {auditError}
+    </div>
+  )}
+
+  <div className="overflow-x-auto">
+    <table className="min-w-full divide-y divide-gray-100 text-left text-sm">
+      <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+        <tr>
+          <th className="px-4 py-3">Date (IST)</th>
+          <th className="px-4 py-3">Automation</th>
+          <th className="px-4 py-3">Previous</th>
+          <th className="px-4 py-3">New</th>
+          <th className="px-4 py-3">Changed by</th>
+        </tr>
+      </thead>
+
+      <tbody className="divide-y divide-gray-100">
+        {auditRecords.map((record) => {
+          const automation = overview?.automations.find(
+            (item) => item.automationKey === record.automationKey,
+          );
+
+          return (
+            <tr key={record.id} className="hover:bg-gray-50">
+              <td className="whitespace-nowrap px-4 py-4 text-gray-600">
+                {formatDate(record.createdAt)}
+              </td>
+
+              <td className="px-4 py-4">
+                <div className="font-semibold text-gray-900">
+                  {automation?.name || record.automationKey}
+                </div>
+                <div className="mt-1 break-all text-xs text-gray-500">
+                  {record.automationKey}
+                </div>
+              </td>
+
+              <td className="px-4 py-4">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    record.previousEnabled
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  {record.previousEnabled ? 'ON' : 'OFF'}
+                </span>
+              </td>
+
+              <td className="px-4 py-4">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    record.newEnabled
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  {record.newEnabled ? 'ON' : 'OFF'}
+                </span>
+              </td>
+
+              <td className="px-4 py-4 text-gray-700">
+                OWNER · User ID {record.changedBy}
+              </td>
+            </tr>
+          );
+        })}
+
+        {!auditLoading && auditRecords.length === 0 && !auditError && (
+          <tr>
+            <td colSpan={5} className="p-10 text-center text-gray-500">
+              No automation changes recorded.
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+
+  <div className="flex flex-wrap items-center justify-between gap-3 border-t p-4">
+    <p className="text-sm text-gray-500">
+      Page {auditPage} of {Math.max(1, auditTotalPages)}
+    </p>
+
+    <div className="flex gap-2">
+      <button
+        type="button"
+        disabled={auditLoading || auditPage <= 1}
+        onClick={() => setAuditPage((page) => page - 1)}
+        className="rounded-lg border px-4 py-2 text-sm disabled:opacity-40"
+      >
+        Previous
+      </button>
+
+      <button
+        type="button"
+        disabled={auditLoading || auditPage >= auditTotalPages}
+        onClick={() => setAuditPage((page) => page + 1)}
+        className="rounded-lg border px-4 py-2 text-sm disabled:opacity-40"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+</section>
 
       <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
         <div className="border-b p-5">
