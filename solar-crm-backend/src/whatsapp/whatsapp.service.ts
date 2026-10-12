@@ -20,6 +20,8 @@ import {
   WhatsappAutomationTriggerType,
 } from './whatsapp-automation.entity';
 
+import { WhatsappAutomationAudit } from './whatsapp-automation-audit.entity';
+
 import {
   ProjectCustomerConfirmation,
   ProjectCustomerConfirmationStatus,
@@ -416,51 +418,81 @@ async updateAutomationManagementSetting(params: {
     throw new BadRequestException('Valid OWNER ID is required');
   }
 
-  const automation = await this.automationRepository.findOne({
-    where: { automationKey },
-  });
+  return this.dataSource.transaction(async (manager) => {
+    const automationRepository =
+      manager.getRepository(WhatsappAutomation);
 
-  if (!automation) {
-    throw new NotFoundException('WhatsApp automation not found');
-  }
+    const auditRepository =
+      manager.getRepository(WhatsappAutomationAudit);
 
-  if (automation.isEnabled === params.isEnabled) {
-    return {
-      automationKey: automation.automationKey,
-      isEnabled: automation.isEnabled,
-      effectiveEnabled:
-        this.automationsEnabled && automation.isEnabled,
-      globalAutomationsEnabled: this.automationsEnabled,
-      updatedAt: automation.updatedAt,
-      changed: false,
+    // Lock this automation row to prevent concurrent updates
+    // from producing incorrect audit history.
+    const automation = await automationRepository
+      .createQueryBuilder('automation')
+      .setLock('pessimistic_write')
+      .where('automation.automationKey = :automationKey', {
+        automationKey,
+      })
+      .getOne();
+
+    if (!automation) {
+      throw new NotFoundException(
+        'WhatsApp automation not found',
+      );
+    }
+
+    // No actual status change: no audit entry required.
+    if (automation.isEnabled === params.isEnabled) {
+      return {
+        automationKey: automation.automationKey,
+        isEnabled: automation.isEnabled,
+        effectiveEnabled:
+          this.automationsEnabled && automation.isEnabled,
+        globalAutomationsEnabled: this.automationsEnabled,
+        updatedAt: automation.updatedAt,
+        changed: false,
+      };
+    }
+
+    const previousEnabled = automation.isEnabled;
+    const changedAt = new Date();
+
+    automation.isEnabled = params.isEnabled;
+
+    // Preserve the existing latest-change metadata.
+    automation.configuration = {
+      ...(automation.configuration || {}),
+      lastManagementChange: {
+        previousEnabled,
+        newEnabled: params.isEnabled,
+        changedBy: params.changedBy,
+        changedAt: changedAt.toISOString(),
+      },
     };
-  }
 
-  const previousEnabled = automation.isEnabled;
+    const saved = await automationRepository.save(automation);
 
-  automation.isEnabled = params.isEnabled;
+    // Permanent audit record, in the same transaction.
+    await auditRepository.save(
+      auditRepository.create({
+        automationKey: saved.automationKey,
+        previousEnabled,
+        newEnabled: saved.isEnabled,
+        changedBy: params.changedBy,
+        createdAt: changedAt,
+      }),
+    );
 
-  automation.configuration = {
-    ...(automation.configuration || {}),
-    lastManagementChange: {
-      previousEnabled,
-      newEnabled: params.isEnabled,
-      changedBy: params.changedBy,
-      changedAt: new Date().toISOString(),
-    },
-  };
-
-  const saved = await this.automationRepository.save(automation);
-
-  return {
-    automationKey: saved.automationKey,
-    isEnabled: saved.isEnabled,
-    effectiveEnabled:
-      this.automationsEnabled && saved.isEnabled,
-    globalAutomationsEnabled: this.automationsEnabled,
-    updatedAt: saved.updatedAt,
-    changed: true,
-  };
+    return {
+      automationKey: saved.automationKey,
+      isEnabled: saved.isEnabled,
+      effectiveEnabled:
+        this.automationsEnabled && saved.isEnabled,
+      globalAutomationsEnabled: this.automationsEnabled,
+      updatedAt: saved.updatedAt,
+      changed: true,
+    };
+  });
 }
 
 async getAutomation(
