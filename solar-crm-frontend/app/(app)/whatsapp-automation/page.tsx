@@ -103,6 +103,74 @@ type CustomerConfirmationResponse = {
   totalPages: number;
 };
 
+type ConfirmationSnapshot = {
+  snapshotVersion?: number;
+  capturedAt?: string | null;
+  projectId?: number;
+  customer?: {
+    name?: string | null;
+    phone?: string | null;
+    kNumber?: string | null;
+    city?: string | null;
+    zone?: string | null;
+    address?: string | null;
+  };
+  financial?: {
+    finalCost?: number | null;
+    netAmount?: number | null;
+    loanAmount?: number | null;
+    projectCost?: number | null;
+    projectType?: string | null;
+    subsidyType?: string | null;
+    subsidyAmount?: number | null;
+    subsidyCategory?: string | null;
+  };
+  solarSystem?: {
+    capacity?: number | string | null;
+    panelBrand?: string | null;
+    dcrPanelCount?: number | null;
+    inverterBrand?: string | null;
+    inverterPhase?: string | null;
+    structureType?: string | null;
+    inverterCapacity?: number | string | null;
+    nonDcrPanelCount?: number | null;
+    structureCapacityKw?: number | string | null;
+  };
+};
+
+type ConfirmationHistoryEvent = {
+  id: number;
+  projectId: number;
+  confirmationId: number;
+  eventType: string;
+  previousStatus: string | null;
+  newStatus: string | null;
+  requestMessageId: string | null;
+  responseMessageId: string | null;
+  responseText: string | null;
+  customerPhone: string | null;
+  projectSnapshot: ConfirmationSnapshot | null;
+  performedBy: number | null;
+  remarks: string | null;
+  createdAt: string;
+};
+
+type ConfirmationDetailsResponse = {
+  projectId: number;
+  confirmation: (CustomerConfirmation & {
+    requestMessageId: string | null;
+    responseMessageId: string | null;
+    ownerOverride: boolean;
+    ownerOverrideBy: number | null;
+    ownerOverrideReason: string | null;
+    ownerOverrideAt: string | null;
+    projectSnapshot: ConfirmationSnapshot | null;
+    resendReservationId: string | null;
+    resendReservedAt: string | null;
+  }) | null;
+  history: ConfirmationHistoryEvent[];
+};
+
 const statusOptions = ['PENDING', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'RECEIVED', 'SKIPPED'];
 
 function formatDate(value: string | null) {
@@ -144,7 +212,7 @@ const [selectedConfirmationProjectId, setSelectedConfirmationProjectId] =
   useState<number | null>(null);
 
 const [confirmationDetails, setConfirmationDetails] =
-  useState<Record<string, unknown> | null>(null);
+  useState<ConfirmationDetailsResponse | null>(null);
 
 const [confirmationDetailsLoading, setConfirmationDetailsLoading] =
   useState(false);
@@ -1061,13 +1129,268 @@ useEffect(() => {
                   </div>
                 )}
 
-                {!confirmationDetailsLoading &&
+                                {!confirmationDetailsLoading &&
                   !confirmationDetailsError &&
                   confirmationDetails && (
-                    <div className="mt-4">
-                      <pre className="max-h-96 overflow-auto rounded-lg bg-gray-900 p-4 text-xs text-gray-100">
-                        {JSON.stringify(confirmationDetails, null, 2)}
-                      </pre>
+                    <div className="mt-5 space-y-5">
+                      {confirmationDetails.confirmation ? (
+                        <>
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                Confirmation Status
+                              </p>
+                              <p className="mt-1 text-lg font-bold text-gray-900">
+                                {confirmationDetails.confirmation.status ===
+                                'CONFIRMED'
+                                  ? 'Customer Confirmed'
+                                  : confirmationDetails.confirmation.status ===
+                                      'CORRECTION_REQUESTED'
+                                    ? 'Correction Requested'
+                                    : confirmationDetails.confirmation.requestedAt
+                                      ? 'Awaiting Customer Response'
+                                      : 'Not Yet Sent'}
+                              </p>
+                            </div>
+
+                            <span
+                              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                                confirmationDetails.confirmation.status ===
+                                'CONFIRMED'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : confirmationDetails.confirmation.status ===
+                                      'CORRECTION_REQUESTED'
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {confirmationDetails.confirmation.status}
+                            </span>
+                          </div>
+
+                          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            <div className="rounded-xl border bg-gray-50 p-4">
+                              <p className="text-xs text-gray-500">
+                                Customer Name
+                              </p>
+                              <p className="mt-1 font-semibold text-gray-900">
+                                {confirmationDetails.confirmation.projectSnapshot
+                                  ?.customer?.name || '—'}
+                              </p>
+                            </div>
+
+                            <div className="rounded-xl border bg-gray-50 p-4">
+                              <p className="text-xs text-gray-500">
+                                Customer Phone
+                              </p>
+                              <p className="mt-1 font-semibold text-gray-900">
+                                {confirmationDetails.confirmation.customerPhone ||
+                                  '—'}
+                              </p>
+                            </div>
+
+                            <div className="rounded-xl border bg-gray-50 p-4">
+                              <p className="text-xs text-gray-500">
+                                K-Number
+                              </p>
+                              <p className="mt-1 break-all font-semibold text-gray-900">
+                                {confirmationDetails.confirmation.projectSnapshot
+                                  ?.customer?.kNumber || '—'}
+                              </p>
+                            </div>
+
+                            <div className="rounded-xl border bg-gray-50 p-4">
+                              <p className="text-xs text-gray-500">
+                                Request Sent (IST)
+                              </p>
+                              <p className="mt-1 font-semibold text-gray-900">
+                                {formatDate(
+                                  confirmationDetails.confirmation.requestedAt,
+                                )}
+                              </p>
+                            </div>
+
+                            <div className="rounded-xl border bg-gray-50 p-4">
+                              <p className="text-xs text-gray-500">
+                                Customer Responded (IST)
+                              </p>
+                              <p className="mt-1 font-semibold text-gray-900">
+                                {formatDate(
+                                  confirmationDetails.confirmation.respondedAt,
+                                )}
+                              </p>
+                            </div>
+
+                            <div className="rounded-xl border bg-gray-50 p-4">
+                              <p className="text-xs text-gray-500">
+                                Customer Response
+                              </p>
+                              <p className="mt-1 font-semibold text-gray-900">
+                                {confirmationDetails.confirmation.responseText ||
+                                  '—'}
+                              </p>
+                            </div>
+                          </div>
+
+                                                    <div className="space-y-4 border-t pt-5">
+                            <h4 className="text-base font-bold text-gray-900">
+                              Solar System Snapshot
+                            </h4>
+
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                              {[
+                                ['System Capacity', confirmationDetails.confirmation.projectSnapshot?.solarSystem?.capacity],
+                                ['Panel Brand', confirmationDetails.confirmation.projectSnapshot?.solarSystem?.panelBrand],
+                                ['DCR Panels', confirmationDetails.confirmation.projectSnapshot?.solarSystem?.dcrPanelCount],
+                                ['Non-DCR Panels', confirmationDetails.confirmation.projectSnapshot?.solarSystem?.nonDcrPanelCount],
+                                ['Inverter Brand', confirmationDetails.confirmation.projectSnapshot?.solarSystem?.inverterBrand],
+                                ['Inverter Capacity', confirmationDetails.confirmation.projectSnapshot?.solarSystem?.inverterCapacity],
+                                ['Inverter Phase', confirmationDetails.confirmation.projectSnapshot?.solarSystem?.inverterPhase],
+                                ['Structure Type', confirmationDetails.confirmation.projectSnapshot?.solarSystem?.structureType],
+                                ['Structure Capacity (kW)', confirmationDetails.confirmation.projectSnapshot?.solarSystem?.structureCapacityKw],
+                              ].map(([label, value]) => (
+                                <div key={String(label)} className="rounded-xl border bg-gray-50 p-3">
+                                  <p className="text-xs text-gray-500">{label}</p>
+                                  <p className="mt-1 font-semibold text-gray-900">
+                                    {value === null || value === undefined || value === ''
+                                      ? '—'
+                                      : String(value)}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-4 border-t pt-5">
+                            <h4 className="text-base font-bold text-gray-900">
+                              Financial Snapshot
+                            </h4>
+
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                              {[
+                                ['Project Type', confirmationDetails.confirmation.projectSnapshot?.financial?.projectType],
+                                ['Final Cost', confirmationDetails.confirmation.projectSnapshot?.financial?.finalCost],
+                                ['Net Amount', confirmationDetails.confirmation.projectSnapshot?.financial?.netAmount],
+                                ['Project Cost', confirmationDetails.confirmation.projectSnapshot?.financial?.projectCost],
+                                ['Loan Amount', confirmationDetails.confirmation.projectSnapshot?.financial?.loanAmount],
+                                ['Subsidy Type', confirmationDetails.confirmation.projectSnapshot?.financial?.subsidyType],
+                                ['Subsidy Category', confirmationDetails.confirmation.projectSnapshot?.financial?.subsidyCategory],
+                                ['Subsidy Amount', confirmationDetails.confirmation.projectSnapshot?.financial?.subsidyAmount],
+                              ].map(([label, value]) => (
+                                <div key={String(label)} className="rounded-xl border bg-gray-50 p-3">
+                                  <p className="text-xs text-gray-500">{label}</p>
+                                  <p className="mt-1 font-semibold text-gray-900">
+                                    {value === null || value === undefined || value === ''
+                                      ? '—'
+                                      : String(value)}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                                                    <div className="space-y-4 border-t pt-5">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <h4 className="text-base font-bold text-gray-900">
+                                Confirmation Event History
+                              </h4>
+
+                              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+                                {confirmationDetails.history.length} events
+                              </span>
+                            </div>
+
+                            {confirmationDetails.history.length === 0 ? (
+                              <p className="rounded-xl border bg-gray-50 p-4 text-sm text-gray-500">
+                                No confirmation events recorded yet.
+                              </p>
+                            ) : (
+                              <div className="space-y-3">
+                                {confirmationDetails.history.map((event) => (
+                                  <div
+                                    key={event.id}
+                                    className="rounded-xl border bg-white p-4"
+                                  >
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                      <div>
+                                        <p className="font-semibold text-gray-900">
+                                          {event.eventType
+                                            .replace(/_/g, ' ')
+                                            .toLowerCase()
+                                            .replace(/\b\w/g, (character) =>
+                                              character.toUpperCase(),
+                                            )}
+                                        </p>
+
+                                        <p className="mt-1 text-xs text-gray-500">
+                                          {formatDate(event.createdAt)}
+                                        </p>
+                                      </div>
+
+                                      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+                                        {event.newStatus || '—'}
+                                      </span>
+                                    </div>
+
+                                    <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                                      <div>
+                                        <p className="text-xs text-gray-500">
+                                          Previous Status
+                                        </p>
+                                        <p className="font-medium text-gray-800">
+                                          {event.previousStatus || '—'}
+                                        </p>
+                                      </div>
+
+                                      <div>
+                                        <p className="text-xs text-gray-500">
+                                          New Status
+                                        </p>
+                                        <p className="font-medium text-gray-800">
+                                          {event.newStatus || '—'}
+                                        </p>
+                                      </div>
+
+                                      <div>
+                                        <p className="text-xs text-gray-500">
+                                          Customer Response
+                                        </p>
+                                        <p className="font-medium text-gray-800">
+                                          {event.responseText || '—'}
+                                        </p>
+                                      </div>
+
+                                      <div>
+                                        <p className="text-xs text-gray-500">
+                                          Performed By (User ID)
+                                        </p>
+                                        <p className="font-medium text-gray-800">
+                                          {event.performedBy ?? 'System / Customer'}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {event.remarks && (
+                                      <div className="mt-3 rounded-lg bg-amber-50 p-3">
+                                        <p className="text-xs font-semibold text-amber-800">
+                                          Remarks
+                                        </p>
+                                        <p className="mt-1 break-words text-sm text-amber-900">
+                                          {event.remarks}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-500">
+                          No confirmation record exists for this project.
+                        </p>
+                      )}
                     </div>
                   )}
               </div>
