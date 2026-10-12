@@ -97,6 +97,9 @@ export default function WhatsappAutomationPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+    const [updatingAutomationKey, setUpdatingAutomationKey] = useState('');
+  const [automationActionError, setAutomationActionError] = useState('');
+
   useEffect(() => {
     try {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -143,6 +146,79 @@ export default function WhatsappAutomationPage() {
 
   useEffect(() => { void loadData(); }, [loadData]);
 
+    const updateAutomation = async (
+    item: Automation,
+    nextEnabled: boolean,
+  ) => {
+    if (updatingAutomationKey) return;
+
+    const action = nextEnabled ? 'ENABLE' : 'DISABLE';
+
+    const confirmed = window.confirm(
+      `${action} "${item.name}"?\n\n` +
+      (
+        nextEnabled
+          ? 'This enables the individual automation setting. ' +
+            'Messages can be sent when global automations are enabled and the trigger runs.'
+          : 'This disables the individual automation setting.'
+      ),
+    );
+
+    if (!confirmed) return;
+
+    setUpdatingAutomationKey(item.automationKey);
+    setAutomationActionError('');
+
+    try {
+      if (!API_BASE_URL) {
+        throw new Error('Backend API URL is not configured.');
+      }
+
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error('Please log in again.');
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}${ROOT}/setting`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            automationKey: item.automationKey,
+            isEnabled: nextEnabled,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+
+        const message = Array.isArray(result?.message)
+          ? result.message.join(', ')
+          : typeof result?.message === 'string'
+            ? result.message
+            : `Unable to update automation (${response.status}).`;
+
+        throw new Error(message);
+      }
+
+      await loadData();
+    } catch (err) {
+      setAutomationActionError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to update automation.',
+      );
+    } finally {
+      setUpdatingAutomationKey('');
+    }
+  };
+
   if (authorized === null) return <div className="p-6 text-gray-600">Checking access...</div>;
   if (!authorized) return <div className="rounded-xl border bg-white p-6 text-red-700">Only the OWNER can access WhatsApp Automation Management.</div>;
 
@@ -160,7 +236,9 @@ export default function WhatsappAutomationPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">WhatsApp Automation Management</h1>
-          <p className="mt-1 text-sm text-gray-500">OWNER dashboard · Live records · Read-only monitoring</p>
+          <p className="mt-1 text-sm text-gray-500">
+  OWNER dashboard · Live records · Automation controls
+</p>
         </div>
         <button type="button" onClick={() => void loadData()} disabled={loading}
           className="rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
@@ -169,6 +247,12 @@ export default function WhatsappAutomationPage() {
       </div>
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+
+      {automationActionError && (
+  <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+    Automation update failed: {automationActionError}
+  </div>
+)}
 
       <div className="rounded-2xl border bg-white p-5 shadow-sm">
         <h2 className="mb-4 font-semibold text-gray-900">System configuration</h2>
@@ -185,7 +269,15 @@ export default function WhatsappAutomationPage() {
             </div>
           ))}
         </div>
-        <p className="mt-4 text-xs text-gray-500">Configuration is informational. No controls on this page send messages or change automation settings.</p>
+        <p className="mt-4 text-xs text-gray-500">
+  The global automation setting is controlled through the backend environment.
+  Individual automation switches can be managed below.
+  {overview && !overview.configuration.globalAutomationsEnabled && (
+    <span className="ml-1 font-semibold text-amber-700">
+      Global automations are currently disabled.
+    </span>
+  )}
+</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -222,6 +314,35 @@ export default function WhatsappAutomationPage() {
                 <p>Template: <span className="break-all">{item.templateName || 'Not configured'}</span> ({item.templateLanguage})</p>
                 <p>Updated: {formatDate(item.updatedAt)}</p>
               </div>
+
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+  <span
+    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+      item.isEnabled
+        ? 'bg-emerald-50 text-emerald-700'
+        : 'bg-gray-100 text-gray-600'
+    }`}
+  >
+    Individual setting: {item.isEnabled ? 'ON' : 'OFF'}
+  </span>
+
+  <button
+    type="button"
+    disabled={Boolean(updatingAutomationKey) || loading}
+    onClick={() => void updateAutomation(item, !item.isEnabled)}
+    className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+      item.isEnabled
+        ? 'bg-red-600 hover:bg-red-700'
+        : 'bg-emerald-600 hover:bg-emerald-700'
+    }`}
+  >
+    {updatingAutomationKey === item.automationKey
+      ? 'Updating...'
+      : item.isEnabled
+        ? 'Disable automation'
+        : 'Enable automation'}
+  </button>
+</div>
             </div>
           ))}
           {overview && overview.automations.length === 0 && <p className="text-sm text-gray-500">No automation definitions found.</p>}
