@@ -646,6 +646,35 @@ async executeAutomation(
     };
   }
 
+    /*
+   * Controlled WhatsApp automation testing.
+   * When the allowlist is configured, only the
+   * listed phone numbers can receive messages.
+   *
+   * In production, the allowlist is mandatory
+   * while the rollout safety lock is enabled.
+   */
+  if (
+    process.env.WHATSAPP_AUTOMATION_ROLLOUT_LOCK !==
+    'RELEASED'
+  ) {
+    const allowedPhones = (
+      process.env.WHATSAPP_AUTOMATION_ALLOWED_PHONES || ''
+    )
+      .split(',')
+      .map((phone) => this.normalizePhone(phone.trim()))
+      .filter(Boolean);
+
+    if (
+      !allowedPhones.includes(recipientPhone)
+    ) {
+      return {
+        sent: false,
+        reason: 'RECIPIENT_NOT_ALLOWED_FOR_ROLLOUT',
+      };
+    }
+  }
+
   const deduplicationKey = [
     automation.automationKey,
     input.referenceType,
