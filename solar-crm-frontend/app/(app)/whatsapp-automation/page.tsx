@@ -80,6 +80,29 @@ type AutomationAuditResponse = {
   totalPages: number;
 };
 
+type CustomerConfirmation = {
+  id: number;
+  projectId: number;
+  status: 'PENDING' | 'CONFIRMED' | 'CORRECTION_REQUESTED';
+  customerName: string | null;
+  customerPhone: string | null;
+  kNumber: string | null;
+  requestedAt: string | null;
+  respondedAt: string | null;
+  responseText: string | null;
+  resendAttemptNumber: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type CustomerConfirmationResponse = {
+  data: CustomerConfirmation[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
 const statusOptions = ['PENDING', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'RECEIVED', 'SKIPPED'];
 
 function formatDate(value: string | null) {
@@ -101,6 +124,165 @@ function statusClass(status: string) {
 
 export default function WhatsappAutomationPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
+  const [activeTab, setActiveTab] = useState<
+  'overview' | 'confirmations' | 'messages' | 'audit'
+>('overview');
+
+const [confirmations, setConfirmations] = useState<CustomerConfirmation[]>([]);
+const [confirmationTotal, setConfirmationTotal] = useState(0);
+const [confirmationTotalPages, setConfirmationTotalPages] = useState(0);
+const [confirmationPage, setConfirmationPage] = useState(1);
+
+const [confirmationStatus, setConfirmationStatus] = useState('');
+const [confirmationSearchInput, setConfirmationSearchInput] = useState('');
+const [confirmationSearch, setConfirmationSearch] = useState('');
+
+const [confirmationLoading, setConfirmationLoading] = useState(false);
+const [confirmationError, setConfirmationError] = useState('');
+
+const [selectedConfirmationProjectId, setSelectedConfirmationProjectId] =
+  useState<number | null>(null);
+
+const [confirmationDetails, setConfirmationDetails] =
+  useState<Record<string, unknown> | null>(null);
+
+const [confirmationDetailsLoading, setConfirmationDetailsLoading] =
+  useState(false);
+
+const [confirmationDetailsError, setConfirmationDetailsError] =
+  useState('');
+
+  const loadConfirmationDetails = async (projectId: number) => {
+  setSelectedConfirmationProjectId(projectId);
+  setConfirmationDetails(null);
+  setConfirmationDetailsError('');
+  setConfirmationDetailsLoading(true);
+
+  try {
+    if (!API_BASE_URL) {
+      throw new Error('Backend API URL is not configured.');
+    }
+
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      throw new Error('Please log in again.');
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/project/${projectId}/customer-confirmation`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: 'no-store',
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        response.status === 403
+          ? 'OWNER permission is required.'
+          : `Unable to load confirmation details (HTTP ${response.status}).`,
+      );
+    }
+
+    const result = await response.json();
+
+    setConfirmationDetails(result);
+  } catch (error) {
+    setConfirmationDetailsError(
+      error instanceof Error
+        ? error.message
+        : 'Unable to load confirmation details.',
+    );
+  } finally {
+    setConfirmationDetailsLoading(false);
+  }
+};
+
+const loadCustomerConfirmations = async (
+  page = 1,
+  status = '',
+  search = '',
+) => {
+  setConfirmationLoading(true);
+  setConfirmationError('');
+
+  try {
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      throw new Error('Login session not found.');
+    }
+
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: '20',
+    });
+
+    if (status) {
+      params.set('status', status);
+    }
+
+    if (search.trim()) {
+      params.set('search', search.trim());
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/project/customer-confirmations?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: 'no-store',
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to load customer confirmations (HTTP ${response.status}).`,
+      );
+    }
+
+    const result: CustomerConfirmationResponse = await response.json();
+
+    setConfirmations(result.data ?? []);
+    setConfirmationTotal(result.total ?? 0);
+    setConfirmationTotalPages(result.totalPages ?? 0);
+    setConfirmationPage(result.page ?? page);
+  } catch (error) {
+    setConfirmationError(
+      error instanceof Error
+        ? error.message
+        : 'Unable to load customer confirmations.',
+    );
+    setConfirmations([]);
+  } finally {
+    setConfirmationLoading(false);
+  }
+};
+
+useEffect(() => {
+  if (authorized !== true || activeTab !== 'confirmations') {
+    return;
+  }
+
+  void loadCustomerConfirmations(
+    confirmationPage,
+    confirmationStatus,
+    confirmationSearch,
+  );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [
+  authorized,
+  activeTab,
+  confirmationPage,
+  confirmationStatus,
+  confirmationSearch,
+]);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [total, setTotal] = useState(0);
@@ -335,6 +517,30 @@ useEffect(() => {
         </button>
       </div>
 
+            <div className="flex flex-wrap gap-2 rounded-2xl border bg-white p-2 shadow-sm">
+        {(
+          [
+            { key: 'overview', label: 'Overview & Automations' },
+            { key: 'confirmations', label: 'Customer Confirmations' },
+            { key: 'messages', label: 'Message History' },
+            { key: 'audit', label: 'Automation Audit' },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+              activeTab === tab.key
+                ? 'bg-gray-900 text-white shadow-sm'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
 
       {automationActionError && (
@@ -342,6 +548,9 @@ useEffect(() => {
     Automation update failed: {automationActionError}
   </div>
 )}
+
+            {activeTab === 'overview' && (
+        <>
 
       <div className="rounded-2xl border bg-white p-5 shadow-sm">
         <h2 className="mb-4 font-semibold text-gray-900">System configuration</h2>
@@ -438,6 +647,10 @@ useEffect(() => {
         </div>
       </section>
 
+              </>
+      )}
+
+      {activeTab === 'audit' && (
       <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
   <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
     <div>
@@ -594,6 +807,311 @@ useEffect(() => {
     </div>
   </div>
 </section>
+      )}
+
+            {activeTab === 'confirmations' && (
+        <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
+            <div>
+              <h2 className="font-semibold text-gray-900">
+                Customer Project Confirmations
+              </h2>
+              <p className="mt-1 text-xs text-gray-500">
+                {confirmationTotal} matching records · Customer responses · Project verification
+              </p>
+            </div>
+
+            <button
+              type="button"
+              disabled={confirmationLoading}
+              onClick={() =>
+                void loadCustomerConfirmations(
+                  confirmationPage,
+                  confirmationStatus,
+                  confirmationSearch,
+                )
+              }
+              className="rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              {confirmationLoading ? 'Loading...' : 'Refresh'}
+            </button>
+          </div>
+
+          <form
+            className="grid gap-3 border-b p-4 sm:grid-cols-2 lg:grid-cols-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setConfirmationPage(1);
+              setConfirmationSearch(confirmationSearchInput.trim());
+            }}
+          >
+            <input
+              value={confirmationSearchInput}
+              onChange={(event) =>
+                setConfirmationSearchInput(event.target.value)
+              }
+              placeholder="Project ID, customer, phone or K-Number"
+              className={`${selectClass} lg:col-span-2`}
+            />
+
+            <select
+              value={confirmationStatus}
+              onChange={(event) => {
+                setConfirmationStatus(event.target.value);
+                setConfirmationPage(1);
+              }}
+              className={selectClass}
+            >
+              <option value="">All statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="CONFIRMED">Confirmed</option>
+              <option value="CORRECTION_REQUESTED">
+                Correction Requested
+              </option>
+            </select>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="submit"
+                className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white"
+              >
+                Search
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmationSearchInput('');
+                  setConfirmationSearch('');
+                  setConfirmationStatus('');
+                  setConfirmationPage(1);
+                }}
+                className="rounded-xl border px-4 py-2 text-sm font-semibold"
+              >
+                Clear
+              </button>
+            </div>
+          </form>
+
+          {confirmationError && (
+            <div className="m-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {confirmationError}
+            </div>
+          )}
+
+                    <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-100 text-left text-sm">
+              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                <tr>
+                  <th className="px-4 py-3">Project</th>
+                  <th className="px-4 py-3">Customer</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Requested (IST)</th>
+                  <th className="px-4 py-3">Responded (IST)</th>
+                  <th className="px-4 py-3">Response</th>
+                  <th className="px-4 py-3">Attempts</th>
+                  <th className="px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-gray-100">
+                {confirmations.map((item) => (
+                  <tr
+                    key={item.id}
+                    className="align-top hover:bg-gray-50"
+                  >
+                    <td className="px-4 py-4">
+                      <a
+                        href={`/project/${item.projectId}`}
+                        className="font-semibold text-blue-700 hover:underline"
+                      >
+                        #{item.projectId}
+                      </a>
+
+                      <div className="mt-1 text-xs text-gray-500">
+                        K-Number: {item.kNumber || '—'}
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-4">
+                      <div className="font-semibold text-gray-900">
+                        {item.customerName || '—'}
+                      </div>
+                      <div className="mt-1 text-xs text-gray-500">
+                        {item.customerPhone || '—'}
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-4">
+                      <span
+                        className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+                          item.status === 'CONFIRMED'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : item.status === 'CORRECTION_REQUESTED'
+                              ? 'bg-red-50 text-red-700'
+                              : 'bg-amber-50 text-amber-700'
+                        }`}
+                      >
+                        {item.status === 'CONFIRMED'
+                          ? 'Confirmed'
+                          : item.status === 'CORRECTION_REQUESTED'
+                            ? 'Correction Requested'
+                            : item.requestedAt
+                              ? 'Awaiting Response'
+                              : 'Not Yet Sent'}
+                      </span>
+                    </td>
+
+                    <td className="whitespace-nowrap px-4 py-4 text-gray-600">
+                      {formatDate(item.requestedAt)}
+                    </td>
+
+                    <td className="whitespace-nowrap px-4 py-4 text-gray-600">
+                      {formatDate(item.respondedAt)}
+                    </td>
+
+                    <td className="px-4 py-4 text-gray-700">
+                      {item.responseText || '—'}
+                    </td>
+
+                    <td className="px-4 py-4 text-gray-700">
+                      {item.resendAttemptNumber}
+                    </td>
+
+                                        <td className="px-4 py-4">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void loadConfirmationDetails(item.projectId)
+                        }
+                        disabled={confirmationDetailsLoading}
+                        className="whitespace-nowrap rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                      >
+                        {confirmationDetailsLoading &&
+                        selectedConfirmationProjectId === item.projectId
+                          ? 'Loading...'
+                          : 'View Details'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+                {!confirmationLoading &&
+                  confirmations.length === 0 &&
+                  !confirmationError && (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="p-10 text-center text-gray-500"
+                      >
+                        No customer confirmations found.
+                      </td>
+                    </tr>
+                  )}
+
+                {confirmationLoading && (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="p-10 text-center text-gray-500"
+                    >
+                      Loading customer confirmations...
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+                    {selectedConfirmationProjectId !== null && (
+            <div className="border-t bg-gray-50 p-4 sm:p-5">
+              <div className="rounded-xl border bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">
+                      Confirmation Details — Project #{selectedConfirmationProjectId}
+                    </h3>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Read-only project confirmation information
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedConfirmationProjectId(null);
+                      setConfirmationDetails(null);
+                      setConfirmationDetailsError('');
+                    }}
+                    className="rounded-lg border px-3 py-2 text-sm font-semibold text-gray-700"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                {confirmationDetailsLoading && (
+                  <p className="mt-4 text-sm text-gray-500">
+                    Loading confirmation details...
+                  </p>
+                )}
+
+                {confirmationDetailsError && (
+                  <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    {confirmationDetailsError}
+                  </div>
+                )}
+
+                {!confirmationDetailsLoading &&
+                  !confirmationDetailsError &&
+                  confirmationDetails && (
+                    <div className="mt-4">
+                      <pre className="max-h-96 overflow-auto rounded-lg bg-gray-900 p-4 text-xs text-gray-100">
+                        {JSON.stringify(confirmationDetails, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+              </div>
+            </div>
+          )}
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t p-4">
+            <p className="text-sm text-gray-500">
+              Page {confirmationPage} of {Math.max(1, confirmationTotalPages)}
+              {' · '}
+              {confirmationTotal} total records
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={confirmationLoading || confirmationPage <= 1}
+                onClick={() =>
+                  setConfirmationPage((current) => Math.max(1, current - 1))
+                }
+                className="rounded-lg border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+
+              <button
+                type="button"
+                disabled={
+                  confirmationLoading ||
+                  confirmationPage >= confirmationTotalPages
+                }
+                onClick={() =>
+                  setConfirmationPage((current) => current + 1)
+                }
+                className="rounded-lg border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+            {activeTab === 'messages' && (
 
       <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
         <div className="border-b p-5">
@@ -649,8 +1167,9 @@ useEffect(() => {
             <button type="button" disabled={loading || page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-lg border px-4 py-2 text-sm disabled:opacity-40">Previous</button>
             <button type="button" disabled={loading || page >= totalPages} onClick={() => setPage((p) => p + 1)} className="rounded-lg border px-4 py-2 text-sm disabled:opacity-40">Next</button>
           </div>
-        </div>
-      </section>
-    </div>
-  );
+              </div>
+    </section>
+      )}
+  </div>
+);
 }
