@@ -6394,6 +6394,22 @@ getProjectEditHistory(
   return this.projectService.getProjectEditHistory(id);
 }
 
+@Roles('OWNER')
+@Get('customer-confirmations')
+listCustomerConfirmations(
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+  @Query('status') status?: string,
+  @Query('search') search?: string,
+) {
+  return this.projectService.listCustomerConfirmations(
+    page ? Number(page) : 1,
+    limit ? Number(limit) : 20,
+    status,
+    search,
+  );
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,
@@ -6470,21 +6486,7 @@ update(
   );
 }
 
-@Roles('OWNER')
-@Get('customer-confirmations')
-listCustomerConfirmations(
-  @Query('page') page?: string,
-  @Query('limit') limit?: string,
-  @Query('status') status?: string,
-  @Query('search') search?: string,
-) {
-  return this.projectService.listCustomerConfirmations(
-    page ? Number(page) : 1,
-    limit ? Number(limit) : 20,
-    status,
-    search,
-  );
-}
+
 
 @Roles('OWNER')
 @Get(':id/customer-confirmation')
