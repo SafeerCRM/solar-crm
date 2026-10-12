@@ -1149,6 +1149,161 @@ private async callConfiguredMessagesApi(
     }
   }
 
+  async sendProductionTemplateTest(
+  to: string,
+) {
+  // This method is intentionally independent of
+  // WHATSAPP_SEND_MODE and automation switches.
+  const recipientPhone = this.normalizePhone(to);
+
+  if (!/^91[6-9]\d{9}$/.test(recipientPhone)) {
+    throw new BadRequestException(
+      'A valid Indian WhatsApp number is required',
+    );
+  }
+
+  // Prevent accidental use after controlled testing.
+  if (
+    process.env.WHATSAPP_PRODUCTION_TEST_ENABLED !== 'true'
+  ) {
+    throw new BadRequestException(
+      'Production WhatsApp testing is disabled',
+    );
+  }
+
+  const allowedPhone = (
+  process.env.WHATSAPP_PRODUCTION_TEST_PHONE || ''
+).replace(/\D/g, '');
+
+if (
+  !allowedPhone ||
+  recipientPhone !== allowedPhone
+) {
+  throw new BadRequestException(
+    'Recipient is not the authorized production test number',
+  );
+}
+
+return this.sendProductionTemplateTestRequest(
+  recipientPhone,
+);
+}
+
+private async sendProductionTemplateTestRequest(
+  recipientPhone: string,
+) {
+  const components = [
+    {
+      type: 'body',
+      parameters: [
+        {
+          type: 'text',
+          text: 'Test Customer',
+        },
+        {
+          type: 'text',
+          text: 'This is a controlled CRM WhatsApp production test. No project details have changed.',
+        },
+        {
+          type: 'text',
+          text: new Intl.DateTimeFormat('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric',
+          }).format(new Date()),
+        },
+      ],
+    },
+  ];
+
+  const log = this.messageRepository.create({
+    direction: WhatsappMessageDirection.OUTBOUND,
+    recipientType: WhatsappRecipientType.CUSTOMER,
+    recipientPhone,
+    recipientName: 'Production Test',
+    messageType: WhatsappMessageType.TEMPLATE,
+    templateName: 'customer_project_update',
+    templateLanguage: 'en',
+    messageBody: null,
+    templateParameters: { components },
+    metaMessageId: null,
+    status: WhatsappMessageStatus.PENDING,
+    automationKey: null,
+    referenceType: 'PRODUCTION_TEST',
+    referenceId: null,
+    deduplicationKey: null,
+    errorCode: null,
+    errorMessage: null,
+    metaPayload: null,
+    sentAt: null,
+    deliveredAt: null,
+    readAt: null,
+    failedAt: null,
+  });
+
+  await this.messageRepository.save(log);
+
+  try {
+    const result = await this.callMessagesApi({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: recipientPhone,
+      type: 'template',
+      template: {
+        name: 'customer_project_update',
+        language: { code: 'en' },
+        components,
+      },
+    });
+
+    if (!result.ok) {
+      const metaError = this.getMetaError(result.data);
+
+      log.status = WhatsappMessageStatus.FAILED;
+      log.errorCode = metaError.errorCode;
+      log.errorMessage =
+        metaError.errorMessage ||
+        `Meta API failed with status ${result.status}`;
+      log.metaPayload = result.data;
+      log.failedAt = new Date();
+
+      await this.messageRepository.save(log);
+
+      throw new BadRequestException(log.errorMessage);
+    }
+
+    log.status = WhatsappMessageStatus.SENT;
+    log.metaMessageId =
+      result.data?.messages?.[0]?.id || null;
+    log.metaPayload = result.data;
+    log.sentAt = new Date();
+
+    await this.messageRepository.save(log);
+
+    return {
+      success: true,
+      templateName: 'customer_project_update',
+      recipientPhone,
+      metaMessageId: log.metaMessageId,
+      logId: log.id,
+    };
+  } catch (error) {
+    if (log.status !== WhatsappMessageStatus.FAILED) {
+      log.status = WhatsappMessageStatus.FAILED;
+      log.errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Unknown production test error';
+      log.failedAt = new Date();
+
+      await this.messageRepository.save(log);
+    }
+
+    throw error;
+  }
+}
+
 
 async sendTestTemplateMessage(to: string) {
   const recipientPhone = this.normalizePhone(to);

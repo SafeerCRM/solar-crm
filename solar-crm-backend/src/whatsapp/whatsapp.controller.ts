@@ -30,6 +30,28 @@ export class WhatsappController {
     private readonly whatsappService: WhatsappService,
   ) {}
 
+    @Post('automation-management/production-test')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  @HttpCode(200)
+  async sendProductionTemplateTest(
+    @Body() body: { to?: string },
+  ) {
+    if (
+      !body ||
+      typeof body.to !== 'string' ||
+      !body.to.trim()
+    ) {
+      throw new BadRequestException(
+        'Recipient WhatsApp number is required',
+      );
+    }
+
+    return this.whatsappService.sendProductionTemplateTest(
+      body.to.trim(),
+    );
+  }
+
     @Patch('automation-management/setting')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
