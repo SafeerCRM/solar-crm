@@ -2892,7 +2892,7 @@ private async sendCustomerProjectConfirmationWhatsapp(
       `Project Type: ${financial.projectType || 'Not provided'}`,
       `Final Cost: ${financial.finalCost ?? 'Not provided'}`,
       `Installation Address: ${customer?.address || 'Not provided'}`,
-    ].join('\n');
+        ].join(' | ');
 
     const attemptNumber = isResend
       ? Number(confirmation.resendAttemptNumber) + 1
