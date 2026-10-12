@@ -6471,6 +6471,18 @@ update(
 }
 
 @Roles('OWNER')
+@Post(':id/customer-confirmation/retry-failed-initial')
+retryFailedInitialCustomerConfirmation(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.retryFailedInitialCustomerConfirmation(
+    id,
+    user,
+  );
+}
+
+@Roles('OWNER')
 @Post(':id/customer-confirmation/resend')
 resendCustomerConfirmation(
   @Param('id') id: string,

@@ -37,6 +37,10 @@ import { CalculatorService } from '../calculator/calculator.service';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import {
+  WhatsappMessage,
+  WhatsappMessageStatus,
+} from '../whatsapp/whatsapp-message.entity';
+import {
   ProjectMaterialMaster,
   ProjectMaterialMarginType,
 } from './project-material-master.entity';
@@ -2801,6 +2805,7 @@ private buildCustomerConfirmationSnapshot(
 private async sendCustomerProjectConfirmationWhatsapp(
   project: Project,
   resendReservationId?: string,
+  initialRetryReservationId?: string,
 ): Promise<boolean> {
   try {
         // Never send the generic TEST template as a real
@@ -2822,8 +2827,25 @@ private async sendCustomerProjectConfirmationWhatsapp(
     }
 
     const isResend = Boolean(resendReservationId);
+    const isInitialRetry = Boolean(initialRetryReservationId);
 
-    if (isResend) {
+    if (isResend && isInitialRetry) {
+      return false;
+    }
+
+    if (isInitialRetry) {
+      if (
+        confirmation.status !==
+          ProjectCustomerConfirmationStatus.PENDING ||
+        confirmation.requestMessageId ||
+        confirmation.requestedAt ||
+        confirmation.resendReservationId !== initialRetryReservationId ||
+        !confirmation.resendReservedAt ||
+        Number(confirmation.resendAttemptNumber) < 1
+      ) {
+        return false;
+      }
+    } else if (isResend) {
       if (
         confirmation.status !==
           ProjectCustomerConfirmationStatus.CORRECTION_REQUESTED ||
@@ -2844,7 +2866,7 @@ private async sendCustomerProjectConfirmationWhatsapp(
       }
     }
 
-    const snapshot = confirmation.projectSnapshot;
+  const snapshot = confirmation.projectSnapshot;
 
     if (!snapshot) {
       console.warn(
@@ -2853,23 +2875,23 @@ private async sendCustomerProjectConfirmationWhatsapp(
       return false;
     }
 
-    const customer = snapshot.customer as
+  const customer = snapshot.customer as
       | Record<string, unknown>
       | undefined;
 
-    const solar = snapshot.solarSystem as
+  const solar = snapshot.solarSystem as
       | Record<string, unknown>
       | undefined;
 
-    const financial = snapshot.financial as
+  const financial = snapshot.financial as
       | Record<string, unknown>
       | undefined;
 
-    const phone = String(
+  const phone = String(
       confirmation.customerPhone || '',
     ).trim();
 
-    const name = String(
+  const name = String(
       customer?.name || project.customerName || '',
     ).trim();
 
@@ -2894,9 +2916,11 @@ private async sendCustomerProjectConfirmationWhatsapp(
       `Installation Address: ${customer?.address || 'Not provided'}`,
         ].join(' | ');
 
-    const attemptNumber = isResend
+    const attemptNumber = isInitialRetry
       ? Number(confirmation.resendAttemptNumber) + 1
-      : 1;
+      : isResend
+        ? Number(confirmation.resendAttemptNumber) + 1
+        : 1;
 
     if (
       !Number.isInteger(attemptNumber) ||
@@ -2930,7 +2954,7 @@ private async sendCustomerProjectConfirmationWhatsapp(
         ],
       });
 
-        if (!result.sent) {
+    if (!result.sent) {
       console.log(
         `[Customer Confirmation] Project ${project.id}: ${result.reason}`,
       );
@@ -2960,7 +2984,7 @@ private async sendCustomerProjectConfirmationWhatsapp(
 
         const requestedAt = new Date();
 
-        if (isResend) {
+        if (isResend || isInitialRetry) {
           const updateResult = await confirmationRepository
             .createQueryBuilder()
             .update(ProjectCustomerConfirmation)
@@ -2978,15 +3002,29 @@ private async sendCustomerProjectConfirmationWhatsapp(
               confirmationId: confirmation.id,
             })
             .andWhere('"status" = :status', {
-              status:
-                ProjectCustomerConfirmationStatus.CORRECTION_REQUESTED,
+              status: isInitialRetry
+                ? ProjectCustomerConfirmationStatus.PENDING
+                : ProjectCustomerConfirmationStatus.CORRECTION_REQUESTED,
             })
             .andWhere('"resendReservationId" = :reservationId', {
-              reservationId: resendReservationId,
+              reservationId: isInitialRetry
+                ? initialRetryReservationId
+                : resendReservationId,
             })
             .andWhere('"resendAttemptNumber" = :attemptNumber', {
               attemptNumber: Number(confirmation.resendAttemptNumber),
             })
+            .andWhere('"resendReservedAt" IS NOT NULL')
+            .andWhere(
+              isInitialRetry
+                ? '"requestMessageId" IS NULL'
+                : '1 = 1',
+            )
+            .andWhere(
+              isInitialRetry
+                ? '"requestedAt" IS NULL'
+                : '1 = 1',
+            )
             .execute();
 
           if (updateResult.affected !== 1) {
@@ -3001,8 +3039,9 @@ private async sendCustomerProjectConfirmationWhatsapp(
               confirmationId: confirmation.id,
               eventType:
                 ProjectCustomerConfirmationEventType.REQUEST_SENT,
-              previousStatus:
-                ProjectCustomerConfirmationStatus.CORRECTION_REQUESTED,
+              previousStatus: isInitialRetry
+                ? ProjectCustomerConfirmationStatus.PENDING
+                : ProjectCustomerConfirmationStatus.CORRECTION_REQUESTED,
               newStatus:
                 ProjectCustomerConfirmationStatus.PENDING,
               requestMessageId: String(metaMessageId),
@@ -3011,8 +3050,9 @@ private async sendCustomerProjectConfirmationWhatsapp(
               customerPhone: confirmation.customerPhone,
               projectSnapshot: confirmation.projectSnapshot,
               performedBy: null,
-              remarks:
-                `CORRECTION_RESEND:ATTEMPT_${confirmation.resendAttemptNumber}`,
+              remarks: isInitialRetry
+                ? `FAILED_INITIAL_SEND_RETRY:ATTEMPT_${attemptNumber}`
+                : `CORRECTION_RESEND:ATTEMPT_${confirmation.resendAttemptNumber}`,
             }),
           );
 
@@ -3034,6 +3074,7 @@ private async sendCustomerProjectConfirmationWhatsapp(
           })
           .andWhere('"requestMessageId" IS NULL')
           .andWhere('"requestedAt" IS NULL')
+          .andWhere('"resendReservationId" IS NULL')
           .execute();
 
         if (updateResult.affected !== 1) {
@@ -6893,6 +6934,314 @@ if (
 }
 
 return updatedProject;
+}
+
+async retryFailedInitialCustomerConfirmation(
+  projectId: number,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (!roles.includes('OWNER')) {
+    throw new ForbiddenException(
+      'Only Owner can retry failed customer confirmation',
+    );
+  }
+
+  if (!Number.isInteger(projectId) || projectId <= 0) {
+    throw new BadRequestException('Invalid project ID');
+  }
+
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+    if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  if (
+    project.ownerApprovalStatus !==
+    ProjectApprovalStatus.APPROVED
+  ) {
+    throw new BadRequestException(
+      'Customer confirmation retry requires an Owner-approved project',
+    );
+  }
+
+  const confirmation =
+    await this.projectCustomerConfirmationRepository.findOne({
+      where: { projectId },
+    });
+
+  if (!confirmation) {
+    throw new NotFoundException(
+      'Customer confirmation record not found',
+    );
+  }
+
+  if (
+    confirmation.status !==
+      ProjectCustomerConfirmationStatus.PENDING ||
+    confirmation.requestMessageId ||
+    confirmation.requestedAt ||
+    confirmation.resendReservationId
+  ) {
+    throw new BadRequestException(
+      'Confirmation is not eligible for initial retry',
+    );
+  }
+
+  const originalDeduplicationKey =
+    `CUSTOMER_PROJECT_CONFIRMATION:PROJECT:${projectId}:` +
+    `confirmation-${confirmation.id}-attempt-1`;
+
+  const originalMessage =
+    await this.projectCustomerConfirmationRepository.manager
+      .getRepository(WhatsappMessage)
+      .findOne({
+        where: {
+          automationKey: 'CUSTOMER_PROJECT_CONFIRMATION',
+          referenceType: 'PROJECT',
+          referenceId: String(projectId),
+          deduplicationKey: originalDeduplicationKey,
+        },
+      });
+
+  if (
+    !originalMessage ||
+    originalMessage.status !== WhatsappMessageStatus.FAILED ||
+    originalMessage.metaMessageId
+  ) {
+    throw new BadRequestException(
+      'Original WhatsApp message is not verified as failed',
+    );
+  }
+
+  const acceptedMessageCount =
+    await this.projectCustomerConfirmationRepository.manager
+      .getRepository(WhatsappMessage)
+      .createQueryBuilder('message')
+      .where('message.automationKey = :automationKey', {
+        automationKey: 'CUSTOMER_PROJECT_CONFIRMATION',
+      })
+      .andWhere('message.referenceType = :referenceType', {
+        referenceType: 'PROJECT',
+      })
+      .andWhere('message.referenceId = :referenceId', {
+        referenceId: String(projectId),
+      })
+      .andWhere('message.direction = :direction', {
+        direction: 'OUTBOUND',
+      })
+      .andWhere('message.metaMessageId IS NOT NULL')
+      .getCount();
+
+  if (acceptedMessageCount > 0) {
+    throw new BadRequestException(
+      'A WhatsApp confirmation was already accepted by Meta. Manual reconciliation is required.',
+    );
+  }
+
+  if (
+    process.env.WHATSAPP_SEND_MODE !== 'PRODUCTION' ||
+    process.env.WHATSAPP_AUTOMATIONS_ENABLED !== 'true'
+  ) {
+    throw new BadRequestException(
+      'Customer confirmation WhatsApp sending is not enabled',
+    );
+  }
+
+  if (
+    process.env.WHATSAPP_AUTOMATION_ROLLOUT_LOCK !== 'LOCKED'
+  ) {
+    throw new BadRequestException(
+      'Failed initial confirmation retry is restricted to controlled rollout',
+    );
+  }
+
+  const allowedPhones = String(
+    process.env.WHATSAPP_AUTOMATION_ALLOWED_PHONES || '',
+  )
+    .split(',')
+    .map((phone) => phone.replace(/\D/g, ''))
+    .filter(Boolean);
+
+  const customerPhone = String(
+    confirmation.customerPhone || '',
+  ).replace(/\D/g, '');
+
+  if (
+    !customerPhone ||
+    !allowedPhones.includes(customerPhone)
+  ) {
+    throw new ForbiddenException(
+      'Customer phone is not permitted for controlled retry',
+    );
+  }
+
+  const snapshot = confirmation.projectSnapshot;
+
+  const snapshotCustomer = snapshot?.customer as
+    | Record<string, unknown>
+    | undefined;
+
+  const snapshotSolar = snapshot?.solarSystem as
+    | Record<string, unknown>
+    | undefined;
+
+  const snapshotFinancial = snapshot?.financial as
+    | Record<string, unknown>
+    | undefined;
+
+  const recipientName = String(
+    snapshotCustomer?.name || project.customerName || '',
+  ).trim();
+
+  if (
+    !snapshot ||
+    !snapshotSolar ||
+    !snapshotFinancial ||
+    !recipientName
+  ) {
+    throw new BadRequestException(
+      'Customer confirmation snapshot is incomplete. Retry not reserved.',
+    );
+  }
+
+  const customerConfirmationAutomation =
+    await this.whatsappService.getAutomation(
+      'CUSTOMER_PROJECT_CONFIRMATION',
+    );
+
+  if (
+    !customerConfirmationAutomation ||
+    !customerConfirmationAutomation.isEnabled ||
+    !customerConfirmationAutomation.templateName
+  ) {
+    throw new BadRequestException(
+      'Customer confirmation automation is disabled or its template is not configured. Retry not reserved.',
+    );
+  }
+
+  const reservationId = randomUUID();
+
+  const reservedConfirmation =
+    await this.projectCustomerConfirmationRepository.manager.transaction(
+      async (manager) => {
+        const confirmationRepo =
+          manager.getRepository(ProjectCustomerConfirmation);
+
+        const messageRepo =
+          manager.getRepository(WhatsappMessage);
+
+        const acceptedMessageCount =
+          await messageRepo
+            .createQueryBuilder('message')
+            .where('message.automationKey = :automationKey', {
+              automationKey: 'CUSTOMER_PROJECT_CONFIRMATION',
+            })
+            .andWhere('message.referenceType = :referenceType', {
+              referenceType: 'PROJECT',
+            })
+            .andWhere('message.referenceId = :referenceId', {
+              referenceId: String(projectId),
+            })
+            .andWhere('message.direction = :direction', {
+              direction: 'OUTBOUND',
+            })
+            .andWhere('message.metaMessageId IS NOT NULL')
+            .getCount();
+
+        if (acceptedMessageCount > 0) {
+          throw new BadRequestException(
+            'A WhatsApp confirmation was already accepted by Meta. Manual reconciliation is required.',
+          );
+        }
+
+        const failedOriginal = await messageRepo.findOne({
+          where: {
+            id: originalMessage.id,
+            automationKey: 'CUSTOMER_PROJECT_CONFIRMATION',
+            referenceType: 'PROJECT',
+            referenceId: String(projectId),
+            deduplicationKey: originalDeduplicationKey,
+            status: WhatsappMessageStatus.FAILED,
+          },
+        });
+
+        if (
+          !failedOriginal ||
+          failedOriginal.metaMessageId
+        ) {
+          throw new BadRequestException(
+            'Original WhatsApp failure changed. Retry cancelled.',
+          );
+        }
+
+        const reservationResult = await confirmationRepo
+          .createQueryBuilder()
+          .update(ProjectCustomerConfirmation)
+          .set({
+            resendReservationId: reservationId,
+            resendReservedAt: new Date(),
+            resendAttemptNumber: () =>
+              '"resendAttemptNumber" + 1',
+          })
+          .where('"id" = :confirmationId', {
+            confirmationId: confirmation.id,
+          })
+          .andWhere('"status" = :status', {
+            status: ProjectCustomerConfirmationStatus.PENDING,
+          })
+          .andWhere('"requestMessageId" IS NULL')
+          .andWhere('"requestedAt" IS NULL')
+          .andWhere('"resendReservationId" IS NULL')
+          .andWhere('"resendAttemptNumber" = 0')
+          .execute();
+
+        if (reservationResult.affected !== 1) {
+          throw new BadRequestException(
+            'Initial retry is already reserved or confirmation state changed',
+          );
+        }
+
+        const reserved = await confirmationRepo.findOne({
+          where: {
+            id: confirmation.id,
+            resendReservationId: reservationId,
+          },
+        });
+
+        if (!reserved) {
+          throw new Error(
+            'Initial retry reservation could not be verified',
+          );
+        }
+
+        return reserved;
+      },
+    );
+
+  const sent =
+    await this.sendCustomerProjectConfirmationWhatsapp(
+      project,
+      undefined,
+      reservationId,
+    );
+
+  return {
+    sent,
+    projectId,
+    confirmationId: reservedConfirmation.id,
+    failedMessageId: originalMessage.id,
+    attemptNumber: Number(reservedConfirmation.resendAttemptNumber) + 1,
+    message: sent
+      ? 'Failed initial confirmation retried successfully.'
+      : 'Retry was not completed. Reservation retained for manual reconciliation.',
+  };
 }
 
 async resendCustomerConfirmation(
