@@ -6113,6 +6113,39 @@ activityMatchMode:
   };
 }
 
+async getCustomerConfirmationDetails(
+  projectId: number,
+  user: any,
+) {
+  // Reuse existing project access checks.
+  await this.findOne(projectId, user);
+
+  const confirmation =
+    await this.projectCustomerConfirmationRepository.findOne({
+      where: { projectId },
+    });
+
+  if (!confirmation) {
+    return {
+      projectId,
+      confirmation: null,
+      history: [],
+    };
+  }
+
+  const history =
+    await this.projectCustomerConfirmationHistoryRepository.find({
+      where: { projectId },
+      order: { createdAt: 'DESC' },
+    });
+
+  return {
+    projectId,
+    confirmation,
+    history,
+  };
+}
+
   async findOne(id: number, user?: any) {
     const project = await this.projectRepository.findOne({
       where: { id },

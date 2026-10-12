@@ -6471,6 +6471,18 @@ update(
 }
 
 @Roles('OWNER')
+@Get(':id/customer-confirmation')
+getCustomerConfirmationDetails(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getCustomerConfirmationDetails(
+    id,
+    user,
+  );
+}
+
+@Roles('OWNER')
 @Post(':id/customer-confirmation/retry-failed-initial')
 retryFailedInitialCustomerConfirmation(
   @Param('id', ParseIntPipe) id: number,
