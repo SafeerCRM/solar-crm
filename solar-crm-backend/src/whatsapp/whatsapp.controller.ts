@@ -30,6 +30,23 @@ export class WhatsappController {
     private readonly whatsappService: WhatsappService,
   ) {}
 
+    @Get('automation-management/rollout-check')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  checkAutomationRolloutRecipient(
+    @Query('to') to?: string,
+  ) {
+    if (!to || !to.trim()) {
+      throw new BadRequestException(
+        'Recipient phone number is required',
+      );
+    }
+
+    return this.whatsappService.checkAutomationRolloutRecipient(
+      to.trim(),
+    );
+  }
+
     @Post('automation-management/production-test')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')

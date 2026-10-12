@@ -790,6 +790,35 @@ async executeAutomation(
   };
 }
 
+  checkAutomationRolloutRecipient(to: string) {
+    const recipientPhone = this.normalizePhone(to);
+
+    const rolloutLocked =
+      process.env.WHATSAPP_AUTOMATION_ROLLOUT_LOCK !==
+      'RELEASED';
+
+    const allowedPhones = (
+      process.env.WHATSAPP_AUTOMATION_ALLOWED_PHONES || ''
+    )
+      .split(',')
+      .map((phone) => this.normalizePhone(phone.trim()))
+      .filter(Boolean);
+
+    const recipientAllowed =
+      Boolean(recipientPhone) &&
+      (!rolloutLocked ||
+        allowedPhones.includes(recipientPhone));
+
+    return {
+      recipientPhone,
+      rolloutLocked,
+      recipientAllowed,
+      globalAutomationsEnabled:
+        this.automationsEnabled,
+      sendMode: this.sendMode,
+    };
+  }
+
   private validateConfig() {
     if (!this.accessToken) {
       throw new Error(
