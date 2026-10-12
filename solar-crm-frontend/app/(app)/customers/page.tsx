@@ -211,8 +211,9 @@ const [showHidden, setShowHidden] = useState(false);
 });
 
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const limit = 20;
+const [totalPages, setTotalPages] = useState(1);
+const [totalMatchingCustomers, setTotalMatchingCustomers] = useState(0);
+const limit = 20;
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
@@ -254,8 +255,9 @@ showHidden: appliedFilters.showHidden ? 'true' : 'false',
       });
 
       setCustomers(res.data?.data || []);
-      setPage(res.data?.page || targetPage);
-      setTotalPages(res.data?.totalPages || 1);
+setPage(res.data?.page || targetPage);
+setTotalPages(res.data?.totalPages || 1);
+setTotalMatchingCustomers(Number(res.data?.total ?? 0));
     } catch (error: any) {
       console.error(error);
       alert(error?.response?.data?.message || 'Failed to load customers');
@@ -1720,11 +1722,33 @@ URL.revokeObjectURL(url);
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
-        <h2 className="text-lg font-bold text-gray-800">
-          {appliedFilters.showHidden ? 'Hidden Customers' : 'Customer List'}
-        </h2>
+  <h2 className="text-lg font-bold text-gray-800">
+    {appliedFilters.showHidden ? 'Hidden Customers' : 'Customer List'}
+  </h2>
 
-        {loading ? (
+  <div className="mt-3 flex flex-wrap items-center gap-3">
+    <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+      <p className="text-xs font-semibold text-blue-700">
+        {appliedFilters.appUsage === 'LOGGED_IN'
+          ? 'App Logged In'
+          : appliedFilters.appUsage === 'NEVER_LOGGED_IN'
+            ? 'Never Logged In'
+            : 'Matching Customers'}
+      </p>
+
+      <p className="mt-1 text-2xl font-bold text-blue-900">
+        {loading
+          ? '...'
+          : totalMatchingCustomers.toLocaleString('en-IN')}
+      </p>
+
+      <p className="text-xs text-blue-600">
+        Across all pages
+      </p>
+    </div>
+  </div>
+
+  {loading ? (
           <p className="mt-4 text-sm text-gray-500">Loading customers...</p>
         ) : customers.length === 0 ? (
           <p className="mt-4 text-sm text-gray-500">No customers found.</p>
