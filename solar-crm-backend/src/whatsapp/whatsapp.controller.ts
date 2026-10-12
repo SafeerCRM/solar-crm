@@ -75,6 +75,21 @@ export class WhatsappController {
     });
   }
 
+  @Get('automation-management/audit-history')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+async getAutomationManagementAuditHistory(
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+  @Query('automationKey') automationKey?: string,
+) {
+  return this.whatsappService.getAutomationManagementAuditHistory({
+    page,
+    limit,
+    automationKey,
+  });
+}
+
     @Get('automation-management/messages')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')

@@ -296,6 +296,54 @@ async getAutomationManagementMessages(query: {
   };
 }
 
+async getAutomationManagementAuditHistory(query: {
+  page?: string;
+  limit?: string;
+  automationKey?: string;
+}) {
+  const page = Math.max(
+    1,
+    Math.floor(Number(query.page) || 1),
+  );
+
+  const limit = Math.min(
+    100,
+    Math.max(1, Math.floor(Number(query.limit) || 20)),
+  );
+
+  const qb = this.dataSource
+    .getRepository(WhatsappAutomationAudit)
+    .createQueryBuilder('audit');
+
+  if (query.automationKey?.trim()) {
+    qb.andWhere('audit.automationKey = :automationKey', {
+      automationKey: query.automationKey.trim(),
+    });
+  }
+
+  const [records, total] = await qb
+    .orderBy('audit.createdAt', 'DESC')
+    .addOrderBy('audit.id', 'DESC')
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getManyAndCount();
+
+  return {
+    data: records.map((record) => ({
+      id: record.id,
+      automationKey: record.automationKey,
+      previousEnabled: record.previousEnabled,
+      newEnabled: record.newEnabled,
+      changedBy: record.changedBy,
+      createdAt: record.createdAt,
+    })),
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+}
+
 async getAutomationManagementOverview() {
   const automations = await this.automationRepository.find({
     order: {
