@@ -6113,6 +6113,97 @@ activityMatchMode:
   };
 }
 
+async listCustomerConfirmations(
+  pageInput: number,
+  limitInput: number,
+  status?: string,
+  search?: string,
+) {
+  const page = Number.isFinite(pageInput)
+    ? Math.max(1, Math.floor(pageInput))
+    : 1;
+
+  const limit = Number.isFinite(limitInput)
+    ? Math.min(100, Math.max(1, Math.floor(limitInput)))
+    : 20;
+
+  const qb = this.projectCustomerConfirmationRepository
+    .createQueryBuilder('confirmation')
+    .leftJoin(
+      this.projectRepository.metadata.target,
+      'project',
+      'project.id = confirmation.projectId',
+    )
+    .select([
+      'confirmation.id',
+      'confirmation.projectId',
+      'confirmation.status',
+      'confirmation.customerPhone',
+      'confirmation.requestedAt',
+      'confirmation.respondedAt',
+      'confirmation.responseText',
+      'confirmation.resendAttemptNumber',
+      'confirmation.createdAt',
+      'confirmation.updatedAt',
+    ])
+    .addSelect('project.customerName', 'customerName')
+    .addSelect('project.customerPhone', 'projectPhone')
+    .addSelect('project.electricityKNumber', 'kNumber');
+
+  if (
+    status &&
+    ['PENDING', 'CONFIRMED', 'CORRECTION_REQUESTED'].includes(status)
+  ) {
+    qb.andWhere('confirmation.status = :status', { status });
+  }
+
+  const term = search?.trim();
+
+  if (term) {
+    qb.andWhere(
+      `(
+        CAST(confirmation.projectId AS TEXT) ILIKE :search
+        OR project.customerName ILIKE :search
+        OR project.customerPhone ILIKE :search
+        OR project.electricityKNumber ILIKE :search
+      )`,
+      { search: `%${term}%` },
+    );
+  }
+
+  const total = await qb.getCount();
+
+  const rows = await qb
+    .orderBy('confirmation.updatedAt', 'DESC')
+    .addOrderBy('confirmation.id', 'DESC')
+    .offset((page - 1) * limit)
+    .limit(limit)
+    .getRawMany();
+
+  return {
+    data: rows.map((row) => ({
+      id: Number(row.confirmation_id),
+      projectId: Number(row.confirmation_projectId),
+      status: row.confirmation_status,
+      customerName: row.customerName,
+      customerPhone:
+        row.projectPhone || row.confirmation_customerPhone,
+      kNumber: row.kNumber,
+      requestedAt: row.confirmation_requestedAt,
+      respondedAt: row.confirmation_respondedAt,
+      responseText: row.confirmation_responseText,
+      resendAttemptNumber:
+        Number(row.confirmation_resendAttemptNumber) || 0,
+      createdAt: row.confirmation_createdAt,
+      updatedAt: row.confirmation_updatedAt,
+    })),
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+}
+
 async getCustomerConfirmationDetails(
   projectId: number,
   user: any,
