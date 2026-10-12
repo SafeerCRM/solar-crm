@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   Injectable,
+  NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -389,6 +391,75 @@ async getAutomationManagementOverview() {
       maxRepeatCount: automation.maxRepeatCount,
       updatedAt: automation.updatedAt,
     })),
+  };
+}
+
+async updateAutomationManagementSetting(params: {
+  automationKey: string;
+  isEnabled: boolean;
+  changedBy: number;
+}) {
+  const automationKey = String(params.automationKey || '').trim();
+
+  if (!automationKey) {
+    throw new BadRequestException('Automation key is required');
+  }
+
+  if (typeof params.isEnabled !== 'boolean') {
+    throw new BadRequestException('isEnabled must be a boolean');
+  }
+
+  if (
+    !Number.isSafeInteger(params.changedBy) ||
+    params.changedBy <= 0
+  ) {
+    throw new BadRequestException('Valid OWNER ID is required');
+  }
+
+  const automation = await this.automationRepository.findOne({
+    where: { automationKey },
+  });
+
+  if (!automation) {
+    throw new NotFoundException('WhatsApp automation not found');
+  }
+
+  if (automation.isEnabled === params.isEnabled) {
+    return {
+      automationKey: automation.automationKey,
+      isEnabled: automation.isEnabled,
+      effectiveEnabled:
+        this.automationsEnabled && automation.isEnabled,
+      globalAutomationsEnabled: this.automationsEnabled,
+      updatedAt: automation.updatedAt,
+      changed: false,
+    };
+  }
+
+  const previousEnabled = automation.isEnabled;
+
+  automation.isEnabled = params.isEnabled;
+
+  automation.configuration = {
+    ...(automation.configuration || {}),
+    lastManagementChange: {
+      previousEnabled,
+      newEnabled: params.isEnabled,
+      changedBy: params.changedBy,
+      changedAt: new Date().toISOString(),
+    },
+  };
+
+  const saved = await this.automationRepository.save(automation);
+
+  return {
+    automationKey: saved.automationKey,
+    isEnabled: saved.isEnabled,
+    effectiveEnabled:
+      this.automationsEnabled && saved.isEnabled,
+    globalAutomationsEnabled: this.automationsEnabled,
+    updatedAt: saved.updatedAt,
+    changed: true,
   };
 }
 

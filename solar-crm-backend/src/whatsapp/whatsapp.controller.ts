@@ -1,12 +1,14 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
+  Patch,
   Post,
   Query,
   Req,
   Res,
-    HttpCode,
+  HttpCode,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -27,6 +29,51 @@ export class WhatsappController {
   constructor(
     private readonly whatsappService: WhatsappService,
   ) {}
+
+    @Patch('automation-management/setting')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  async updateAutomationManagementSetting(
+    @Body() body: {
+      automationKey?: string;
+      isEnabled?: boolean;
+    },
+    @Req() req: Request & {
+      user?: {
+        id?: number;
+        userId?: number;
+        sub?: number;
+      };
+    },
+  ) {
+    const changedBy = Number(
+      req.user?.id ??
+      req.user?.userId ??
+      req.user?.sub,
+    );
+
+    if (!Number.isSafeInteger(changedBy) || changedBy <= 0) {
+      throw new UnauthorizedException(
+        'Unable to identify authenticated OWNER',
+      );
+    }
+
+    if (
+      !body ||
+      typeof body.automationKey !== 'string' ||
+      typeof body.isEnabled !== 'boolean'
+    ) {
+      throw new BadRequestException(
+        'automationKey and boolean isEnabled are required',
+      );
+    }
+
+    return this.whatsappService.updateAutomationManagementSetting({
+      automationKey: body.automationKey,
+      isEnabled: body.isEnabled,
+      changedBy,
+    });
+  }
 
     @Get('automation-management/messages')
   @UseGuards(JwtAuthGuard, RolesGuard)
