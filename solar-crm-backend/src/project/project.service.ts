@@ -12578,9 +12578,10 @@ private async getProjectMaterialLagat(
         normalize(value);
 
       return (
-        text.includes('NON DCR') ||
-        text.includes('NONDCR')
-      );
+  text.includes('NON DCR') ||
+  text.includes('NONDCR') ||
+  text.split(' ').includes('NDCR')
+);
     };
 
   const isDcrPanelText =
