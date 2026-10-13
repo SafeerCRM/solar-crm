@@ -2916,11 +2916,10 @@ private async sendCustomerProjectConfirmationWhatsapp(
       `Installation Address: ${customer?.address || 'Not provided'}`,
         ].join(' | ');
 
-    const attemptNumber = isInitialRetry
-      ? Number(confirmation.resendAttemptNumber) + 1
-      : isResend
-        ? Number(confirmation.resendAttemptNumber) + 1
-        : 1;
+    const attemptNumber =
+  isInitialRetry || isResend
+    ? Number(confirmation.resendAttemptNumber)
+    : 1;
 
     if (
       !Number.isInteger(attemptNumber) ||
