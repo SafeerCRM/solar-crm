@@ -13263,34 +13263,6 @@ private async getProjectMaterialLagat(
                 requestItem,
               );
 
-              if (projectId === 855 && isPanel) {
-  console.log(
-    '[LAAGAT PANEL DEBUG]',
-    JSON.stringify({
-      projectId,
-      requestItemId: requestItem.id,
-      requestBrand: requestItem.brand,
-      requestName: requestItem.materialName,
-      requestIsNonDcr,
-      activeRayzonMaterials: activeMaterials
-        .filter((m: any) =>
-          String(m.brand || '')
-            .toUpperCase()
-            .includes('RAYZON'),
-        )
-        .map((m: any) => ({
-          id: m.id,
-          name: m.name,
-          category: m.category,
-          dealerCategory: m.dealerCategory,
-          brand: m.brand,
-          rate: m.rate,
-          isActive: m.isActive,
-        })),
-      matchedMasterId: master?.id ?? null,
-    }),
-  );
-}
 
         if (!master) {
           /*
