@@ -4419,6 +4419,80 @@ private async syncSolarMitraProjectLink(
   );
 }
 
+private async validateProjectPanelMaterial(
+  materialId: number | null | undefined,
+  panelBrand: string | null | undefined,
+  dcrPanelCount: number,
+  nonDcrPanelCount: number,
+): Promise<void> {
+  if (materialId === null || materialId === undefined) {
+    return;
+  }
+
+  if (!Number.isInteger(materialId) || materialId <= 0) {
+    throw new BadRequestException(
+      'Invalid selected panel material ID',
+    );
+  }
+
+  const material =
+    await this.projectMaterialMasterRepository.findOne({
+      where: {
+        id: materialId,
+        isActive: true,
+      },
+    });
+
+  if (!material) {
+    throw new BadRequestException(
+      'Selected panel material is not available in Material Settings',
+    );
+  }
+
+  const normalize = (value: unknown) =>
+    String(value ?? '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  if (normalize(material.dealerCategory) !== 'PANELS') {
+    throw new BadRequestException(
+      'Selected material is not a solar panel',
+    );
+  }
+
+  if (normalize(material.brand) !== normalize(panelBrand)) {
+    throw new BadRequestException(
+      'Selected panel brand does not match Material Settings',
+    );
+  }
+
+  const materialText = normalize(
+    `${material.name || ''} ${material.category || ''}`,
+  );
+
+  const isNonDcr =
+    materialText.includes('NON DCR') ||
+    materialText.includes('NONDCR');
+
+  const isDcr =
+    materialText.includes('DCR') && !isNonDcr;
+
+  if (dcrPanelCount > 0 && !isDcr) {
+    throw new BadRequestException(
+      'Selected panel is not a DCR panel',
+    );
+  }
+
+  if (nonDcrPanelCount > 0 && !isNonDcr) {
+    throw new BadRequestException(
+      'Selected panel is not a Non-DCR panel',
+    );
+  }
+}
+
   async create(
   data: Partial<Project>,
   user?: any,
@@ -4740,6 +4814,30 @@ projectWorkStateUpdatedByName:
   marketingHeadApprovalStatus: ProjectApprovalStatus.PENDING,
     ownerApprovalStatus: ProjectApprovalStatus.PENDING,
 };
+
+const selectedPanelMaterialId =
+  (projectData as any).panelMaterialId;
+
+if (
+  selectedPanelMaterialId !== null &&
+  selectedPanelMaterialId !== undefined &&
+  selectedPanelMaterialId !== ''
+) {
+  const panelMaterialId = Number(
+    selectedPanelMaterialId,
+  );
+
+  await this.validateProjectPanelMaterial(
+    panelMaterialId,
+    projectData.panelBrand,
+    Number(projectData.dcrPanelCount || 0),
+    Number(projectData.nonDcrPanelCount || 0),
+  );
+
+  projectData.panelMaterialId = panelMaterialId;
+} else {
+  projectData.panelMaterialId = null;
+}
 
 const project =
   this.projectRepository.create(
@@ -6499,9 +6597,10 @@ const currentUserId = Number(user?.id || user?.sub);
 'customerId',
 'customerCode',
     'aadhaarLinkedMobile',
-    'panelBrand',
-    'dcrPanelCount',
-    'nonDcrPanelCount',
+'panelBrand',
+'panelMaterialId',
+'dcrPanelCount',
+'nonDcrPanelCount',
     'converterBrand',
     'converterCapacity',
     'converterPhase',
@@ -6558,6 +6657,7 @@ const currentUserId = Number(user?.id || user?.sub);
 'customerCode',
     'aadhaarLinkedMobile',
     'panelBrand',
+    'panelMaterialId',
     'dcrPanelCount',
     'nonDcrPanelCount',
     'converterBrand',
@@ -6676,6 +6776,7 @@ if (
   const numberFields = [
   'projectOwnerId',
   'solarFranchiseUserId',
+  'panelMaterialId',
   'dcrPanelCount',
   'nonDcrPanelCount',
   'marginMoney',
@@ -6844,6 +6945,60 @@ if (hasProjectLocationUpdate) {
 
   (safeData as any).locationUpdatedAt =
     new Date();
+}
+
+const panelBrandChanged =
+  Object.prototype.hasOwnProperty.call(
+    safeData,
+    'panelBrand',
+  ) &&
+  String(safeData.panelBrand || '').trim().toUpperCase() !==
+    String(project.panelBrand || '').trim().toUpperCase();
+
+const panelIdSubmitted =
+  Object.prototype.hasOwnProperty.call(
+    safeData,
+    'panelMaterialId',
+  );
+
+if (panelBrandChanged && !panelIdSubmitted) {
+  safeData.panelMaterialId = null;
+}
+
+if (
+  Object.prototype.hasOwnProperty.call(
+    safeData,
+    'panelMaterialId',
+  )
+) {
+  const rawPanelMaterialId =
+    (safeData as any).panelMaterialId;
+
+  const panelMaterialId =
+    rawPanelMaterialId === null ||
+    rawPanelMaterialId === undefined ||
+    rawPanelMaterialId === ''
+      ? null
+      : Number(rawPanelMaterialId);
+
+  if (panelMaterialId !== null) {
+    await this.validateProjectPanelMaterial(
+      panelMaterialId,
+      (safeData.panelBrand ?? project.panelBrand),
+      Number(
+        safeData.dcrPanelCount ??
+          project.dcrPanelCount ??
+          0,
+      ),
+      Number(
+        safeData.nonDcrPanelCount ??
+          project.nonDcrPanelCount ??
+          0,
+      ),
+    );
+  }
+
+  safeData.panelMaterialId = panelMaterialId;
 }
 
 Object.assign(
@@ -27639,22 +27794,65 @@ const historicalProjectItems =
    * that this function itself generates.
    */
   const requirementKey = (
-    item: {
-      materialName?: string;
-      category?: string;
-    },
-  ) =>
-    `${String(
-      item.category ||
-        '',
-    )
+  item: {
+    materialName?: string;
+    category?: string;
+    brand?: string;
+    remarks?: string;
+  },
+) => {
+  const normalize = (value: any) =>
+    String(value || '')
       .trim()
-      .toUpperCase()}::${String(
-      item.materialName ||
-        '',
-    )
-      .trim()
-      .toUpperCase()}`;
+      .toUpperCase()
+      .replace(/[^A-Z0-9.]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const category = normalize(item.category);
+  const name = normalize(item.materialName);
+  const brand = normalize(item.brand);
+  const remarks = String(item.remarks || '');
+
+  const capacity =
+    remarks.match(/CAPACITY\s*:\s*(\d+(?:\.\d+)?)/i)?.[1] ||
+    '';
+
+  const phase =
+    remarks.match(/PHASE\s*:\s*([^|]+)/i)?.[1] || '';
+
+  const structureType =
+    remarks.match(/TYPE\s*:\s*([^|]+)/i)?.[1] || '';
+
+  const buildingHeight =
+    remarks.match(/BUILDING HEIGHT\s*:\s*([^|]+)/i)?.[1] || '';
+
+  if (category === 'INVERTER') {
+    return [
+      category,
+      name,
+      brand,
+      normalize(capacity),
+      normalize(phase),
+    ].join('::');
+  }
+
+  if (category === 'STRUCTURE') {
+    return [
+      category,
+      name,
+      normalize(structureType),
+      normalize(capacity),
+      normalize(buildingHeight),
+    ].join('::');
+  }
+
+  return [
+    category,
+    name,
+    brand,
+  ].join('::');
+};
 
       /*
  * Convert old material rows into the same logical
@@ -28250,14 +28448,10 @@ const isSafeHistoricalStockMatch = (
       );
 
     const existingItem =
-      existingItems.find(
-        (
-          item,
-        ) =>
-          requirementKey(
-            item,
-          ) === key,
-      );
+  existingItems.find(
+    (item) =>
+      requirementKey(item) === key,
+  );
 
       const matchingStockMovements =
   historicalStockMovements.filter(
@@ -28678,6 +28872,18 @@ existingItem.pendingQuantity =
       continue;
     }
 
+    /*
+ * Already retired historical requirement.
+ * Keep its purchase and issue history unchanged.
+ */
+if (
+  String(existingItem.remarks || '').includes(
+    'Automatic requirement removed because current Project technical details no longer require this item',
+  )
+) {
+  continue;
+}
+
     existingItem.quantity =
       Math.max(
         Number(
@@ -28698,34 +28904,20 @@ existingItem.pendingQuantity =
       0;
 
     if (
-      Number(
-        existingItem.purchasedQuantity ||
-          0,
-      ) > 0
-    ) {
-      existingItem.purchaseStatus =
-        ProjectMaterialPurchaseStatus.PURCHASED;
-    } else {
-      /*
-       * Row remains historical, but zero pending
-       * means it will not appear on Purchase Orders.
-       */
-      existingItem.purchaseStatus =
-        ProjectMaterialPurchaseStatus.PURCHASED;
-    }
+  Number(existingItem.purchasedQuantity || 0) > 0
+) {
+  existingItem.purchaseStatus =
+    ProjectMaterialPurchaseStatus.PURCHASED;
+} else {
+  existingItem.purchaseStatus =
+    ProjectMaterialPurchaseStatus.PENDING;
+}
 
-    if (
-      Number(
-        existingItem.issuedQuantity ||
-          0,
-      ) > 0
-    ) {
-      existingItem.issueStatus =
-        ProjectMaterialIssueStatus.ISSUED;
-    } else {
-      existingItem.issueStatus =
-        ProjectMaterialIssueStatus.ISSUED;
-    }
+        /*
+     * Preserve actual historical issue status.
+     * Retiring a requirement must not imply
+     * that materials were physically issued.
+     */
 
     existingItem.remarks =
       [

@@ -202,6 +202,12 @@ customerCode: string;
   @Column({ nullable: true })
   panelBrand: string;
 
+  @Column({
+  type: 'integer',
+  nullable: true,
+})
+panelMaterialId: number | null;
+
   @Column({ nullable: true, default: 0 })
   dcrPanelCount: number;
 
