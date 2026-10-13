@@ -220,6 +220,14 @@ const [confirmationDetailsLoading, setConfirmationDetailsLoading] =
 const [confirmationDetailsError, setConfirmationDetailsError] =
   useState('');
 
+  const [confirmationResending, setConfirmationResending] = useState(false);
+
+const [confirmationResendError, setConfirmationResendError] =
+  useState('');
+
+const [confirmationResendSuccess, setConfirmationResendSuccess] =
+  useState('');
+
   const loadConfirmationDetails = async (projectId: number) => {
   setSelectedConfirmationProjectId(projectId);
   setConfirmationDetails(null);
@@ -267,6 +275,96 @@ const [confirmationDetailsError, setConfirmationDetailsError] =
     );
   } finally {
     setConfirmationDetailsLoading(false);
+  }
+};
+
+const resendCustomerConfirmation = async (projectId: number) => {
+  if (confirmationResending) return;
+
+  if (
+    selectedConfirmationProjectId !== projectId ||
+    confirmationDetails?.projectId !== projectId ||
+    confirmationDetails.confirmation?.status !== 'CORRECTION_REQUESTED'
+  ) {
+    setConfirmationResendError(
+      'Resend is allowed only for a verified correction request.',
+    );
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Resend corrected project details to the customer for Project #${projectId}?\n\n` +
+      'This will send a real WhatsApp message if the recipient is permitted by the production rollout settings.\n\n' +
+      'Please verify that the project details have been corrected before proceeding.',
+  );
+
+  if (!confirmed) return;
+
+  setConfirmationResending(true);
+  setConfirmationResendError('');
+  setConfirmationResendSuccess('');
+
+  try {
+    if (!API_BASE_URL) {
+      throw new Error('Backend API URL is not configured.');
+    }
+
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      throw new Error('Please log in again.');
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/project/${projectId}/customer-confirmation/resend`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      const backendMessage = result?.message;
+
+      throw new Error(
+        typeof backendMessage === 'string'
+          ? backendMessage
+          : `Resend failed (HTTP ${response.status}).`,
+      );
+    }
+
+    if (result?.requiresReconciliation || result?.sent !== true) {
+      setConfirmationResendError(
+        typeof result?.message === 'string'
+          ? result.message
+          : 'Sending could not be confirmed. Manual reconciliation is required. Do not retry.',
+      );
+    } else {
+      setConfirmationResendSuccess(
+        typeof result?.message === 'string'
+          ? result.message
+          : 'Corrected confirmation submitted successfully.',
+      );
+    }
+
+    await loadConfirmationDetails(projectId);
+    await loadCustomerConfirmations(
+      confirmationPage,
+      confirmationStatus,
+      confirmationSearch,
+    );
+  } catch (error) {
+    setConfirmationResendError(
+      error instanceof Error
+        ? error.message
+        : 'Unable to resend customer confirmation.',
+    );
+  } finally {
+    setConfirmationResending(false);
   }
 };
 
@@ -1135,6 +1233,56 @@ useEffect(() => {
                     <div className="mt-5 space-y-5">
                       {confirmationDetails.confirmation ? (
                         <>
+
+                            {confirmationDetails.confirmation.status ===
+      'CORRECTION_REQUESTED' && (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-semibold text-amber-900">
+              Customer Correction Requested
+            </p>
+            <p className="mt-1 text-sm text-amber-800">
+              Verify and update the project details before resending
+              the confirmation to the customer.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            disabled={confirmationResending}
+            onClick={() =>
+              void resendCustomerConfirmation(
+                confirmationDetails.projectId,
+              )
+            }
+            className="rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {confirmationResending
+              ? 'Sending...'
+              : 'Resend Corrected Confirmation'}
+          </button>
+        </div>
+      </div>
+    )}
+
+    {confirmationResendError && (
+      <div
+        role="alert"
+        className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+      >
+        {confirmationResendError}
+      </div>
+    )}
+
+    {confirmationResendSuccess && (
+      <div
+        role="status"
+        className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700"
+      >
+        {confirmationResendSuccess}
+      </div>
+    )}
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
                               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
