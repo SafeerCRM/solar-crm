@@ -2873,6 +2873,7 @@ async changeCustomerPortalPassword(customerId: number, body: any) {
   };
 }
 
+
 async registerCustomerDeviceToken(
   customerId: number,
   body: {
@@ -2881,95 +2882,42 @@ async registerCustomerDeviceToken(
     deviceId?: string;
   },
 ) {
-  const fcmToken =
-    String(
-      body?.fcmToken || '',
-    ).trim();
+  const fcmToken = String(body?.fcmToken || '').trim();
 
   if (!fcmToken) {
-    throw new BadRequestException(
-      'FCM token is required',
-    );
+    throw new BadRequestException('FCM token is required');
   }
 
-  const platform =
-    String(
-      body?.platform || '',
-    )
-      .trim()
-      .toUpperCase();
+  const platform = String(body?.platform || '')
+    .trim()
+    .toUpperCase();
 
-  if (
-    platform !== 'ANDROID' &&
-    platform !== 'IOS'
-  ) {
+  if (platform !== 'ANDROID' && platform !== 'IOS') {
     throw new BadRequestException(
       'Platform must be ANDROID or IOS',
     );
   }
 
-  const existing =
-    await this.portalDeviceTokenRepository.findOne({
-      where: {
-        fcmToken,
-      },
-    });
-
-  if (existing) {
-    existing.portalType =
-      PortalDeviceType.CUSTOMER;
-
-    existing.portalUserId =
-      customerId;
-
-    existing.platform =
-      platform as PortalDevicePlatform;
-
-    existing.deviceId =
-      body?.deviceId
-        ? String(body.deviceId)
-        : null;
-
-    existing.isActive =
-      true;
-
-    existing.lastRegisteredAt =
-      new Date();
-
-    return this.portalDeviceTokenRepository.save(
-      existing,
-    );
-  }
-
-  const token =
-    this.portalDeviceTokenRepository.create({
-      portalType:
-        PortalDeviceType.CUSTOMER,
-
-      portalUserId:
-        customerId,
-
-      platform:
-        platform as PortalDevicePlatform,
-
+  await this.portalDeviceTokenRepository.upsert(
+    {
+      portalType: PortalDeviceType.CUSTOMER,
+      portalUserId: customerId,
+      platform: platform as PortalDevicePlatform,
       fcmToken,
-
-      deviceId:
-        body?.deviceId
-          ? String(body.deviceId)
-          : null,
-
-      isActive:
-        true,
-
-      lastRegisteredAt:
-        new Date(),
-    });
-
-  return this.portalDeviceTokenRepository.save(
-    token,
+      deviceId: body?.deviceId
+        ? String(body.deviceId)
+        : null,
+      isActive: true,
+      lastRegisteredAt: new Date(),
+    },
+    ['fcmToken'],
   );
+
+  return this.portalDeviceTokenRepository.findOneOrFail({
+    where: { fcmToken },
+  });
 }
+
 
 async sendCustomerTestPush(
   customerId: number,
