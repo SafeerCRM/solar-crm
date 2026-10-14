@@ -2917,9 +2917,11 @@ private async sendCustomerProjectConfirmationWhatsapp(
         ].join(' | ');
 
     const attemptNumber =
-  isInitialRetry || isResend
-    ? Number(confirmation.resendAttemptNumber)
-    : 1;
+     isResend
+      ? Number(confirmation.resendAttemptNumber) + 1
+      : isInitialRetry
+       ? Number(confirmation.resendAttemptNumber)
+       : 1;
 
     if (
       !Number.isInteger(attemptNumber) ||
