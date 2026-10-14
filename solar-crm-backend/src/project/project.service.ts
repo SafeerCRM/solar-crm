@@ -7334,13 +7334,8 @@ async retryFailedInitialCustomerConfirmation(
     );
   }
 
-  if (
-    process.env.WHATSAPP_AUTOMATION_ROLLOUT_LOCK !== 'LOCKED'
-  ) {
-    throw new BadRequestException(
-      'Failed initial confirmation retry is restricted to controlled rollout',
-    );
-  }
+  const isControlledRollout =
+  process.env.WHATSAPP_AUTOMATION_ROLLOUT_LOCK === 'LOCKED';
 
   const allowedPhones = String(
     process.env.WHATSAPP_AUTOMATION_ALLOWED_PHONES || '',
@@ -7353,14 +7348,20 @@ async retryFailedInitialCustomerConfirmation(
     confirmation.customerPhone || '',
   ).replace(/\D/g, '');
 
-  if (
-    !customerPhone ||
-    !allowedPhones.includes(customerPhone)
-  ) {
-    throw new ForbiddenException(
-      'Customer phone is not permitted for controlled retry',
-    );
-  }
+  if (!customerPhone) {
+  throw new BadRequestException(
+    'Customer phone is missing for confirmation retry',
+  );
+}
+
+if (
+  isControlledRollout &&
+  !allowedPhones.includes(customerPhone)
+) {
+  throw new ForbiddenException(
+    'Customer phone is not permitted for controlled retry',
+  );
+}
 
   const snapshot = confirmation.projectSnapshot;
 
