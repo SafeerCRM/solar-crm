@@ -927,30 +927,29 @@ solarMiterPhone: this.isSolarFranchise(user)
   }
 
   if (query?.customerName) {
-    qb.andWhere(
-      `meeting.customerName
-        ILIKE :customerName`,
-      {
-        customerName: `%${String(
-          query.customerName,
-        ).trim()}%`,
-      },
-    );
-  }
+  qb.andWhere(
+    `"meeting"."customerName" ILIKE :customerName`,
+    {
+      customerName: `%${String(
+        query.customerName,
+      ).trim()}%`,
+    },
+  );
+}
 
   if (query?.location) {
-    qb.andWhere(
-      `(
-        meeting.address ILIKE :location
-        OR meeting.gpsAddress ILIKE :location
-      )`,
-      {
-        location: `%${String(
-          query.location,
-        ).trim()}%`,
-      },
-    );
-  }
+  qb.andWhere(
+    `(
+      "meeting"."address" ILIKE :location
+      OR "meeting"."gpsAddress" ILIKE :location
+    )`,
+    {
+      location: `%${String(
+        query.location,
+      ).trim()}%`,
+    },
+  );
+}
 
   if (query?.fromDate) {
     qb.andWhere(

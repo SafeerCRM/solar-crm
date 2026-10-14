@@ -4566,27 +4566,48 @@ const convertMeetingToSolarMitra =
     Shop Photo
   </label>
 
-  <input
-    type="file"
-    accept="image/jpeg,image/png,image/webp"
-    capture="environment"
-    disabled={uploadingShopPhoto}
-    onChange={async (
-      event,
-    ) => {
-      const file =
-        event.target.files?.[0];
+  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+  <label className="flex cursor-pointer items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700">
+    📷 Take Photo
 
-      if (file) {
-        await uploadShopPhoto(
-          file,
-        );
-      }
+    <input
+      type="file"
+      accept="image/*"
+      capture="environment"
+      disabled={uploadingShopPhoto}
+      className="hidden"
+      onChange={async (event) => {
+        const file = event.target.files?.[0];
 
-      event.target.value = '';
-    }}
-    className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
-  />
+        if (file) {
+          await uploadShopPhoto(file);
+        }
+
+        event.target.value = '';
+      }}
+    />
+  </label>
+
+  <label className="flex cursor-pointer items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50">
+    🖼️ Upload from Gallery
+
+    <input
+      type="file"
+      accept="image/jpeg,image/png,image/webp"
+      disabled={uploadingShopPhoto}
+      className="hidden"
+      onChange={async (event) => {
+        const file = event.target.files?.[0];
+
+        if (file) {
+          await uploadShopPhoto(file);
+        }
+
+        event.target.value = '';
+      }}
+    />
+  </label>
+</div>
 
   {uploadingShopPhoto && (
     <p className="mt-2 text-xs font-semibold text-blue-600">
