@@ -2825,6 +2825,156 @@ const convertMeetingToSolarMitra =
   link.remove();
 };
 
+  const exportSolarMitrasCsv = async (
+    action: 'download' | 'share',
+  ) => {
+    if (filteredMitras.length === 0) {
+      alert('No Solar Mitras found for the selected filters.');
+      return;
+    }
+
+    try {
+      const escapeCsv = (value: unknown) => {
+        const text = String(value ?? '');
+
+        // Prevent spreadsheet formula injection.
+        const safeText = /^[\s]*[=+\-@\t\r]/.test(text)
+          ? `'${text}`
+          : text;
+
+        return `"${safeText.replace(/"/g, '""')}"`;
+      };
+
+      const headers = [
+        'Solar Mitra Name',
+        'Shop Name',
+        'City',
+        'Area',
+        'Contact Number',
+      ];
+
+      const rows = filteredMitras.map((item) => [
+        item.name,
+        item.businessName,
+        item.city,
+        item.area,
+        item.primaryPhone,
+      ]);
+
+      const csvContent =
+        '\uFEFF' +
+        [headers, ...rows]
+          .map((row) =>
+            row.map(escapeCsv).join(','),
+          )
+          .join('\r\n');
+
+      const date = new Date()
+        .toLocaleDateString('en-CA');
+
+      const fileName =
+        `solar-mitras-${date}.csv`;
+
+      const { Capacitor } = await import(
+        '@capacitor/core'
+      );
+
+      if (Capacitor.isNativePlatform()) {
+        const {
+          Filesystem,
+          Directory,
+          Encoding,
+        } = await import(
+          '@capacitor/filesystem'
+        );
+
+        const { Share } = await import(
+          '@capacitor/share'
+        );
+
+        const saved = await Filesystem.writeFile({
+          path: fileName,
+          data: csvContent,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+          recursive: true,
+        });
+
+        await Share.share({
+          title: 'Solar Mitra Report',
+          text: `${filteredMitras.length} Solar Mitra records`,
+          files: [saved.uri],
+          dialogTitle:
+            action === 'download'
+              ? 'Save Solar Mitra CSV'
+              : 'Share Solar Mitra CSV',
+        });
+
+        return;
+      }
+
+      const blob = new Blob([csvContent], {
+        type: 'text/csv;charset=utf-8',
+      });
+
+      if (action === 'share') {
+        const file = new File(
+          [blob],
+          fileName,
+          { type: 'text/csv' },
+        );
+
+        if (
+          navigator.canShare?.({
+            files: [file],
+          })
+        ) {
+          try {
+            await navigator.share({
+              title: 'Solar Mitra Report',
+              files: [file],
+            });
+            return;
+          } catch (error: any) {
+            if (error?.name === 'AbortError') {
+              return;
+            }
+            console.error(
+              'Web CSV sharing failed:',
+              error,
+            );
+          }
+        }
+
+        // Browser does not support file sharing.
+        // Download the actual CSV instead.
+      }
+
+      const url = URL.createObjectURL(blob);
+
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 1000);
+    } catch (error) {
+      console.error(
+        'Solar Mitra CSV export failed:',
+        error,
+      );
+
+      alert(
+        'Unable to prepare Solar Mitra CSV. Please try again.',
+      );
+    }
+  };
+
   const tabs: {
     key: Tab;
     label: string;
@@ -3178,6 +3328,28 @@ const convertMeetingToSolarMitra =
     )}
   </select>
 )}
+
+            <button
+              type="button"
+              onClick={() =>
+                void exportSolarMitrasCsv('download')
+              }
+              disabled={filteredMitras.length === 0}
+              className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              ↓ Download CSV
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                void exportSolarMitrasCsv('share')
+              }
+              disabled={filteredMitras.length === 0}
+              className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              ↗ Share CSV
+            </button>
 
             <button
               type="button"
