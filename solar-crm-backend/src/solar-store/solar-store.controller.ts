@@ -7,9 +7,13 @@ import {
   ParseIntPipe,
   Patch,
   Post,
-  Query,
+    Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+
+import { FileInterceptor } from '@nestjs/platform-express';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -114,4 +118,23 @@ getAuditHistory(
 ) {
   return this.solarStoreService.getSolarStoreAuditHistory(id);
 }
+
+  @Roles('OWNER', 'FRANCHISE_HEAD')
+  @Post('shop-photo/upload')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+      },
+    }),
+  )
+  uploadShopPhoto(
+    @UploadedFile() file: any,
+    @CurrentUser() user: any,
+  ) {
+    return this.solarStoreService.uploadShopPhoto(
+      file,
+      user,
+    );
+  }
 }

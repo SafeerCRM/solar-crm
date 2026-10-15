@@ -8,6 +8,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
+import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
+
 import {
   User,
   UserRole,
@@ -46,6 +49,91 @@ private readonly onboardingPaymentRepository:
     return digits.length > 10
       ? digits.slice(-10)
       : digits;
+  }
+
+    async uploadShopPhoto(file: any, user: any) {
+    if (!file) {
+      throw new BadRequestException(
+        'Shop photo is required',
+      );
+    }
+
+    const mimeType = String(file.mimetype || '');
+
+    const allowedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    ];
+
+    if (!allowedTypes.includes(mimeType)) {
+      throw new BadRequestException(
+        'Only JPG, PNG, and WEBP images are allowed',
+      );
+    }
+
+    const maxSize = 10 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      throw new BadRequestException(
+        'Shop photo must be less than 10 MB',
+      );
+    }
+
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    const bucket =
+      process.env.SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+      'project-documents';
+
+    if (!supabaseUrl || !serviceKey) {
+      throw new BadRequestException(
+        'Supabase storage is not configured',
+      );
+    }
+
+    const supabase = createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+    const extensionByMime: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+    };
+
+    const extension = extensionByMime[mimeType];
+
+    const filePath =
+      `solar-store/shop-photos/` +
+      `user-${user?.id || user?.sub || 'unknown'}/` +
+      `${Date.now()}-${randomUUID()}.${extension}`;
+
+    const uploadResult = await supabase.storage
+      .from(bucket)
+      .upload(filePath, file.buffer, {
+        contentType: mimeType,
+        upsert: false,
+      });
+
+    if (uploadResult.error) {
+      throw new BadRequestException(
+        uploadResult.error.message,
+      );
+    }
+
+    const publicUrlResult = supabase.storage
+      .from(bucket)
+      .getPublicUrl(filePath);
+
+    return {
+      message: 'Shop photo uploaded successfully',
+      fileUrl: publicUrlResult.data.publicUrl,
+      filePath,
+    };
   }
 
   private validateAmount(
