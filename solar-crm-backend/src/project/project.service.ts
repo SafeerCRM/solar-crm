@@ -238,6 +238,10 @@ import { ProjectPaymentReceipt } from './project-payment-receipt.entity';
 
 import { Lead } from '../leads/lead.entity';
 import { Meeting } from '../meeting/meeting.entity';
+import {
+  SolarStore,
+  SolarStoreStatus,
+} from '../solar-store/solar-store.entity';
 import { CallLog } from '../telecalling/call-log.entity';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 import { User } from '../users/user.entity';
@@ -2466,6 +2470,9 @@ private formatInsuranceDate(
     @InjectRepository(Project)
 private readonly projectRepository: Repository<Project>,
 
+@InjectRepository(SolarStore)
+private readonly solarStoreRepository: Repository<SolarStore>,
+
 @InjectRepository(ProjectCustomerConfirmation)
 private readonly projectCustomerConfirmationRepository:
   Repository<ProjectCustomerConfirmation>,
@@ -4610,8 +4617,104 @@ if (existingProjectForKNumber) {
 );
 }
 
-    const journeySnapshot =
-  await this.buildProjectJourneySnapshot(data, user);
+    const journeySnapshot = await this.buildProjectJourneySnapshot(data, user);
+
+// Solar Store attribution is independent of employee payroll.
+const creatorRoles = [
+  user?.role,
+  ...(Array.isArray(user?.roles)
+    ? user.roles.map((role: any) =>
+        typeof role === 'string'
+          ? role
+          : role?.name || role?.role || role?.code,
+      )
+    : []),
+]
+  .filter(Boolean)
+  .map((role: any) => String(role).trim().toUpperCase());
+
+const isSolarStoreCreator = creatorRoles.includes('SOLAR_STORE');
+
+let verifiedSolarStore: SolarStore | null = null;
+
+if (isSolarStoreCreator) {
+  verifiedSolarStore = await this.solarStoreRepository.findOne({
+    where: {
+      linkedUserId: Number(user?.id),
+      status: SolarStoreStatus.ACTIVE,
+      isHidden: false,
+    },
+  });
+
+  if (!verifiedSolarStore) {
+    throw new ForbiddenException(
+      'Your Solar Store account is inactive, hidden, or not linked.',
+    );
+  }
+}
+
+const linkedMeeting = data?.meetingId
+  ? await this.meetingRepository.findOne({
+      where: { id: Number(data.meetingId) },
+    })
+  : null;
+
+const effectiveLeadId =
+  linkedMeeting?.leadId || data?.leadId;
+
+const linkedLead = effectiveLeadId
+  ? await this.leadRepository.findOne({
+      where: { id: Number(effectiveLeadId) },
+    })
+  : null;
+
+const meetingStoreId = Number(linkedMeeting?.solarStoreId || 0);
+const leadStoreId = Number(linkedLead?.solarStoreId || 0);
+const creatorStoreId = Number(verifiedSolarStore?.id || 0);
+
+if (
+  meetingStoreId &&
+  leadStoreId &&
+  meetingStoreId !== leadStoreId
+) {
+  throw new ForbiddenException(
+    'The linked Lead and Meeting belong to different Solar Stores.',
+  );
+}
+
+const sourceStoreId = meetingStoreId || leadStoreId;
+
+if (
+  isSolarStoreCreator &&
+  sourceStoreId &&
+  sourceStoreId !== creatorStoreId
+) {
+  throw new ForbiddenException(
+    'You cannot create a Project from another Solar Store.',
+  );
+}
+
+const resolvedSolarStoreId =
+  sourceStoreId || creatorStoreId;
+
+const resolvedSolarStore = resolvedSolarStoreId
+  ? await this.solarStoreRepository.findOne({
+      where: { id: resolvedSolarStoreId },
+    })
+  : null;
+
+if (resolvedSolarStoreId && !resolvedSolarStore) {
+  throw new ForbiddenException(
+    'The originating Solar Store could not be verified.',
+  );
+}
+
+// Never trust store attribution submitted by the frontend.
+data = {
+  ...data,
+  solarStoreId: resolvedSolarStore?.id ?? null,
+  solarStoreName: resolvedSolarStore?.name ?? null,
+};
 
     const payload: any = {
   ...data,
@@ -4717,20 +4820,26 @@ const currentUserId = Number(user?.id || user?.sub);
 const currentUserName = user?.name || user?.email || '';
 
 const isSolarFranchise = roles.includes('SOLAR_FRANCHISE');
+const isSolarStore = roles.includes('SOLAR_STORE');
 
-const finalProjectOwnerId = isSolarFranchise
+const isSelfOwnedProject =
+  isSolarFranchise || isSolarStore;
+
+const finalProjectOwnerId = isSelfOwnedProject
   ? currentUserId
   : payload?.projectOwnerId
     ? Number(payload.projectOwnerId)
     : undefined;
 
-const finalProjectOwnerName = isSolarFranchise
+const finalProjectOwnerName = isSelfOwnedProject
   ? currentUserName
   : String(payload?.projectOwnerName || '').trim() || undefined;
 
 const finalProjectOwnerRole = isSolarFranchise
   ? 'SOLAR_FRANCHISE'
-  : String(payload?.projectOwnerRole || '').trim() || undefined;
+  : isSolarStore
+    ? 'SOLAR_STORE'
+    : String(payload?.projectOwnerRole || '').trim() || undefined;
 
     const projectData: Partial<Project> = {
   ...payload,
@@ -4857,7 +4966,7 @@ await this.syncSolarMitraProjectLink(
 return savedProject;
   }
 
-  async createWithCalculation(data: any) {
+  async createWithCalculation(data: any, user: any) {
     const calculation =
       await this.calculatorService.calculateProjectCost(data);
 
@@ -6579,8 +6688,10 @@ const address = String(
   const isMarketingHead = roles.includes('MARKETING_HEAD');
   const isProjectManager = roles.includes('PROJECT_MANAGER');
 
-  const isSolarFranchise = roles.includes('SOLAR_FRANCHISE');
-const currentUserId = Number(user?.id || user?.sub);
+    const isSolarFranchise = roles.includes('SOLAR_FRANCHISE');
+  const isSolarStore = roles.includes('SOLAR_STORE');
+
+  const currentUserId = Number(user?.id || user?.sub);
 
   const editableFieldsForOwner = [
     'customerName',
@@ -6714,12 +6825,34 @@ const currentUserId = Number(user?.id || user?.sub);
    *
    * Owner and Project Manager retain access.
    */
-  allowedFields =
+    allowedFields =
     editableFieldsForProjectManager.filter(
       (field) =>
         field !==
         'applicableMargin',
     );
+} else if (isSolarStore) {
+  if (
+    !Number.isFinite(currentUserId) ||
+    currentUserId <= 0 ||
+    Number(project.projectOwnerId) !== currentUserId
+  ) {
+    throw new ForbiddenException(
+      'You can edit only your own Solar Store projects',
+    );
+  }
+
+  allowedFields = editableFieldsForProjectManager.filter(
+    (field) =>
+      ![
+        'projectOwnerId',
+        'projectOwnerName',
+        'projectOwnerRole',
+        'solarFranchiseUserId',
+        'solarFranchiseName',
+        'solarFranchisePhone',
+      ].includes(field),
+  );
 }
 
   const safeData: Partial<Project> = {};

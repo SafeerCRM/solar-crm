@@ -59,7 +59,8 @@ const allRoles = [
 'PROJECT_CONTRACTOR',
 
   'CUSTOMER',
-  'SOLAR_FRANCHISE'
+  'SOLAR_FRANCHISE',
+  'SOLAR_STORE',
 ];
 
 export default function UsersPage() {

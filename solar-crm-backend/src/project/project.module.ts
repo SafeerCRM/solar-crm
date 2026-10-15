@@ -65,6 +65,7 @@ import { Dealer } from '../dealer/dealer.entity';
 import { ProjectPaymentReceipt } from './project-payment-receipt.entity';
 import { Lead } from '../leads/lead.entity';
 import { Meeting } from '../meeting/meeting.entity';
+import { SolarStore } from '../solar-store/solar-store.entity';
 import { CallLog } from '../telecalling/call-log.entity';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 import { User } from '../users/user.entity';
@@ -178,6 +179,7 @@ ProjectDealerPayment,
 ProjectDealerComment, ProjectDealerNotification,
 ProjectDealerMonthlyRequirement, ProjectTradingMeeting, FollowUp, ProjectFranchisePayoutRequest, Dealer, ProjectPaymentReceipt, Lead, SolarMitraReferral, SolarMitraPayout,
 Meeting,
+SolarStore,
 CallLog,
 TelecallingContact,
 ProjectTimelineRule,

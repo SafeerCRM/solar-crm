@@ -73,6 +73,12 @@ export class Project {
   @Column({ nullable: true })
   meetingId: number;
 
+  @Column({ type: 'integer', nullable: true })
+solarStoreId: number | null;
+
+@Column({ type: 'text', nullable: true })
+solarStoreName: string | null;
+
   @Column({ nullable: true })
   proposalId: number;
 

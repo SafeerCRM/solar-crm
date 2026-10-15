@@ -47,11 +47,12 @@ create(
 }
 
   @Post('create-with-calculation')
-  createWithCalculation(@Body() body: any) {
-    return this.projectService.createWithCalculation(
-      body,
-    );
-  }
+createWithCalculation(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createWithCalculation(body, user);
+}
 
   @Get()
 findAll(
@@ -6472,6 +6473,7 @@ updateProjectLocation(
   'MARKETING_HEAD',
   'PROJECT_MANAGER',
   'SOLAR_FRANCHISE',
+  'SOLAR_STORE',
 )
 @Patch(':id')
 update(

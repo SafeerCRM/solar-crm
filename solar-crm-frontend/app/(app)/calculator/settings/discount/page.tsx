@@ -42,6 +42,7 @@ const roleOptions = [
   'SOLAR_MITRA',
 
   'PROJECT_CONTRACTOR',
+  'SOLAR_STORE',
 ];
 
 export default function DiscountSettingsPage() {
