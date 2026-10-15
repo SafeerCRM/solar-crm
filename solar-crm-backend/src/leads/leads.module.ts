@@ -8,17 +8,19 @@ import { CallLog } from '../telecalling/call-log.entity';
 import { LeadNote } from './lead-note.entity';
 import { LeadStorage } from './lead-storage.entity';
 import { User } from '../users/user.entity';
+import { SolarStore } from '../solar-store/solar-store.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      Lead,
-      User,
-      FollowUp,
-      CallLog,
-      LeadNote,
-      LeadStorage,
-    ]),
+  Lead,
+  User,
+  FollowUp,
+  CallLog,
+  LeadNote,
+  LeadStorage,
+  SolarStore,
+]),
   ],
   controllers: [LeadsController],
   providers: [LeadsService],

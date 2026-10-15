@@ -1,6 +1,8 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Meeting } from './meeting.entity';
+import { Lead } from '../leads/lead.entity';
+import { SolarStore } from '../solar-store/solar-store.entity';
 import { MeetingService } from './meeting.service';
 import { MeetingController } from './meeting.controller';
 import { ProjectModule } from '../project/project.module';
@@ -17,6 +19,8 @@ import { WhatsappModule } from '../whatsapp/whatsapp.module';
   Meeting,
   MeetingReviewRemark,
   SolarMitraReferral,
+  Lead,
+  SolarStore,
 ]),
     forwardRef(() => ProjectModule),
     forwardRef(() => WhatsappModule),

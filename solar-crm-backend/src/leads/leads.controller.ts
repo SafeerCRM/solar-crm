@@ -269,23 +269,29 @@ restoreLead(
 }
 
   @UseGuards(RolesGuard)
-  @Roles('OWNER')
-  @Patch('assign-bulk')
-  assignBulk(
-    @Body()
-    body: {
-      leadIds: number[];
-      assignedTo: number;
-    },
-  ) {
-    return this.leadsService.assignBulk(body);
-  }
+@Roles('OWNER')
+@Patch('assign-bulk')
+assignBulk(
+  @Body()
+  body: {
+    leadIds: number[];
+    assignedTo: number;
+  },
+  @CurrentUser() user: any,
+) {
+  return this.leadsService.assignBulk(body, user);
+}
 
   @Patch(':id/assign')
-  assignLead(
-    @Param('id', ParseIntPipe) id: number,
-    @Body('assignedTo') assignedTo: number,
-  ) {
-    return this.leadsService.assignLead(id, Number(assignedTo));
-  }
+assignLead(
+  @Param('id', ParseIntPipe) id: number,
+  @Body('assignedTo') assignedTo: number,
+  @CurrentUser() user: any,
+) {
+  return this.leadsService.assignLead(
+    id,
+    Number(assignedTo),
+    user,
+  );
+}
 }

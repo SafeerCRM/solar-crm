@@ -219,6 +219,7 @@ private getHighestCalculatorRole(roles: string[] = []) {
   'HR_MANAGER',
 
   'PROJECT_CONTRACTOR',
+  'SOLAR_STORE',
 ];
 
   for (const role of priority) {

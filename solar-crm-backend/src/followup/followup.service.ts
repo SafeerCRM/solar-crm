@@ -46,6 +46,10 @@ export class FollowupService {
     return this.hasAnyRole(user, [UserRole.OWNER]);
   }
 
+  private isSolarStore(user: any): boolean {
+  return this.hasAnyRole(user, [UserRole.SOLAR_STORE]);
+}
+
   private isLeadManager(user: any): boolean {
     return this.hasAnyRole(user, [UserRole.LEAD_MANAGER]);
   }
@@ -259,9 +263,49 @@ if (due === 'OVERDUE') {
 
     const currentUserId = this.getCurrentUserId(user);
 
-    if (this.isBroadAccessRole(user)) {
-      return followUp;
-    }
+if (this.isSolarStore(user)) {
+  const solarStoreId = Number(
+    followUp.lead?.solarStoreId,
+  );
+
+  if (
+    !followUp.lead ||
+    !Number.isInteger(solarStoreId) ||
+    solarStoreId <= 0
+  ) {
+    throw new ForbiddenException(
+      'This follow-up is not linked to your Solar Store lead',
+    );
+  }
+
+  const store = await this.leadRepository.manager
+    .createQueryBuilder()
+    .select('store.id', 'id')
+    .from('solar_store', 'store')
+    .where('store.id = :solarStoreId', {
+      solarStoreId,
+    })
+    .andWhere('store."linkedUserId" = :currentUserId', {
+      currentUserId,
+    })
+    .andWhere('store.status = :status', {
+      status: 'ACTIVE',
+    })
+    .andWhere('store."isHidden" = false')
+    .getRawOne();
+
+  if (!store) {
+    throw new ForbiddenException(
+      'You cannot access another Solar Store follow-up',
+    );
+  }
+
+  return followUp;
+}
+
+if (this.isBroadAccessRole(user)) {
+  return followUp;
+}
 
     if (this.isMeetingAssistant(user)) {
   if (String(followUp.sourceModule || '').toUpperCase() !== 'MEETING') {
@@ -311,9 +355,61 @@ if (due === 'OVERDUE') {
   }
 
   const currentUserId = this.getCurrentUserId(user);
-  const currentUserName = user?.name || user?.email || 'Unknown User';
+const currentUserName = user?.name || user?.email || 'Unknown User';
 
-  const sourceModule = String(data.sourceModule || 'FOLLOWUP').toUpperCase();
+if (this.isSolarStore(user)) {
+  const leadId = Number(data.leadId);
+
+  if (!Number.isInteger(leadId) || leadId <= 0) {
+    throw new ForbiddenException(
+      'Solar Store follow-ups must be linked to an existing lead',
+    );
+  }
+
+  const lead = await this.leadRepository.findOne({
+    where: { id: leadId },
+  });
+
+  if (!lead || !lead.solarStoreId) {
+    throw new ForbiddenException(
+      'Lead does not belong to a Solar Store',
+    );
+  }
+
+  const activeStore = await this.leadRepository.manager
+    .createQueryBuilder()
+    .select('store.id', 'id')
+    .from('solar_store', 'store')
+    .where('store.id = :solarStoreId', {
+      solarStoreId: lead.solarStoreId,
+    })
+    .andWhere('store."linkedUserId" = :currentUserId', {
+      currentUserId,
+    })
+    .andWhere('store.status = :status', {
+      status: 'ACTIVE',
+    })
+    .andWhere('store."isHidden" = false')
+    .getRawOne();
+
+  if (!activeStore) {
+    throw new ForbiddenException(
+      'You can only create follow-ups for your Solar Store leads',
+    );
+  }
+
+  // Meeting and contact follow-ups will be integrated
+  // separately with their own ownership checks.
+  if ((data as any).meetingId || (data as any).contactId) {
+    throw new ForbiddenException(
+      'Solar Store meeting/contact follow-ups are not enabled yet',
+    );
+  }
+
+  data.assignedTo = currentUserId;
+}
+
+const sourceModule = String(data.sourceModule || 'FOLLOWUP').toUpperCase();
 
   if (
     !data.leadId &&
@@ -395,16 +491,32 @@ if (due === 'OVERDUE') {
    * All search, source, status and due filters
    * are then applied to the same query.
    */
-  if (this.isMeetingAssistant(user)) {
-    qb.where(
-      'UPPER(followUp.sourceModule) = :meetingSourceModule',
-      {
-        meetingSourceModule: 'MEETING',
-      },
-    );
-  } else if (
-    this.isOwnAssignedOnlyRole(user)
-  ) {
+  if (this.isSolarStore(user)) {
+  const currentUserId = this.getCurrentUserId(user);
+
+  qb.where(
+    `"lead"."solarStoreId" IN (
+      SELECT "store"."id"
+      FROM "solar_store" "store"
+      WHERE "store"."linkedUserId" = :currentUserId
+        AND "store"."status" = :activeStoreStatus
+        AND "store"."isHidden" = false
+    )`,
+    {
+      currentUserId,
+      activeStoreStatus: 'ACTIVE',
+    },
+  );
+} else if (this.isMeetingAssistant(user)) {
+  qb.where(
+    'UPPER(followUp.sourceModule) = :meetingSourceModule',
+    {
+      meetingSourceModule: 'MEETING',
+    },
+  );
+} else if (
+  this.isOwnAssignedOnlyRole(user)
+) {
     const currentUserId =
       this.getCurrentUserId(user);
 
@@ -480,10 +592,37 @@ if (due === 'OVERDUE') {
     end.setHours(23, 59, 59, 999);
 
     if (this.isProjectManager(user)) {
-      return [];
-    }
+  return [];
+}
 
-    if (this.isMeetingAssistant(user)) {
+if (this.isSolarStore(user)) {
+  const currentUserId = this.getCurrentUserId(user);
+
+  return this.followUpRepository
+    .createQueryBuilder('followUp')
+    .leftJoinAndSelect('followUp.lead', 'lead')
+    .where(
+      'followUp.followUpDate BETWEEN :start AND :end',
+      { start, end },
+    )
+    .andWhere(
+      `"lead"."solarStoreId" IN (
+        SELECT "store"."id"
+        FROM "solar_store" "store"
+        WHERE "store"."linkedUserId" = :currentUserId
+          AND "store"."status" = :activeStoreStatus
+          AND "store"."isHidden" = false
+      )`,
+      {
+        currentUserId,
+        activeStoreStatus: 'ACTIVE',
+      },
+    )
+    .orderBy('followUp.followUpDate', 'ASC')
+    .getMany();
+}
+
+if (this.isMeetingAssistant(user)) {
   return this.followUpRepository.find({
     where: {
       sourceModule: 'MEETING',
@@ -549,11 +688,27 @@ const qb = this.followUpRepository
     },
   );
 
-  if (this.isMeetingAssistant(user)) {
-    qb.andWhere('followUp.sourceModule = :sourceModule', {
-      sourceModule: 'MEETING',
-    });
-  } else if (this.isOwnAssignedOnlyRole(user)) {
+  if (this.isSolarStore(user)) {
+  const currentUserId = this.getCurrentUserId(user);
+
+  qb.andWhere(
+    `"lead"."solarStoreId" IN (
+      SELECT "store"."id"
+      FROM "solar_store" "store"
+      WHERE "store"."linkedUserId" = :currentUserId
+        AND "store"."status" = :activeStoreStatus
+        AND "store"."isHidden" = false
+    )`,
+    {
+      currentUserId,
+      activeStoreStatus: 'ACTIVE',
+    },
+  );
+} else if (this.isMeetingAssistant(user)) {
+  qb.andWhere('followUp.sourceModule = :sourceModule', {
+    sourceModule: 'MEETING',
+  });
+} else if (this.isOwnAssignedOnlyRole(user)) {
     const currentUserId = this.getCurrentUserId(user);
 
     qb.andWhere(
@@ -763,10 +918,37 @@ async findByDate(date: string, user: any) {
   end.setHours(23, 59, 59, 999);
 
   if (this.isProjectManager(user)) {
-    return [];
-  }
+  return [];
+}
 
-  if (this.isOwnAssignedOnlyRole(user)) {
+if (this.isSolarStore(user)) {
+  const currentUserId = this.getCurrentUserId(user);
+
+  return this.followUpRepository
+    .createQueryBuilder('followUp')
+    .leftJoinAndSelect('followUp.lead', 'lead')
+    .where(
+      'followUp.followUpDate BETWEEN :start AND :end',
+      { start, end },
+    )
+    .andWhere(
+      `"lead"."solarStoreId" IN (
+        SELECT "store"."id"
+        FROM "solar_store" "store"
+        WHERE "store"."linkedUserId" = :currentUserId
+          AND "store"."status" = :activeStoreStatus
+          AND "store"."isHidden" = false
+      )`,
+      {
+        currentUserId,
+        activeStoreStatus: 'ACTIVE',
+      },
+    )
+    .orderBy('followUp.followUpDate', 'ASC')
+    .getMany();
+}
+
+if (this.isOwnAssignedOnlyRole(user)) {
     const currentUserId = this.getCurrentUserId(user);
 
     return this.followUpRepository

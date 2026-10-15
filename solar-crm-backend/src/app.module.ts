@@ -30,6 +30,7 @@ import { PushNotificationModule } from './push-notification/push-notification.mo
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { PaymentModule } from './payment/payment.module';
 import { SolarMitraModule } from './solar-mitra/solar-mitra.module';
+import { SolarStoreModule } from './solar-store/solar-store.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { SolarMitraModule } from './solar-mitra/solar-mitra.module';
 WhatsappModule,
 PaymentModule,
 SolarMitraModule,
+SolarStoreModule,
   ],
   controllers: [AppController],
   providers: [AppService],

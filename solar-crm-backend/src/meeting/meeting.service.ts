@@ -22,6 +22,8 @@ import { FollowUp } from '../followup/follow-up.entity';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { UserRole } from '../users/user.entity';
+import { Lead } from '../leads/lead.entity';
+import { SolarStore } from '../solar-store/solar-store.entity';
 import { ProjectService } from '../project/project.service';
 import { MeetingReviewRemark } from './meeting-review-remark.entity';
 import {
@@ -37,6 +39,12 @@ export class MeetingService {
   constructor(
   @InjectRepository(Meeting)
   private readonly meetingRepository: Repository<Meeting>,
+
+  @InjectRepository(Lead)
+private readonly leadRepository: Repository<Lead>,
+
+@InjectRepository(SolarStore)
+private readonly solarStoreRepository: Repository<SolarStore>,
 
   @InjectRepository(MeetingReviewRemark)
   private readonly meetingReviewRemarkRepository:
@@ -97,6 +105,46 @@ private isSolarFranchise(user: any): boolean {
   return this.hasAnyRole(user, ['SOLAR_FRANCHISE' as any]);
 }
 
+private isSolarStore(user: any): boolean {
+  return this.hasAnyRole(user, [UserRole.SOLAR_STORE]);
+}
+
+private async getAuthenticatedSolarStore(
+  user: any,
+): Promise<SolarStore> {
+  if (!this.isSolarStore(user)) {
+    throw new ForbiddenException(
+      'Solar Store access is required',
+    );
+  }
+
+  const currentUserId = this.getCurrentUserId(user);
+
+  if (!Number.isInteger(currentUserId) || currentUserId <= 0) {
+    throw new ForbiddenException(
+      'Invalid Solar Store user',
+    );
+  }
+
+  const store = await this.solarStoreRepository.findOne({
+    where: {
+      linkedUserId: currentUserId,
+    },
+  });
+
+  if (
+    !store ||
+    store.status !== 'ACTIVE' ||
+    store.isHidden
+  ) {
+    throw new ForbiddenException(
+      'Solar Store is inactive, blocked, or unavailable',
+    );
+  }
+
+  return store;
+}
+
   private isMarketingHead(user: any): boolean {
     return this.hasAnyRole(user, [UserRole.MARKETING_HEAD]);
   }
@@ -112,9 +160,20 @@ private isSolarFranchise(user: any): boolean {
   private canModifyMeeting(meeting: Meeting, user: any): boolean {
   const currentUserId = this.getCurrentUserId(user);
 
-  if (this.isOwner(user)) return true;
+  if (this.isSolarStore(user)) {
+  const currentUserId = this.getCurrentUserId(user);
 
-  if (this.isSolarFranchise(user)) {
+  return (
+    Number.isInteger(currentUserId) &&
+    currentUserId > 0 &&
+    Number(meeting.solarStoreId) > 0 &&
+    Number(meeting.createdBy) === currentUserId
+  );
+}
+
+if (this.isOwner(user)) return true;
+
+if (this.isSolarFranchise(user)) {
     return (
       Number(meeting.createdBy) === currentUserId ||
       Number(meeting.assignedTo) === currentUserId
@@ -274,11 +333,29 @@ private async assertNoDuplicateMeetingMobile(
   private applyRoleVisibility(qb: any, user: any) {
   const currentUserId = this.getCurrentUserId(user);
 
-  if (this.isOwner(user)) {
-    return qb;
-  }
+  if (this.isSolarStore(user)) {
+  qb.andWhere(
+    `"meeting"."solarStoreId" IN (
+      SELECT "store"."id"
+      FROM "solar_store" "store"
+      WHERE "store"."linkedUserId" = :currentUserId
+        AND "store"."status" = :activeStoreStatus
+        AND "store"."isHidden" = false
+    )`,
+    {
+      currentUserId,
+      activeStoreStatus: 'ACTIVE',
+    },
+  );
 
-  if (this.isSolarFranchise(user)) {
+  return qb;
+}
+
+if (this.isOwner(user)) {
+  return qb;
+}
+
+if (this.isSolarFranchise(user)) {
     qb.andWhere(
       '(meeting.assignedTo = :currentUserId OR meeting.createdBy = :currentUserId)',
       { currentUserId },
@@ -359,7 +436,23 @@ private async assertNoDuplicateMeetingMobile(
       throw new NotFoundException(`Meeting with ID ${id} not found`);
     }
 
-    if (this.isOwner(user)) {
+    if (this.isSolarStore(user)) {
+  const store = await this.getAuthenticatedSolarStore(user);
+
+  if (
+    meeting.solarStoreId === null ||
+    meeting.solarStoreId === undefined ||
+    Number(meeting.solarStoreId) !== Number(store.id)
+  ) {
+    throw new ForbiddenException(
+      'You can only access meetings belonging to your Solar Store',
+    );
+  }
+
+  return meeting;
+}
+
+if (this.isOwner(user)) {
   return meeting;
 }
 
@@ -415,8 +508,11 @@ if (this.isBroadMeetingAccessRole(user)) {
     const currentUserName = this.getCurrentUserName(user);
 
     const version = this.meetingRepository.create({
-      leadId: baseMeeting.leadId,
-      followupId: updates.followupId ?? baseMeeting.followupId,
+  solarStoreId: baseMeeting.solarStoreId ?? null,
+  solarStoreName: baseMeeting.solarStoreName ?? null,
+
+  leadId: baseMeeting.leadId,
+  followupId: updates.followupId ?? baseMeeting.followupId,
       customerName: updates.customerName ?? baseMeeting.customerName,
       mobile: updates.mobile ?? baseMeeting.mobile,
       address: updates.address ?? baseMeeting.address,
@@ -558,9 +654,43 @@ proposedSystemKw:
 
     async create(createMeetingDto: CreateMeetingDto, user: any): Promise<Meeting> {
     const currentUserId = this.getCurrentUserId(user);
-    const currentUserName = this.getCurrentUserName(user);
+const currentUserName = this.getCurrentUserName(user);
 
-    await this.assertNoDuplicateMeetingMobile(
+let verifiedSolarStore: SolarStore | null = null;
+
+if (this.isSolarStore(user)) {
+  verifiedSolarStore =
+    await this.getAuthenticatedSolarStore(user);
+
+  const requestedLeadId = (createMeetingDto as any).leadId;
+
+  if (
+    requestedLeadId !== undefined &&
+    requestedLeadId !== null &&
+    requestedLeadId !== ''
+  ) {
+    const leadId = Number(requestedLeadId);
+
+    if (!Number.isInteger(leadId) || leadId <= 0) {
+      throw new BadRequestException('Invalid lead ID');
+    }
+
+    const lead = await this.leadRepository.findOne({
+      where: { id: leadId },
+    });
+
+    if (
+      !lead ||
+      Number(lead.solarStoreId) !== verifiedSolarStore.id
+    ) {
+      throw new ForbiddenException(
+        'This lead does not belong to your Solar Store',
+      );
+    }
+  }
+}
+
+await this.assertNoDuplicateMeetingMobile(
   (createMeetingDto as any).mobile,
 );
 
@@ -608,9 +738,44 @@ if (!cleanAddress && !cleanGpsAddress) {
       });
     }
 
-    const meetingData: Partial<Meeting> = {
-      ...(createMeetingDto as any),
-      leadId:
+    let inheritedSolarStoreId: number | null = null;
+let inheritedSolarStoreName: string | null = null;
+
+const requestedLeadId = (createMeetingDto as any).leadId;
+
+if (
+  !verifiedSolarStore &&
+  requestedLeadId !== undefined &&
+  requestedLeadId !== null &&
+  requestedLeadId !== ''
+) {
+  const leadId = Number(requestedLeadId);
+
+  if (Number.isInteger(leadId) && leadId > 0) {
+    const sourceLead = await this.leadRepository.findOne({
+      where: { id: leadId },
+    });
+
+    if (sourceLead?.solarStoreId) {
+      inheritedSolarStoreId = sourceLead.solarStoreId;
+      inheritedSolarStoreName =
+        sourceLead.solarStoreName || null;
+    }
+  }
+}
+
+const meetingData: Partial<Meeting> = {
+  ...(createMeetingDto as any),
+
+  solarStoreId: verifiedSolarStore
+    ? verifiedSolarStore.id
+    : inheritedSolarStoreId,
+
+  solarStoreName: verifiedSolarStore
+    ? verifiedSolarStore.name
+    : inheritedSolarStoreName,
+
+  leadId:
         (createMeetingDto as any).leadId !== undefined &&
         (createMeetingDto as any).leadId !== null &&
         (createMeetingDto as any).leadId !== ''
@@ -1327,9 +1492,20 @@ async exportCsv(
     const groupId = meeting.meetingGroupId || meeting.id;
 
     const history = await this.meetingRepository.find({
-      where: [{ meetingGroupId: groupId }, { id: groupId }],
-      order: { updatedAt: 'DESC', createdAt: 'DESC' },
-    });
+  where: this.isSolarStore(user)
+    ? [
+        {
+          meetingGroupId: groupId,
+          solarStoreId: Number(meeting.solarStoreId),
+        },
+        {
+          id: groupId,
+          solarStoreId: Number(meeting.solarStoreId),
+        },
+      ]
+    : [{ meetingGroupId: groupId }, { id: groupId }],
+  order: { updatedAt: 'DESC', createdAt: 'DESC' },
+});
 
     const latestMeeting = history[0] || meeting;
 
@@ -1418,11 +1594,24 @@ async getReviewRemarks(
         meetingId: meeting.id,
       },
     )
-    .orderBy(
-      'reviewRemark.createdAt',
-      'DESC',
-    )
-    .getMany();
+    .andWhere(
+  this.isSolarStore(user)
+    ? `EXISTS (
+        SELECT 1
+        FROM "meetings" "linkedMeeting"
+        WHERE "linkedMeeting"."id" = "reviewRemark"."meetingId"
+          AND "linkedMeeting"."solarStoreId" = :solarStoreId
+      )`
+    : '1 = 1',
+  this.isSolarStore(user)
+    ? { solarStoreId: Number(meeting.solarStoreId) }
+    : {},
+)
+.orderBy(
+  'reviewRemark.createdAt',
+  'DESC',
+)
+.getMany();
 }
 
   async reassignMeeting(
@@ -1697,6 +1886,20 @@ if (
 
 this.assertCanModifyMeeting(existingMeeting, user);
 
+if (this.isSolarStore(user)) {
+  const requestedLeadId = (updateMeetingDto as any).leadId;
+
+  if (
+    requestedLeadId !== undefined &&
+    requestedLeadId !== null &&
+    Number(requestedLeadId) !== Number(existingMeeting.leadId)
+  ) {
+    throw new ForbiddenException(
+      'Solar Store cannot change the lead linked to an existing meeting',
+    );
+  }
+}
+
 if (
   updateMeetingDto.scheduledAt &&
   new Date(updateMeetingDto.scheduledAt as any).getTime() !==
@@ -1725,17 +1928,24 @@ const currentUserId = this.getCurrentUserId(user);
     let assignedTo = (updateMeetingDto as any).assignedTo;
     let assignedToName = (updateMeetingDto as any).assignedToName;
 
-    if (this.isOwnMeetingRole(user)) {
-      assignedTo = existingMeeting.assignedTo || currentUserId;
-      assignedToName =
-        existingMeeting.assignedToName || this.getCurrentUserName(user);
-    }
+    if (this.isSolarStore(user)) {
+  assignedTo = existingMeeting.assignedTo;
+  assignedToName = existingMeeting.assignedToName;
+} else if (this.isOwnMeetingRole(user)) {
+  assignedTo = existingMeeting.assignedTo || currentUserId;
+  assignedToName =
+    existingMeeting.assignedToName || this.getCurrentUserName(user);
+}
 
     const version = await this.buildMeetingVersion(
-      existingMeeting,
-      {
-        ...updateMeetingDto,
-        scheduledAt: updateMeetingDto.scheduledAt
+  existingMeeting,
+  {
+    ...updateMeetingDto,
+
+    solarStoreId: existingMeeting.solarStoreId ?? null,
+    solarStoreName: existingMeeting.solarStoreName ?? null,
+
+    scheduledAt: updateMeetingDto.scheduledAt
           ? new Date(updateMeetingDto.scheduledAt as any)
           : existingMeeting.scheduledAt,
         assignedTo,

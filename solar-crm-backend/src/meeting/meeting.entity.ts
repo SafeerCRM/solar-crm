@@ -44,6 +44,12 @@ export class Meeting {
   @Column({ nullable: true })
   leadId?: number;
 
+  @Column({ type: 'integer', nullable: true })
+solarStoreId: number | null;
+
+@Column({ type: 'text', nullable: true })
+solarStoreName: string | null;
+
   @Column({ nullable: true })
   followupId?: number;
 

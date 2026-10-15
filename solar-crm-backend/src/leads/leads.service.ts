@@ -22,6 +22,7 @@ import { LeadNote } from './lead-note.entity';
 import { UserRole } from '../users/user.entity';
 import * as XLSX from 'xlsx';
 import { User } from '../users/user.entity';
+import { SolarStore, SolarStoreStatus } from '../solar-store/solar-store.entity';
 
 @Injectable()
 export class LeadsService {
@@ -31,6 +32,9 @@ export class LeadsService {
 
   @InjectRepository(User)
   private readonly userRepository: Repository<User>,
+
+  @InjectRepository(SolarStore)
+private readonly solarStoreRepository: Repository<SolarStore>,
 
   @InjectRepository(FollowUp)
   private readonly followUpRepository: Repository<FollowUp>,
@@ -119,6 +123,42 @@ export class LeadsService {
     return user?.name || user?.email || 'Unknown User';
   }
 
+  private isSolarStore(user: any): boolean {
+  return this.hasAnyRole(user, [UserRole.SOLAR_STORE]);
+}
+
+private async getAuthenticatedSolarStore(
+  user: any,
+): Promise<SolarStore> {
+  if (!this.isSolarStore(user)) {
+    throw new ForbiddenException(
+      'This operation requires a Solar Store account',
+    );
+  }
+
+  const userId = this.getCurrentUserId(user);
+
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new ForbiddenException('Invalid Solar Store account');
+  }
+
+  const store = await this.solarStoreRepository.findOne({
+    where: {
+      linkedUserId: userId,
+      isHidden: false,
+      status: SolarStoreStatus.ACTIVE,
+    },
+  });
+
+  if (!store) {
+    throw new ForbiddenException(
+      'No active Solar Store is linked to your account',
+    );
+  }
+
+  return store;
+}
+
   private normalizePotentialPercentage(value: any) {
     const numericValue = Number(value);
 
@@ -157,6 +197,22 @@ export class LeadsService {
     }
 
     const currentUserId = this.getCurrentUserId(user);
+
+    if (this.isSolarStore(user)) {
+  const solarStore =
+    await this.getAuthenticatedSolarStore(user);
+
+  if (
+    Number(lead.solarStoreId) !==
+    Number(solarStore.id)
+  ) {
+    throw new ForbiddenException(
+      'You can only access leads belonging to your Solar Store',
+    );
+  }
+
+  return lead;
+}
 
     const canAccessDirectly =
   this.isOwner(user) ||
@@ -218,12 +274,20 @@ export class LeadsService {
     }
 
     const currentUserId = this.getCurrentUserId(user);
-    const currentUserName = this.getCurrentUserName(user);
+const currentUserName = this.getCurrentUserName(user);
 
-        let leadData: Partial<Lead> = {
-      ...data,
-      createdBy: currentUserId,
-      createdByName: currentUserName,
+const solarStore = this.isSolarStore(user)
+  ? await this.getAuthenticatedSolarStore(user)
+  : null;
+
+let leadData: Partial<Lead> = {
+  ...data,
+
+  solarStoreId: solarStore ? solarStore.id : null,
+  solarStoreName: solarStore ? solarStore.name : null,
+
+  createdBy: currentUserId,
+  createdByName: currentUserName,
       originTelecallerId:
         (data as any).originTelecallerId !== undefined &&
         (data as any).originTelecallerId !== null
@@ -479,10 +543,11 @@ private buildLeadListQuery(
   );
 
   const requestedFollowUpFilter = String(
-    filters?.followUpFilter || 'WITHOUT',
-  )
-    .trim()
-    .toUpperCase();
+  filters?.followUpFilter ||
+    (this.isSolarStore(user) ? 'ALL' : 'WITHOUT'),
+)
+  .trim()
+  .toUpperCase();
 
   const allowedFollowUpFilters = [
     'WITHOUT',
@@ -498,12 +563,12 @@ private buildLeadListQuery(
    * WITHOUT-follow-up behaviour.
    */
   const followUpFilter =
-    this.isOwner(user) &&
-    allowedFollowUpFilters.includes(
-      requestedFollowUpFilter,
-    )
-      ? requestedFollowUpFilter
-      : 'WITHOUT';
+  (this.isOwner(user) || this.isSolarStore(user)) &&
+  allowedFollowUpFilters.includes(
+    requestedFollowUpFilter,
+  )
+    ? requestedFollowUpFilter
+    : 'WITHOUT';
 
   if (followUpFilter !== 'ALL') {
     query.andWhere((qb) => {
@@ -525,9 +590,23 @@ private buildLeadListQuery(
   }
 
   const currentUserId =
-    this.getCurrentUserId(user);
+  this.getCurrentUserId(user);
 
-  if (this.isTelecaller(user)) {
+if (this.isSolarStore(user)) {
+  query.andWhere(
+    `"lead"."solarStoreId" IN (
+      SELECT "solarStore"."id"
+      FROM "solar_store" "solarStore"
+      WHERE "solarStore"."linkedUserId" = :currentUserId
+        AND "solarStore"."status" = :activeStoreStatus
+        AND "solarStore"."isHidden" = false
+    )`,
+    {
+      currentUserId,
+      activeStoreStatus: SolarStoreStatus.ACTIVE,
+    },
+  );
+} else if (this.isTelecaller(user)) {
     query.andWhere(
       `(
         lead.originTelecallerId = :currentUserId
@@ -1132,8 +1211,13 @@ leadOwnerName:
 
     await this.getAccessibleLead(id, user);
 
-    const currentUserId = this.getCurrentUserId(user);
-    const currentUserName = this.getCurrentUserName(user);
+// Solar Store attribution is permanent.
+// It cannot be changed through a normal lead update.
+delete data.solarStoreId;
+delete data.solarStoreName;
+
+const currentUserId = this.getCurrentUserId(user);
+const currentUserName = this.getCurrentUserName(user);
 
     if (data.potentialPercentage !== undefined) {
       data.potentialPercentage = this.normalizePotentialPercentage(
@@ -1206,20 +1290,84 @@ leadOwnerName:
     return updatedLead;
   }
 
-  async assignLead(id: number, assignedTo: number) {
-    const lead = await this.leadRepository.findOne({
-      where: { id },
-    });
-
-    if (!lead) {
-      throw new NotFoundException('Lead not found');
-    }
-
-    lead.assignedTo = assignedTo;
-    return this.leadRepository.save(lead);
+  async assignLead(
+  id: number,
+  assignedTo: number,
+  user?: any,
+) {
+  if (!user) {
+    throw new ForbiddenException(
+      'Authenticated user is required for lead assignment',
+    );
   }
 
-  async assignBulk(body: { leadIds: number[]; assignedTo: number }) {
+  const lead = await this.leadRepository.findOne({
+    where: { id },
+  });
+
+  if (!lead) {
+    throw new NotFoundException('Lead not found');
+  }
+
+  if (this.isSolarStore(user)) {
+    const solarStore =
+      await this.getAuthenticatedSolarStore(user);
+
+    if (
+      Number(lead.solarStoreId) !==
+      Number(solarStore.id)
+    ) {
+      throw new ForbiddenException(
+        'You cannot assign leads belonging to another Solar Store',
+      );
+    }
+  }
+
+  if (
+    !this.isOwner(user) &&
+    !this.isLeadManager(user) &&
+    !this.isSolarStore(user)
+  ) {
+    throw new ForbiddenException(
+      'You do not have permission to assign leads',
+    );
+  }
+
+  const targetUserId = Number(assignedTo);
+
+  if (
+    !Number.isInteger(targetUserId) ||
+    targetUserId <= 0
+  ) {
+    throw new BadRequestException(
+      'A valid assigned user is required',
+    );
+  }
+
+  const targetUser = await this.userRepository.findOne({
+    where: { id: targetUserId },
+  });
+
+  if (!targetUser || targetUser.isHidden) {
+    throw new BadRequestException(
+      'Selected employee is not available',
+    );
+  }
+
+  lead.assignedTo = targetUserId;
+
+  return this.leadRepository.save(lead);
+}
+
+  async assignBulk(
+  body: { leadIds: number[]; assignedTo: number },
+  user?: any,
+) {
+  if (!user || !this.isOwner(user)) {
+    throw new ForbiddenException(
+      'Only OWNER can perform bulk lead assignment',
+    );
+  }
     const leadIds = Array.isArray(body?.leadIds)
       ? body.leadIds.map(Number).filter((id) => Number.isFinite(id) && id > 0)
       : [];
@@ -1700,6 +1848,12 @@ async assignLeadsByCount(
   assignedTo: number,
   user: any,
 ) {
+  if (!user || !this.isOwner(user)) {
+    throw new ForbiddenException(
+      'Only OWNER can assign unassigned leads by count',
+    );
+  }
+
   if (!assignCount || assignCount <= 0) {
     throw new BadRequestException('Invalid assign count');
   }
@@ -1978,12 +2132,22 @@ async getArchivedLeads(user: any) {
     .createQueryBuilder('lead')
     .where('COALESCE(lead.isArchived, false) = true');
 
-  if (this.isLeadManager(user)) {
-    query.andWhere(
-      '(lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId)',
-      { currentUserId }
-    );
-  }
+  if (this.isSolarStore(user)) {
+  const solarStore =
+    await this.getAuthenticatedSolarStore(user);
+
+  query.andWhere(
+    'lead.solarStoreId = :solarStoreId',
+    {
+      solarStoreId: solarStore.id,
+    },
+  );
+} else if (this.isLeadManager(user)) {
+  query.andWhere(
+    '(lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId)',
+    { currentUserId },
+  );
+}
 
   return query.orderBy('lead.createdAt', 'DESC').getMany();
 }
