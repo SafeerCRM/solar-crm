@@ -37,6 +37,18 @@ export class SolarStore {
   @Column({ type: 'text', nullable: true })
   address: string | null;
 
+  @Column({
+  type: 'double precision',
+  nullable: true,
+})
+gpsLatitude: number | null;
+
+@Column({
+  type: 'double precision',
+  nullable: true,
+})
+gpsLongitude: number | null;
+
   @Column({ type: 'text', nullable: true })
   tehsil: string | null;
 

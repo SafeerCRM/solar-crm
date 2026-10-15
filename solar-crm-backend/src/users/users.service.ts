@@ -113,7 +113,8 @@ export class UsersService {
              OR ${alias} LIKE :leadManager
              OR ${alias} LIKE :projectManager
              OR ${alias} LIKE :meetingManager
-             OR ${alias} LIKE :telecallingManager`,
+             OR ${alias} LIKE :telecallingManager
+             OR ${alias} LIKE :solarStore`,
           {
             telecaller: '%TELECALLER%',
             telecallingAssistant: '%TELECALLING_ASSISTANT%',
@@ -121,6 +122,7 @@ export class UsersService {
             projectManager: '%PROJECT_MANAGER%',
             meetingManager: '%MEETING_MANAGER%',
             telecallingManager: '%TELECALLING_MANAGER%',
+            solarStore: '%SOLAR_STORE%',
           },
         ),
       },
@@ -142,25 +144,36 @@ export class UsersService {
     });
   }
 
-  async findMeetingManagers() {
-  return this.userRepository.find({
-    where: {
-      isHidden: false,
-      roles: Raw((alias) => `${alias} LIKE :role`, {
-        role: '%MEETING_MANAGER%',
-      }),
-    },
-    select: ['id', 'name', 'email', 'roles'],
-    order: { id: 'ASC' },
-  });
-}
-  async findLeadManagers() {
+    async findMeetingManagers() {
     return this.userRepository.find({
       where: {
         isHidden: false,
-        roles: Raw((alias) => `${alias} LIKE :role`, {
-          role: '%LEAD_MANAGER%',
-        }),
+        roles: Raw(
+          (alias) =>
+            `${alias} LIKE :meetingManager OR ${alias} LIKE :solarStore`,
+          {
+            meetingManager: '%MEETING_MANAGER%',
+            solarStore: '%SOLAR_STORE%',
+          },
+        ),
+      },
+      select: ['id', 'name', 'email', 'roles'],
+      order: { id: 'ASC' },
+    });
+  }
+  
+    async findLeadManagers() {
+    return this.userRepository.find({
+      where: {
+        isHidden: false,
+        roles: Raw(
+          (alias) =>
+            `${alias} LIKE :leadManager OR ${alias} LIKE :solarStore`,
+          {
+            leadManager: '%LEAD_MANAGER%',
+            solarStore: '%SOLAR_STORE%',
+          },
+        ),
       },
       select: ['id', 'name', 'email', 'roles'],
       order: { id: 'ASC' },

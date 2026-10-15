@@ -232,7 +232,7 @@ const navItems = [
     'LEAD_MANAGER',
     'INSPECTION_MANAGER',
     'CUSTOMER_MANAGER',
-    'SOLAR_STORE',
+    
   ],
 },
 

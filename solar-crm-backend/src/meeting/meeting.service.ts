@@ -23,7 +23,7 @@ import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { UserRole } from '../users/user.entity';
 import { Lead } from '../leads/lead.entity';
-import { SolarStore } from '../solar-store/solar-store.entity';
+import { SolarStore, SolarStoreStatus } from '../solar-store/solar-store.entity';
 import { ProjectService } from '../project/project.service';
 import { MeetingReviewRemark } from './meeting-review-remark.entity';
 import {
@@ -761,6 +761,30 @@ if (
       inheritedSolarStoreName =
         sourceLead.solarStoreName || null;
     }
+  }
+}
+
+// For a fresh meeting assigned by OWNER to a Solar Store,
+// resolve the linked store without overwriting lead attribution.
+if (
+  !verifiedSolarStore &&
+  !inheritedSolarStoreId &&
+  Array.isArray(user?.roles) &&
+  user.roles.includes('OWNER') &&
+  assignedTo
+) {
+  const targetStore =
+    await this.solarStoreRepository.findOne({
+      where: {
+        linkedUserId: Number(assignedTo),
+        status: SolarStoreStatus.ACTIVE,
+        isHidden: false,
+      },
+    });
+
+  if (targetStore) {
+    inheritedSolarStoreId = targetStore.id;
+    inheritedSolarStoreName = targetStore.name;
   }
 }
 

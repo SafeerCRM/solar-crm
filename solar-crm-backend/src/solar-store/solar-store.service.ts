@@ -351,6 +351,18 @@ private readonly onboardingPaymentRepository:
             address: nullableText(
               body?.address,
             ),
+            gpsLatitude:
+              body?.gpsLatitude === undefined ||
+              body?.gpsLatitude === null ||
+              body?.gpsLatitude === ''
+                ? null
+                : Number(body.gpsLatitude),
+            gpsLongitude:
+              body?.gpsLongitude === undefined ||
+              body?.gpsLongitude === null ||
+              body?.gpsLongitude === ''
+                ? null
+                : Number(body.gpsLongitude),
             tehsil: nullableText(
               body?.tehsil,
             ),
@@ -827,12 +839,54 @@ async updateSolarStore(
         'shopPhotoUrl',
       ] as const;
 
-      for (const field of editableTextFields) {
+            for (const field of editableTextFields) {
         if (body?.[field] !== undefined) {
           store[field] = textOrNull(
             body[field],
           );
         }
+      }
+
+      // Update GPS coordinates only when supplied.
+      // Null or empty values clear the saved location.
+      if (
+        body?.gpsLatitude !== undefined ||
+        body?.gpsLongitude !== undefined
+      ) {
+        const latitude =
+          body?.gpsLatitude === undefined
+            ? store.gpsLatitude
+            : body.gpsLatitude === null ||
+                body.gpsLatitude === ''
+              ? null
+              : Number(body.gpsLatitude);
+
+        const longitude =
+          body?.gpsLongitude === undefined
+            ? store.gpsLongitude
+            : body.gpsLongitude === null ||
+                body.gpsLongitude === ''
+              ? null
+              : Number(body.gpsLongitude);
+
+        if (
+          (latitude === null) !== (longitude === null) ||
+          (latitude !== null &&
+            (!Number.isFinite(latitude) ||
+              latitude < -90 ||
+              latitude > 90)) ||
+          (longitude !== null &&
+            (!Number.isFinite(longitude) ||
+              longitude < -180 ||
+              longitude > 180))
+        ) {
+          throw new BadRequestException(
+            'Invalid GPS coordinates',
+          );
+        }
+
+        store.gpsLatitude = latitude;
+        store.gpsLongitude = longitude;
       }
 
       if (

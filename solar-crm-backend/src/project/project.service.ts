@@ -7135,6 +7135,41 @@ if (
   safeData.panelMaterialId = panelMaterialId;
 }
 
+// Resolve Solar Store attribution when OWNER
+// assigns a Project Owner linked to a Solar Store.
+// Preserve existing store attribution on reassignment.
+if (
+  isOwner &&
+  Object.prototype.hasOwnProperty.call(
+    safeData,
+    'projectOwnerId',
+  ) &&
+  !project.solarStoreId
+) {
+  const selectedOwnerId = Number(
+    safeData.projectOwnerId,
+  );
+
+  if (
+    Number.isInteger(selectedOwnerId) &&
+    selectedOwnerId > 0
+  ) {
+    const selectedStore =
+      await this.solarStoreRepository.findOne({
+        where: {
+          linkedUserId: selectedOwnerId,
+          status: SolarStoreStatus.ACTIVE,
+          isHidden: false,
+        },
+      });
+
+    if (selectedStore) {
+      safeData.solarStoreId = selectedStore.id;
+      safeData.solarStoreName = selectedStore.name;
+    }
+  }
+}
+
 Object.assign(
   project,
   safeData,

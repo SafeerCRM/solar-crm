@@ -280,11 +280,37 @@ const solarStore = this.isSolarStore(user)
   ? await this.getAuthenticatedSolarStore(user)
   : null;
 
+// When OWNER creates a lead for a Solar Store,
+// resolve its linked CRM user to the actual store.
+let assignedSolarStore = solarStore;
+
+if (
+  !assignedSolarStore &&
+  this.isOwner(user) &&
+  data.assignedTo
+) {
+  const selectedUserId = Number(data.assignedTo);
+
+  if (
+    Number.isInteger(selectedUserId) &&
+    selectedUserId > 0
+  ) {
+    assignedSolarStore =
+      await this.solarStoreRepository.findOne({
+        where: {
+          linkedUserId: selectedUserId,
+          status: SolarStoreStatus.ACTIVE,
+          isHidden: false,
+        },
+      });
+  }
+}
+
 let leadData: Partial<Lead> = {
   ...data,
 
-  solarStoreId: solarStore ? solarStore.id : null,
-  solarStoreName: solarStore ? solarStore.name : null,
+    solarStoreId: assignedSolarStore?.id ?? null,
+  solarStoreName: assignedSolarStore?.name ?? null,
 
   createdBy: currentUserId,
   createdByName: currentUserName,
@@ -1354,7 +1380,25 @@ const currentUserName = this.getCurrentUserName(user);
     );
   }
 
-  lead.assignedTo = targetUserId;
+    lead.assignedTo = targetUserId;
+
+  // Associate an ordinary lead with the selected
+  // Solar Store without overwriting existing attribution.
+  if (this.isOwner(user) && !lead.solarStoreId) {
+    const targetStore =
+      await this.solarStoreRepository.findOne({
+        where: {
+          linkedUserId: targetUserId,
+          status: SolarStoreStatus.ACTIVE,
+          isHidden: false,
+        },
+      });
+
+    if (targetStore) {
+      lead.solarStoreId = targetStore.id;
+      lead.solarStoreName = targetStore.name;
+    }
+  }
 
   return this.leadRepository.save(lead);
 }
@@ -1382,7 +1426,32 @@ const currentUserName = this.getCurrentUserName(user);
       throw new BadRequestException('Assigned user is required');
     }
 
-    await this.leadRepository.update(leadIds, { assignedTo });
+        const targetStore =
+      await this.solarStoreRepository.findOne({
+        where: {
+          linkedUserId: assignedTo,
+          status: SolarStoreStatus.ACTIVE,
+          isHidden: false,
+        },
+      });
+
+    await this.leadRepository.update(
+      leadIds,
+      { assignedTo },
+    );
+
+    if (targetStore) {
+      await this.leadRepository
+        .createQueryBuilder()
+        .update(Lead)
+        .set({
+          solarStoreId: targetStore.id,
+          solarStoreName: targetStore.name,
+        })
+        .where('id IN (:...leadIds)', { leadIds })
+        .andWhere('"solarStoreId" IS NULL')
+        .execute();
+    }
 
     return {
       message: `Assigned ${leadIds.length} leads successfully`,
