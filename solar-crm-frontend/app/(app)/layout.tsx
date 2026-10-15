@@ -81,6 +81,12 @@ const navItems = [
   ],
 },
 
+{
+  name: 'Solar Store Management',
+  href: '/solar-store',
+  roles: ['OWNER', 'FRANCHISE_HEAD', 'SOLAR_STORE'],
+},
+
 
   { name: 'Users', href: '/users', roles: ['OWNER'] },
 
