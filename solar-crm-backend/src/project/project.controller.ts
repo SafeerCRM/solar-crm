@@ -65,6 +65,26 @@ getProjectReworks(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Post(':id/reworks/:reworkId/materials')
+addProjectReworkMaterial(
+  @Param('id', ParseIntPipe) projectId: number,
+  @Param('reworkId', ParseIntPipe) reworkId: number,
+  @Body() body: any,
+  @CurrentUser() currentUser: any,
+) {
+  return this.projectService.addProjectReworkMaterial(
+    projectId,
+    reworkId,
+    body,
+    currentUser,
+  );
+}
+
   @Post('create')
 create(
   @Body() body: any,

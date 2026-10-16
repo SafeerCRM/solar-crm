@@ -6737,6 +6737,124 @@ async getProjectReworks(
 }
 
 
+async addProjectReworkMaterial(
+  projectId: number,
+  reworkId: number,
+  body: any,
+  currentUser: any,
+) {
+  await this.findOne(projectId, currentUser);
+
+  const roles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  const allowedRoles = [
+    'OWNER',
+    'PROJECT_MANAGER',
+    'ACCOUNT_MANAGER',
+  ];
+
+  if (!roles.some((role) => allowedRoles.includes(role))) {
+    throw new ForbiddenException(
+      'You are not allowed to manage Re-work materials',
+    );
+  }
+
+  const rework = await this.projectReworkRepository.findOne({
+    where: {
+      id: reworkId,
+      projectId,
+      isHidden: false,
+    },
+  });
+
+  if (!rework) {
+    throw new NotFoundException(
+      'Re-work job not found for this project',
+    );
+  }
+
+  if (
+    rework.status === 'COMPLETED' ||
+    rework.status === 'CANCELLED'
+  ) {
+    throw new BadRequestException(
+      'Materials cannot be added to a completed or cancelled Re-work job',
+    );
+  }
+
+  const materialId = Number(body?.materialId);
+  const plannedQuantity = Number(body?.plannedQuantity);
+
+  if (!Number.isInteger(materialId) || materialId <= 0) {
+    throw new BadRequestException(
+      'Select a valid material',
+    );
+  }
+
+  if (
+    body?.plannedQuantity === undefined ||
+    body?.plannedQuantity === null ||
+    body?.plannedQuantity === '' ||
+    !Number.isFinite(plannedQuantity) ||
+    plannedQuantity <= 0 ||
+    plannedQuantity > 99999999999.999 ||
+    Math.round(plannedQuantity * 1000) / 1000 !==
+      plannedQuantity
+  ) {
+    throw new BadRequestException(
+      'Planned quantity must be positive and have at most 3 decimal places',
+    );
+  }
+
+  const material = await this.projectMaterialMasterRepository.findOne({
+    where: {
+      id: materialId,
+      isActive: true,
+    },
+  });
+
+  if (!material) {
+    throw new NotFoundException(
+      'Active Material Master item not found',
+    );
+  }
+
+  const userId = Number(
+    currentUser?.id ?? currentUser?.sub,
+  );
+
+  const userName = String(
+    currentUser?.name ??
+    currentUser?.fullName ??
+    currentUser?.username ??
+    '',
+  ).trim();
+
+  const newMaterial = this.projectReworkMaterialRepository.create({
+    reworkId,
+    projectId,
+    materialId: material.id,
+    materialName: material.name,
+    unit: material.unit || null,
+    plannedQuantity,
+    issuedQuantity: 0,
+    issuedCost: 0,
+    stockItemId: null,
+    branchId: null,
+    branchName: null,
+    remarks: String(body?.remarks ?? '').trim() || null,
+    createdBy:
+      Number.isInteger(userId) && userId > 0
+        ? userId
+        : null,
+    createdByName: userName || null,
+  });
+
+  return this.projectReworkMaterialRepository.save(newMaterial);
+}
+
 
   async findOne(id: number, user?: any) {
     const project = await this.projectRepository.findOne({
