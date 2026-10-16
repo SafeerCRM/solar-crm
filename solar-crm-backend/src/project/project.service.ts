@@ -184,6 +184,11 @@ import {
   ProjectStockMovement,
   ProjectStockMovementType,
 } from './project-stock-movement.entity';
+
+import { ProjectRework } from './project-rework.entity';
+import { ProjectReworkMaterial } from './project-rework-material.entity';
+import { ProjectReworkExpense } from './project-rework-expense.entity';
+import { ProjectReworkPayment } from './project-rework-payment.entity';
 import { ProjectStockFile } from './project-stock-file.entity';
 
 import { ProjectConsumption } from './project-consumption.entity';
@@ -2615,6 +2620,22 @@ private readonly projectStockMovementRepository: Repository<ProjectStockMovement
 
 @InjectRepository(ProjectStockFile)
 private readonly projectStockFileRepository: Repository<ProjectStockFile>,
+
+@InjectRepository(ProjectRework)
+private readonly projectReworkRepository:
+  Repository<ProjectRework>,
+
+@InjectRepository(ProjectReworkMaterial)
+private readonly projectReworkMaterialRepository:
+  Repository<ProjectReworkMaterial>,
+
+@InjectRepository(ProjectReworkExpense)
+private readonly projectReworkExpenseRepository:
+  Repository<ProjectReworkExpense>,
+
+@InjectRepository(ProjectReworkPayment)
+private readonly projectReworkPaymentRepository:
+  Repository<ProjectReworkPayment>,
 
 @InjectRepository(ProjectPurchaseOrder)
 private readonly projectPurchaseOrderRepository: Repository<ProjectPurchaseOrder>,
@@ -6444,6 +6465,278 @@ async getCustomerConfirmationDetails(
     history,
   };
 }
+
+
+async createProjectRework(
+  projectId: number,
+  body: any,
+  currentUser: any,
+) {
+  // Verify that the project exists and the user can access it.
+  await this.findOne(projectId, currentUser);
+
+  // Creating a financial commitment requires management access.
+  const roles: string[] = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  const allowedRoles = [
+    'OWNER',
+    'PROJECT_MANAGER',
+    'ACCOUNT_MANAGER',
+  ];
+
+  if (!roles.some((role) => allowedRoles.includes(role))) {
+    throw new ForbiddenException(
+      'You are not allowed to create Re-work jobs',
+    );
+  }
+
+  const title = String(body?.title ?? '').trim();
+  const description = String(body?.description ?? '').trim();
+  const agreedAmount = Number(body?.agreedAmount);
+
+  if (!title) {
+    throw new BadRequestException(
+      'Re-work title is required',
+    );
+  }
+
+  if (
+    body?.agreedAmount === undefined ||
+    body?.agreedAmount === null ||
+    body?.agreedAmount === '' ||
+    !Number.isFinite(agreedAmount) ||
+    agreedAmount < 0 ||
+    agreedAmount > 999999999999.99
+  ) {
+    throw new BadRequestException(
+      'Enter a valid Re-work agreed amount',
+    );
+  }
+
+  const agreedDate =
+    body?.agreedDate === undefined ||
+    body?.agreedDate === null ||
+    body?.agreedDate === ''
+      ? null
+      : String(body.agreedDate);
+
+  if (
+    agreedDate !== null &&
+    (
+      !/^\d{4}-\d{2}-\d{2}$/.test(agreedDate) ||
+      Number.isNaN(Date.parse(`${agreedDate}T00:00:00Z`)) ||
+      new Date(`${agreedDate}T00:00:00Z`)
+        .toISOString()
+        .slice(0, 10) !== agreedDate
+    )
+  ) {
+    throw new BadRequestException(
+      'Agreed date must be a valid YYYY-MM-DD date',
+    );
+  }
+
+  const userId = Number(
+    currentUser?.id ?? currentUser?.sub,
+  );
+
+  const userName = String(
+    currentUser?.name ??
+    currentUser?.fullName ??
+    currentUser?.username ??
+    '',
+  ).trim();
+
+  const rework = this.projectReworkRepository.create({
+    projectId,
+    title,
+    description: description || null,
+    agreedAmount,
+    agreedDate,
+    remarks: String(body?.remarks ?? '').trim() || null,
+    createdBy: Number.isInteger(userId) && userId > 0
+      ? userId
+      : null,
+    createdByName: userName || null,
+  });
+
+  return this.projectReworkRepository.save(rework);
+}
+
+
+async getProjectReworks(
+  projectId: number,
+  currentUser: any,
+) {
+  // Preserve existing project access restrictions.
+  await this.findOne(projectId, currentUser);
+
+  const reworks = await this.projectReworkRepository.find({
+    where: {
+      projectId,
+      isHidden: false,
+    },
+    order: {
+      createdAt: 'DESC',
+      id: 'DESC',
+    },
+  });
+
+  if (reworks.length === 0) {
+    return {
+      projectId,
+      reworks: [],
+      summary: {
+        totalReworks: 0,
+        agreedAmount: 0,
+        receivedAmount: 0,
+        outstandingAmount: 0,
+        materialCost: 0,
+        otherExpenses: 0,
+        totalCost: 0,
+        expectedProfit: 0,
+      },
+    };
+  }
+
+  const reworkIds = reworks.map((rework) => rework.id);
+
+  const [materials, expenses, payments] = await Promise.all([
+    this.projectReworkMaterialRepository
+      .createQueryBuilder('material')
+      .where('material.reworkId IN (:...reworkIds)', {
+        reworkIds,
+      })
+      .andWhere('material.projectId = :projectId', {
+        projectId,
+      })
+      .andWhere('material.isHidden = false')
+      .getMany(),
+
+    this.projectReworkExpenseRepository
+      .createQueryBuilder('expense')
+      .where('expense.reworkId IN (:...reworkIds)', {
+        reworkIds,
+      })
+      .andWhere('expense.projectId = :projectId', {
+        projectId,
+      })
+      .andWhere('expense.isHidden = false')
+      .getMany(),
+
+    this.projectReworkPaymentRepository
+      .createQueryBuilder('payment')
+      .where('payment.reworkId IN (:...reworkIds)', {
+        reworkIds,
+      })
+      .andWhere('payment.projectId = :projectId', {
+        projectId,
+      })
+      .andWhere('payment.isHidden = false')
+      .getMany(),
+  ]);
+
+  const roundMoney = (value: number) =>
+    Math.round((value + Number.EPSILON) * 100) / 100;
+
+  const sumAmounts = (
+    rows: any[],
+    field: string,
+  ): number =>
+    roundMoney(
+      rows.reduce(
+        (total, row) => total + Number(row[field] || 0),
+        0,
+      ),
+    );
+
+  const result = reworks.map((rework) => {
+    const reworkMaterials = materials.filter(
+      (item) => item.reworkId === rework.id,
+    );
+
+    const reworkExpenses = expenses.filter(
+      (item) => item.reworkId === rework.id,
+    );
+
+    const reworkPayments = payments.filter(
+      (item) => item.reworkId === rework.id,
+    );
+
+    const agreedAmount = Number(rework.agreedAmount || 0);
+
+    const receivedAmount = sumAmounts(
+      reworkPayments,
+      'amount',
+    );
+
+    const materialCost = sumAmounts(
+      reworkMaterials,
+      'issuedCost',
+    );
+
+    const otherExpenses = sumAmounts(
+      reworkExpenses,
+      'amount',
+    );
+
+    const totalCost = roundMoney(
+      materialCost + otherExpenses,
+    );
+
+    return {
+      ...rework,
+      materials: reworkMaterials,
+      expenses: reworkExpenses,
+      payments: reworkPayments,
+      financials: {
+        agreedAmount: roundMoney(agreedAmount),
+        receivedAmount,
+        outstandingAmount: roundMoney(
+          agreedAmount - receivedAmount,
+        ),
+        materialCost,
+        otherExpenses,
+        totalCost,
+        expectedProfit: roundMoney(
+          agreedAmount - totalCost,
+        ),
+      },
+    };
+  });
+
+  const total = (field: string) =>
+    roundMoney(
+      result.reduce(
+        (sum, item) =>
+          sum +
+          Number(
+            item.financials[
+              field as keyof typeof item.financials
+            ] || 0,
+          ),
+        0,
+      ),
+    );
+
+  return {
+    projectId,
+    reworks: result,
+    summary: {
+      totalReworks: result.length,
+      agreedAmount: total('agreedAmount'),
+      receivedAmount: total('receivedAmount'),
+      outstandingAmount: total('outstandingAmount'),
+      materialCost: total('materialCost'),
+      otherExpenses: total('otherExpenses'),
+      totalCost: total('totalCost'),
+      expectedProfit: total('expectedProfit'),
+    },
+  };
+}
+
+
 
   async findOne(id: number, user?: any) {
     const project = await this.projectRepository.findOne({
@@ -12876,6 +13169,12 @@ private async getProjectMaterialLagat(
       .andWhere(
         'COALESCE(movement.isHidden, false) = false',
       )
+      .andWhere(
+  `COALESCE(movement.sourceType, '') <> :reworkSourceType`,
+  {
+    reworkSourceType: 'REWORK',
+  },
+)
       .select([
         'movement.materialId AS "materialId"',
         'movement.materialName AS "materialName"',
@@ -14651,6 +14950,12 @@ if (projectIds.length > 0) {
       .andWhere(
         'COALESCE(movement.isHidden, false) = false',
       )
+      .andWhere(
+  `COALESCE(movement.sourceType, '') <> :reworkSourceType`,
+  {
+    reworkSourceType: 'REWORK',
+  },
+)
       .select([
         'movement.projectId AS "projectId"',
         'movement.materialId AS "materialId"',

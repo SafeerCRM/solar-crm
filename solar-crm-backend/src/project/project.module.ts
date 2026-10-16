@@ -46,6 +46,10 @@ import { ProjectLoanCoApplicant } from './project-loan-co-applicant.entity';
 import { ProjectAccountExpense } from './project-account-expense.entity';
 import { ProjectStockItem } from './project-stock-item.entity';
 import { ProjectStockMovement } from './project-stock-movement.entity';
+import { ProjectRework } from './project-rework.entity';
+import { ProjectReworkMaterial } from './project-rework-material.entity';
+import { ProjectReworkExpense } from './project-rework-expense.entity';
+import { ProjectReworkPayment } from './project-rework-payment.entity';
 import { ProjectStockFile } from './project-stock-file.entity';
 import { ProjectConsumption } from './project-consumption.entity';
 import { ProjectCustomerUpdate } from './project-customer-update.entity';
@@ -165,6 +169,12 @@ ProjectPurchaseOrder,
 ProjectStockItem,
 ProjectStockMovement,
 ProjectStockFile,
+
+ProjectRework,
+ProjectReworkMaterial,
+ProjectReworkExpense,
+ProjectReworkPayment,
+
 ProjectPurchaseOrderItem, ProjectProformaInvoice,
 ProjectProformaInvoiceItem, ProjectFinalInvoice, ProjectFinalInvoiceItem, ProjectEpcCustomerInvoice,
 ProjectEpcCustomerInvoiceItem, ProjectPartyLedger, ProjectContractorAssignment, ProjectContractorSlaBatch,

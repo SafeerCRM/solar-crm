@@ -35,6 +35,36 @@ export class ProjectController {
     private readonly projectStaffNotificationService: ProjectStaffNotificationService,
   ) {}
 
+  @Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER')
+@Post(':id/reworks')
+createProjectRework(
+  @Param('id', ParseIntPipe) projectId: number,
+  @Body() body: any,
+  @CurrentUser() currentUser: any,
+) {
+  return this.projectService.createProjectRework(
+    projectId,
+    body,
+    currentUser,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Get(':id/reworks')
+getProjectReworks(
+  @Param('id', ParseIntPipe) projectId: number,
+  @CurrentUser() currentUser: any,
+) {
+  return this.projectService.getProjectReworks(
+    projectId,
+    currentUser,
+  );
+}
+
   @Post('create')
 create(
   @Body() body: any,
