@@ -1834,7 +1834,11 @@ disabled={isAutoCalling}
   >
     <option value="">All Lead Managers</option>
     {users
-      .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+      .filter(
+  (u) =>
+    (u.roles || []).includes('LEAD_MANAGER') ||
+    (u.roles || []).includes('SOLAR_STORE'),
+)
       .map((u) => (
         <option key={u.id} value={u.id}>
           {u.name}
@@ -1933,7 +1937,7 @@ disabled={isAutoCalling}
       >
         <option value="">Select lead manager</option>
         {users
-          .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+          .filter((u) => (u.roles || []).includes('LEAD_MANAGER') || (u.roles || []).includes('SOLAR_STORE'))
           .map((u) => (
             <option key={u.id} value={u.id}>
               {u.name}
@@ -1980,7 +1984,7 @@ disabled={isAutoCalling}
       >
         <option value="">Select Lead Manager</option>
         {users
-          .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+          .filter((u) => (u.roles || []).includes('LEAD_MANAGER') || (u.roles || []).includes('SOLAR_STORE'))
           .map((u) => (
             <option key={u.id} value={u.id}>
               {u.name}
@@ -2023,7 +2027,7 @@ disabled={isAutoCalling}
         >
           <option value="">From Lead Manager</option>
           {users
-            .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+            .filter((u) => (u.roles || []).includes('LEAD_MANAGER') || (u.roles || []).includes('SOLAR_STORE'))
             .map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
@@ -2050,7 +2054,7 @@ disabled={isAutoCalling}
         >
           <option value="">To Lead Manager</option>
           {users
-            .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+            .filter((u) => (u.roles || []).includes('LEAD_MANAGER') || (u.roles || []).includes('SOLAR_STORE'))
             .map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
@@ -2381,7 +2385,7 @@ fetchStorageLeads(1);
       >
         <option value="">Select lead manager</option>
         {users
-          .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+          .filter((u) => (u.roles || []).includes('LEAD_MANAGER') || (u.roles || []).includes('SOLAR_STORE'))
           .map((u) => (
             <option key={u.id} value={u.id}>
               {u.name}
@@ -2850,7 +2854,7 @@ fetchStorageLeads(1);
                     >
                       <option value="">Select user</option>
                       {users
-  .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+  .filter((u) => (u.roles || []).includes('LEAD_MANAGER') || (u.roles || []).includes('SOLAR_STORE'))
   .map((u) => (
     <option key={u.id} value={u.id}>
       {u.name}
