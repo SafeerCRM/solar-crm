@@ -4,8 +4,25 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share as CapacitorShare } from '@capacitor/share';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+const blobToBase64 = async (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      const result = String(reader.result || '');
+      resolve(result.split(',')[1] || '');
+    };
+
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
 
 type TradingMeeting = {
   id: number;
@@ -48,6 +65,7 @@ export default function TradingMeetingPage() {
   const [meetings, setMeetings] = useState<TradingMeeting[]>([]);
   const [analytics, setAnalytics] = useState<Analytics>({});
   const [loading, setLoading] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
@@ -173,6 +191,198 @@ const [users, setUsers] = useState<any[]>([]);
     }
   };
 
+  const buildTradingMeetingCsv = async () => {
+  const allMeetings: TradingMeeting[] = [];
+  let exportPage = 1;
+  let exportTotalPages = 1;
+
+  do {
+    const res = await axios.get(
+      `${API_BASE_URL}/project/trading-meetings`,
+      {
+        params: {
+          search: search.trim(),
+          status: status || undefined,
+          assignedTo: assignedTo || undefined,
+          showHidden,
+          page: exportPage,
+          limit: 100,
+        },
+        headers: getAuthHeaders(),
+      },
+    );
+
+    const rows = Array.isArray(res.data?.data)
+      ? res.data.data
+      : [];
+
+    allMeetings.push(...rows);
+
+    exportTotalPages = Number(res.data?.totalPages || 1);
+    exportPage++;
+  } while (exportPage <= exportTotalPages);
+
+  const escapeCsv = (value: unknown) => {
+    const text = String(value ?? '');
+
+    // Prevent spreadsheet formula execution.
+    const safeText = /^[\s]*[=+\-@\t\r]/.test(text)
+      ? `'${text}`
+      : text;
+
+    return `"${safeText.replace(/"/g, '""')}"`;
+  };
+
+  const headers = [
+    'Dealer Name',
+    'Contact Number',
+    'Area',
+    'City',
+    'Trading Manager Name',
+  ];
+
+  const rows = allMeetings.map((meeting) => [
+    meeting.dealerName || '',
+    meeting.dealerPhone || '',
+    '',
+    meeting.branchName || '',
+    meeting.assignedToName || '',
+  ]);
+
+  const csv = [
+    headers,
+    ...rows,
+  ]
+    .map((row) => row.map(escapeCsv).join(','))
+    .join('\r\n');
+
+  return {
+    csv: '\uFEFF' + csv,
+    count: allMeetings.length,
+  };
+};
+
+const downloadTradingMeetingCsv = async () => {
+  try {
+    setExportingCsv(true);
+
+    const { csv, count } = await buildTradingMeetingCsv();
+
+    if (count === 0) {
+      alert('No trading meetings found for export');
+      return;
+    }
+
+    const blob = new Blob([csv], {
+      type: 'text/csv;charset=utf-8;',
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = `trading-meetings-${
+      new Date().toISOString().slice(0, 10)
+    }.csv`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error: any) {
+    console.error('Trading meeting CSV export failed', error);
+    alert(
+      error?.response?.data?.message ||
+      'Failed to export trading meetings',
+    );
+  } finally {
+    setExportingCsv(false);
+  }
+};
+
+const shareTradingMeetingCsv = async () => {
+  try {
+    setExportingCsv(true);
+
+    const { csv, count } = await buildTradingMeetingCsv();
+
+    if (count === 0) {
+      alert('No trading meetings found for export');
+      return;
+    }
+
+    const fileName = `trading-meetings-${
+      new Date().toISOString().slice(0, 10)
+    }.csv`;
+
+    const csvBlob = new Blob([csv], {
+      type: 'text/csv;charset=utf-8',
+    });
+
+    if (Capacitor.isNativePlatform()) {
+      const base64Data = await blobToBase64(csvBlob);
+
+      const savedFile = await Filesystem.writeFile({
+        path: fileName,
+        data: base64Data,
+        directory: Directory.Cache,
+        recursive: true,
+      });
+
+      await CapacitorShare.share({
+        title: 'Trading Meetings Export',
+        text: 'Trading meetings CSV export',
+        url: savedFile.uri,
+        dialogTitle: 'Save or share trading meetings CSV',
+      });
+
+      return;
+    }
+
+    // Web: share the CSV file where supported.
+    const file = new File([csvBlob], fileName, {
+      type: 'text/csv',
+    });
+
+    if (
+      navigator.share &&
+      navigator.canShare?.({ files: [file] })
+    ) {
+      await navigator.share({
+        title: 'Trading Meetings Export',
+        files: [file],
+      });
+
+      return;
+    }
+
+    // Web fallback: download the CSV.
+    const url = URL.createObjectURL(csvBlob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = fileName;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error: any) {
+    if (error?.name === 'AbortError') return;
+
+    console.error('Trading meeting CSV sharing failed', error);
+
+    alert(
+      error?.response?.data?.message ||
+      'Failed to share trading meetings CSV',
+    );
+  } finally {
+    setExportingCsv(false);
+  }
+};
+
   return (
     <div className="mx-auto max-w-7xl space-y-5 overflow-x-hidden">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -292,6 +502,24 @@ const [users, setUsers] = useState<any[]>([]);
           >
             Refresh
           </button>
+
+          <button
+  type="button"
+  onClick={downloadTradingMeetingCsv}
+  disabled={exportingCsv}
+  className="rounded-xl bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+>
+  {exportingCsv ? 'Preparing CSV...' : 'Download CSV'}
+</button>
+
+<button
+  type="button"
+  onClick={shareTradingMeetingCsv}
+  disabled={exportingCsv}
+  className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+>
+  {exportingCsv ? 'Preparing CSV...' : 'Share CSV'}
+</button>
         </div>
       </div>
 

@@ -33,6 +33,9 @@ export default function CreateTradingMeetingPage() {
 
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [materialSearch, setMaterialSearch] = useState('');
+const [materialDropdownOpen, setMaterialDropdownOpen] = useState(false);
+const [materialLoading, setMaterialLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
 
@@ -58,27 +61,96 @@ manualDealerCity: '',
   });
 
   const fetchBaseData = async () => {
-    const [dealerRes, catalogRes] = await Promise.all([
-      axios.get(`${API_BASE_URL}/project/dealer/list`, {
-        params: { page: 1, limit: 200, showHidden: false },
-        headers: getAuthHeaders(),
-      }),
-      axios.get(`${API_BASE_URL}/project/dealer/catalog`, {
-        params: { page: 1, limit: 200 },
-        headers: getAuthHeaders(),
-      }),
-    ]);
+  const allDealers: Dealer[] = [];
+  let page = 1;
+  let totalPages = 1;
 
-    setDealers(dealerRes.data?.data || []);
-    setCatalog(catalogRes.data?.data || []);
-  };
+  do {
+    const response = await axios.get(
+      `${API_BASE_URL}/project/dealer/list`,
+      {
+        params: {
+          page,
+          limit: 100,
+          showHidden: false,
+        },
+        headers: getAuthHeaders(),
+      },
+    );
+
+    const rows = Array.isArray(response.data?.data)
+      ? response.data.data
+      : [];
+
+    allDealers.push(...rows);
+
+    totalPages = Number(response.data?.totalPages || 1);
+    page++;
+  } while (page <= totalPages);
+
+  setDealers(allDealers);
+};
+
+const fetchMaterials = async (searchText = '') => {
+  try {
+    setMaterialLoading(true);
+
+    const allMaterials: CatalogItem[] = [];
+    let page = 1;
+    let totalPages = 1;
+
+    do {
+      const response = await axios.get(
+        `${API_BASE_URL}/project/dealer/catalog`,
+        {
+          params: {
+            page,
+            limit: 100,
+            search: searchText.trim(),
+          },
+          headers: getAuthHeaders(),
+        },
+      );
+
+      const rows = Array.isArray(response.data?.data)
+        ? response.data.data
+        : [];
+
+      allMaterials.push(...rows);
+
+      totalPages = Number(response.data?.totalPages || 1);
+      page++;
+    } while (page <= totalPages);
+
+    setCatalog(allMaterials);
+  } catch (error) {
+    console.error('Failed to load materials', error);
+  } finally {
+    setMaterialLoading(false);
+  }
+};
 
   useEffect(() => {
-    fetchBaseData().catch((error) => {
-      console.error(error);
-      alert('Failed to load dealer/catalog data');
-    });
-  }, []);
+  fetchBaseData().catch((error) => {
+    console.error(error);
+    alert('Failed to load dealers');
+  });
+
+  void fetchMaterials();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
+useEffect(() => {
+  if (!materialDropdownOpen) return;
+
+  const timeout = setTimeout(() => {
+    void fetchMaterials(materialSearch);
+  }, 300);
+
+  return () => clearTimeout(timeout);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [materialSearch, materialDropdownOpen]);
 
   const getCurrentLocation = async () => {
     if (!navigator.geolocation) {
@@ -448,18 +520,63 @@ const updateTimePart = (
   </div>
 </LocalizationProvider>
 
-          <select
-            value={form.expectedMaterialName}
-            onChange={(e) => onMaterialChange(e.target.value)}
-            className="w-full min-w-0 rounded-xl border p-3"
-          >
-            <option value="">Expected Material</option>
-            {catalog.map((item) => (
-              <option key={item.id} value={item.name}>
-                {item.name} | Stock {item.availableQuantity || 0}
-              </option>
-            ))}
-          </select>
+          <div className="relative min-w-0">
+  <button
+    type="button"
+    onClick={() => {
+      setMaterialDropdownOpen((prev) => !prev);
+      setMaterialSearch('');
+    }}
+    className="w-full min-w-0 rounded-xl border bg-white p-3 text-left"
+  >
+    {form.expectedMaterialName || 'Search / Select Expected Material'}
+  </button>
+
+  {materialDropdownOpen && (
+    <div className="absolute left-0 right-0 z-50 mt-1 rounded-xl border bg-white p-2 shadow-xl">
+      <input
+        autoFocus
+        type="text"
+        placeholder="Search material name, brand or category..."
+        value={materialSearch}
+        onChange={(e) => setMaterialSearch(e.target.value)}
+        className="w-full rounded-lg border p-3 text-sm"
+      />
+
+      <div className="mt-2 max-h-64 overflow-y-auto">
+        {materialLoading ? (
+          <p className="p-3 text-sm text-gray-500">
+            Searching materials...
+          </p>
+        ) : catalog.length === 0 ? (
+          <p className="p-3 text-sm text-gray-500">
+            No matching materials
+          </p>
+        ) : (
+          catalog.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                onMaterialChange(item.name || '');
+                setMaterialDropdownOpen(false);
+                setMaterialSearch('');
+              }}
+              className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-blue-50"
+            >
+              <span className="font-medium">
+                {item.name}
+              </span>
+              <span className="block text-xs text-gray-500">
+                Stock: {item.availableQuantity || 0}
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  )}
+</div>
 
           <input
             type="number"
