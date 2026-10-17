@@ -23,6 +23,17 @@ type ReworkStockItem = {
   averageRate: number | string;
 };
 
+type ReworkPayment = {
+  id: number;
+  amount: number | string;
+  paymentDate: string;
+  paymentMode?: string | null;
+  transactionId?: string | null;
+  proofUrl?: string | null;
+  remarks?: string | null;
+  collectedByName?: string | null;
+};
+
 type ReworkExpense = {
   id: number;
   category: string;
@@ -69,7 +80,7 @@ type ReworkJob = {
   createdAt?: string;
   materials?: ReworkMaterial[];
   expenses?: ReworkExpense[];
-payments?: unknown[];
+payments?: ReworkPayment[];
 financials?: ReworkFinancials;
 };
 
@@ -128,6 +139,17 @@ const [issuingMaterialId, setIssuingMaterialId] =
 });
 
 const [expenseBusyId, setExpenseBusyId] =
+  useState<number | null>(null);
+
+  const [paymentForm, setPaymentForm] = useState({
+  amount: '',
+  paymentDate: '',
+  paymentMode: 'CASH',
+  transactionId: '',
+  remarks: '',
+});
+
+const [paymentBusyId, setPaymentBusyId] =
   useState<number | null>(null);
 
 const [stockOptions, setStockOptions] = useState<
@@ -345,6 +367,68 @@ const [issueRequestId, setIssueRequestId] = useState<string | null>(
     setIssuingMaterialId(null);
   } finally {
     setStockLoading(false);
+  }
+};
+
+const addReworkPayment = async (job: ReworkJob) => {
+  const amount = Number(paymentForm.amount);
+
+  if (
+    !paymentForm.amount.trim() ||
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    Math.round(amount * 100) / 100 !== amount
+  ) {
+    alert('Enter a valid payment amount (up to 2 decimals).');
+    return;
+  }
+
+  if (!paymentForm.paymentDate) {
+    alert('Select the payment date.');
+    return;
+  }
+
+  if (
+    !window.confirm(
+      `Record ${money(amount)} received for Re-work #${job.id}?`,
+    )
+  ) {
+    return;
+  }
+
+  try {
+    setPaymentBusyId(job.id);
+
+    await axios.post(
+      `${API_BASE_URL}/project/${projectId}/reworks/${job.id}/payments`,
+      {
+        amount,
+        paymentDate: paymentForm.paymentDate,
+        paymentMode: paymentForm.paymentMode,
+        transactionId: paymentForm.transactionId.trim(),
+        remarks: paymentForm.remarks.trim(),
+      },
+      { headers: headers() },
+    );
+
+    setPaymentForm({
+      amount: '',
+      paymentDate: '',
+      paymentMode: 'CASH',
+      transactionId: '',
+      remarks: '',
+    });
+
+    await loadJobs();
+
+    alert('Re-work payment recorded successfully.');
+  } catch (err: any) {
+    alert(
+      err?.response?.data?.message ||
+        'Unable to record Re-work payment.',
+    );
+  } finally {
+    setPaymentBusyId(null);
   }
 };
 
@@ -1436,6 +1520,153 @@ setOpenMaterialSearchId(null);
         {expenseBusyId === job.id
           ? 'Saving Expense...'
           : '+ Add Expense'}
+      </button>
+    </div>
+  )}
+</div>
+
+<div className="space-y-4 rounded-xl border p-4">
+  <h4 className="font-semibold">Re-work Customer Payments</h4>
+
+  {job.payments && job.payments.length > 0 ? (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[650px] text-left text-sm">
+        <thead className="bg-gray-100">
+          <tr>
+            <th className="p-3">Date</th>
+            <th className="p-3">Amount</th>
+            <th className="p-3">Mode</th>
+            <th className="p-3">Transaction ID</th>
+            <th className="p-3">Collected By</th>
+            <th className="p-3">Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {job.payments.map((payment) => (
+            <tr key={payment.id} className="border-t">
+              <td className="p-3">
+                {String(payment.paymentDate).slice(0, 10)}
+              </td>
+              <td className="p-3 font-semibold">
+                {money(payment.amount)}
+              </td>
+              <td className="p-3">{payment.paymentMode || '-'}</td>
+              <td className="p-3">{payment.transactionId || '-'}</td>
+              <td className="p-3">{payment.collectedByName || '-'}</td>
+              <td className="p-3">{payment.remarks || '-'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ) : (
+    <p className="text-sm text-gray-500">
+      No customer payments recorded for this Re-work.
+    </p>
+  )}
+
+  {job.status !== 'CANCELLED' && (
+    <div className="space-y-3 rounded-lg bg-gray-50 p-4">
+      <h5 className="font-medium">Record Customer Payment</h5>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1 text-sm">
+          <span>Amount (₹)</span>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            className="w-full rounded-lg border bg-white p-3"
+            placeholder="Amount received"
+            value={paymentForm.amount}
+            disabled={paymentBusyId !== null}
+            onChange={(e) =>
+              setPaymentForm((prev) => ({
+                ...prev,
+                amount: e.target.value,
+              }))
+            }
+          />
+        </label>
+
+        <label className="space-y-1 text-sm">
+          <span>Payment Date</span>
+          <input
+            type="date"
+            className="w-full rounded-lg border bg-white p-3"
+            value={paymentForm.paymentDate}
+            disabled={paymentBusyId !== null}
+            onChange={(e) =>
+              setPaymentForm((prev) => ({
+                ...prev,
+                paymentDate: e.target.value,
+              }))
+            }
+          />
+        </label>
+
+        <label className="space-y-1 text-sm">
+          <span>Payment Mode</span>
+          <select
+            className="w-full rounded-lg border bg-white p-3"
+            value={paymentForm.paymentMode}
+            disabled={paymentBusyId !== null}
+            onChange={(e) =>
+              setPaymentForm((prev) => ({
+                ...prev,
+                paymentMode: e.target.value,
+              }))
+            }
+          >
+            <option value="CASH">Cash</option>
+            <option value="UPI">UPI</option>
+            <option value="BANK_TRANSFER">Bank Transfer</option>
+            <option value="CHEQUE">Cheque</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </label>
+
+        <label className="space-y-1 text-sm">
+          <span>Transaction ID / Reference</span>
+          <input
+            type="text"
+            className="w-full rounded-lg border bg-white p-3"
+            placeholder="Optional reference"
+            value={paymentForm.transactionId}
+            disabled={paymentBusyId !== null}
+            onChange={(e) =>
+              setPaymentForm((prev) => ({
+                ...prev,
+                transactionId: e.target.value,
+              }))
+            }
+          />
+        </label>
+      </div>
+
+      <textarea
+        rows={2}
+        className="w-full rounded-lg border bg-white p-3"
+        placeholder="Payment remarks (optional)"
+        value={paymentForm.remarks}
+        disabled={paymentBusyId !== null}
+        onChange={(e) =>
+          setPaymentForm((prev) => ({
+            ...prev,
+            remarks: e.target.value,
+          }))
+        }
+      />
+
+      <button
+        type="button"
+        disabled={paymentBusyId !== null}
+        onClick={() => void addReworkPayment(job)}
+        className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        {paymentBusyId === job.id
+          ? 'Saving Payment...'
+          : '+ Record Payment'}
       </button>
     </div>
   )}
