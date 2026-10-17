@@ -23,6 +23,16 @@ type ReworkStockItem = {
   averageRate: number | string;
 };
 
+type ReworkExpense = {
+  id: number;
+  category: string;
+  description: string;
+  amount: number | string;
+  expenseDate?: string | null;
+  remarks?: string | null;
+  createdByName?: string | null;
+};
+
 type ReworkMaterial = {
   id: number;
   materialId: number;
@@ -58,7 +68,7 @@ type ReworkJob = {
   remarks?: string | null;
   createdAt?: string;
   materials?: ReworkMaterial[];
-expenses?: unknown[];
+  expenses?: ReworkExpense[];
 payments?: unknown[];
 financials?: ReworkFinancials;
 };
@@ -107,6 +117,17 @@ const [editingMaterialId, setEditingMaterialId] = useState<number | null>(null);
 const [editPlannedQuantity, setEditPlannedQuantity] = useState('');
 const [editMaterialRemarks, setEditMaterialRemarks] = useState('');
 const [issuingMaterialId, setIssuingMaterialId] =
+  useState<number | null>(null);
+
+  const [expenseForm, setExpenseForm] = useState({
+  category: 'LABOUR',
+  description: '',
+  amount: '',
+  expenseDate: '',
+  remarks: '',
+});
+
+const [expenseBusyId, setExpenseBusyId] =
   useState<number | null>(null);
 
 const [stockOptions, setStockOptions] = useState<
@@ -324,6 +345,62 @@ const [issueRequestId, setIssueRequestId] = useState<string | null>(
     setIssuingMaterialId(null);
   } finally {
     setStockLoading(false);
+  }
+};
+
+const addReworkExpense = async (job: ReworkJob) => {
+  const amount = Number(expenseForm.amount);
+
+  if (!expenseForm.description.trim()) {
+    alert('Enter an expense description.');
+    return;
+  }
+
+  if (
+    expenseForm.amount.trim() === '' ||
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    Math.round(amount * 100) / 100 !== amount
+  ) {
+    alert('Enter a valid amount (maximum 2 decimal places).');
+    return;
+  }
+
+  try {
+    setExpenseBusyId(job.id);
+
+    await axios.post(
+      `${API_BASE_URL}/project/${projectId}/reworks/${job.id}/expenses`,
+      {
+        category: expenseForm.category,
+        description: expenseForm.description.trim(),
+        amount,
+        expenseDate: expenseForm.expenseDate || null,
+        remarks: expenseForm.remarks.trim(),
+      },
+      {
+        headers: headers(),
+      },
+    );
+
+    setExpenseForm({
+      category: 'LABOUR',
+      description: '',
+      amount: '',
+      expenseDate: '',
+      remarks: '',
+    });
+
+    await loadJobs();
+
+    alert('Re-work expense recorded successfully.');
+  } catch (err: any) {
+    alert(
+      err?.response?.data?.message ||
+        'Unable to record Re-work expense.',
+    );
+  } finally {
+    setExpenseBusyId(null);
   }
 };
 
@@ -1214,6 +1291,155 @@ setOpenMaterialSearchId(null);
     </button>
   </div>
 )}
+
+<div className="space-y-4 rounded-xl border p-4">
+  <h4 className="font-semibold">Re-work Expenses</h4>
+
+  {job.expenses && job.expenses.length > 0 ? (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[650px] text-left text-sm">
+        <thead className="bg-gray-100">
+          <tr>
+            <th className="p-3">Date</th>
+            <th className="p-3">Category</th>
+            <th className="p-3">Description</th>
+            <th className="p-3">Amount</th>
+            <th className="p-3">Remarks</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {job.expenses.map((expense) => (
+            <tr key={expense.id} className="border-t">
+              <td className="p-3">
+                {expense.expenseDate
+                  ? String(expense.expenseDate).slice(0, 10)
+                  : '-'}
+              </td>
+              <td className="p-3">
+                {expense.category.replaceAll('_', ' ')}
+              </td>
+              <td className="p-3">{expense.description}</td>
+              <td className="p-3 font-semibold">
+                {money(expense.amount)}
+              </td>
+              <td className="p-3">{expense.remarks || '-'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ) : (
+    <p className="text-sm text-gray-500">
+      No expenses recorded for this Re-work.
+    </p>
+  )}
+
+  {!isFinal && (
+    <div className="space-y-3 rounded-lg bg-gray-50 p-4">
+      <h5 className="font-medium">Add Expense</h5>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1 text-sm">
+          <span>Category</span>
+          <select
+            className="w-full rounded-lg border bg-white p-3"
+            value={expenseForm.category}
+            disabled={expenseBusyId !== null}
+            onChange={(e) =>
+              setExpenseForm((prev) => ({
+                ...prev,
+                category: e.target.value,
+              }))
+            }
+          >
+            <option value="LABOUR">Labour</option>
+            <option value="CONTRACTOR">Contractor</option>
+            <option value="TRANSPORTATION">Transportation</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </label>
+
+        <label className="space-y-1 text-sm">
+          <span>Amount (₹)</span>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            placeholder="Expense amount"
+            className="w-full rounded-lg border bg-white p-3"
+            value={expenseForm.amount}
+            disabled={expenseBusyId !== null}
+            onChange={(e) =>
+              setExpenseForm((prev) => ({
+                ...prev,
+                amount: e.target.value,
+              }))
+            }
+          />
+        </label>
+
+        <label className="space-y-1 text-sm">
+          <span>Expense Date</span>
+          <input
+            type="date"
+            className="w-full rounded-lg border bg-white p-3"
+            value={expenseForm.expenseDate}
+            disabled={expenseBusyId !== null}
+            onChange={(e) =>
+              setExpenseForm((prev) => ({
+                ...prev,
+                expenseDate: e.target.value,
+              }))
+            }
+          />
+        </label>
+
+        <label className="space-y-1 text-sm">
+          <span>Description</span>
+          <input
+            type="text"
+            placeholder="What was this expense for?"
+            className="w-full rounded-lg border bg-white p-3"
+            value={expenseForm.description}
+            disabled={expenseBusyId !== null}
+            onChange={(e) =>
+              setExpenseForm((prev) => ({
+                ...prev,
+                description: e.target.value,
+              }))
+            }
+          />
+        </label>
+      </div>
+
+      <textarea
+        rows={2}
+        placeholder="Remarks (optional)"
+        className="w-full rounded-lg border bg-white p-3"
+        value={expenseForm.remarks}
+        disabled={expenseBusyId !== null}
+        onChange={(e) =>
+          setExpenseForm((prev) => ({
+            ...prev,
+            remarks: e.target.value,
+          }))
+        }
+      />
+
+      <button
+        type="button"
+        disabled={expenseBusyId !== null}
+        onClick={() => void addReworkExpense(job)}
+        className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        {expenseBusyId === job.id
+          ? 'Saving Expense...'
+          : '+ Add Expense'}
+      </button>
+    </div>
+  )}
+</div>
           </div>
         );
       })}
