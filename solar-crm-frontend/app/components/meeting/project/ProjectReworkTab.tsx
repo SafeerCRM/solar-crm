@@ -84,6 +84,17 @@ payments?: ReworkPayment[];
 financials?: ReworkFinancials;
 };
 
+type ReworkSummary = {
+  totalReworks: number;
+  agreedAmount: number;
+  receivedAmount: number;
+  outstandingAmount: number;
+  materialCost: number;
+  otherExpenses: number;
+  totalCost: number;
+  expectedProfit: number;
+};
+
 type Props = {
   projectId: number | string;
 };
@@ -104,6 +115,7 @@ export default function ProjectReworkTab({
   projectId,
 }: Props) {
   const [jobs, setJobs] = useState<ReworkJob[]>([]);
+  const [summary, setSummary] = useState<ReworkSummary | null>(null);
   const [materialOptions, setMaterialOptions] = useState<
   MaterialMasterOption[]
 >([]);
@@ -203,6 +215,12 @@ const [issueRequestId, setIssueRequestId] = useState<string | null>(
 
       const data = response.data;
 
+      setSummary(
+  !Array.isArray(data) && data?.summary
+    ? data.summary
+    : null,
+);
+
       setJobs(
         Array.isArray(data)
           ? data
@@ -213,6 +231,7 @@ const [issueRequestId, setIssueRequestId] = useState<string | null>(
               : [],
       );
     } catch (err: any) {
+      setSummary(null);
       setError(
         err?.response?.data?.message ||
           'Unable to load Re-work jobs.',
@@ -892,6 +911,69 @@ setOpenMaterialSearchId(null);
           No Re-work jobs recorded for this project.
         </p>
       )}
+
+      {!loading && !error && summary && jobs.length > 0 && (
+  <div className="space-y-4 rounded-xl border bg-white p-5">
+    <div>
+      <h3 className="text-lg font-bold">
+        Overall Re-work Financial Summary
+      </h3>
+      <p className="text-sm text-gray-500">
+        Combined totals across all Re-work jobs for this project.
+        Separate from original project Laagat and payments.
+      </p>
+    </div>
+
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {[
+        {
+          label: 'Total Re-work Jobs',
+          value: String(summary.totalReworks),
+        },
+        {
+          label: 'Total Agreed Amount',
+          value: money(summary.agreedAmount),
+        },
+        {
+          label: 'Total Payment Received',
+          value: money(summary.receivedAmount),
+        },
+        {
+          label: 'Total Outstanding',
+          value: money(summary.outstandingAmount),
+        },
+        {
+          label: 'Total Material Cost',
+          value: money(summary.materialCost),
+        },
+        {
+          label: 'Total Other Expenses',
+          value: money(summary.otherExpenses),
+        },
+        {
+          label: 'Total Re-work Cost',
+          value: money(summary.totalCost),
+        },
+        {
+          label: 'Total Expected Profit',
+          value: money(summary.expectedProfit),
+        },
+      ].map((item) => (
+        <div
+          key={item.label}
+          className="rounded-lg border bg-gray-50 p-3"
+        >
+          <p className="text-xs text-gray-500">
+            {item.label}
+          </p>
+          <p className="mt-1 text-lg font-bold">
+            {item.value}
+          </p>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
 
       {jobs.map((job) => {
         const isFinal =
