@@ -19,6 +19,7 @@ import {
   useSearchParams,
 } from 'next/navigation';
 import CustomerUpdatesTab from '@/app/components/meeting/project/CustomerUpdatesTab';
+import ProjectReworkTab from '@/app/components/meeting/project/ProjectReworkTab';
 import SearchableUserSelect from '@/app/components/meeting/common/SearchableUserSelect';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -5089,6 +5090,7 @@ useEffect(() => {
   'PROJECT_MANAGEMENT',
   'STOCK_MATERIAL_LEDGER',
   'LAGAT_PROFITABILITY',
+  'REWORK',
   'PROJECT_EXECUTION',
   'CONTRACTOR_WORK',
   'SUBSIDY_DEPARTMENT',
@@ -7222,6 +7224,10 @@ const isLoanProcessCompleted =
   label: 'Laagat & Profitability',
 },
 {
+  key: 'REWORK',
+  label: 'Re-work',
+},
+{
   key: 'PROJECT_EXECUTION',
   label: 'Project Execution',
 },
@@ -7335,6 +7341,7 @@ if (
       'PROJECT_CREATION',
       'PROJECT_MANAGEMENT',
       'STOCK_MATERIAL_LEDGER',
+      'REWORK',
       'PROJECT_EXECUTION',
       'DOCUMENTS',
       'PROJECT_HISTORY',
@@ -7363,6 +7370,18 @@ if (
       contractorWorkTab,
     ];
   }
+}
+
+const canViewRework = hasRole([
+  'OWNER',
+  'PROJECT_MANAGER',
+  'STOCK_MANAGER',
+]);
+
+if (!canViewRework) {
+  visibleTabs = visibleTabs.filter(
+    (tab) => tab.key !== 'REWORK',
+  );
 }
 
 const canViewLagatProfitability =
@@ -9650,6 +9669,13 @@ if (!canViewLagatProfitability) {
     </div>
   </div>
 )}
+
+{activeTab === 'REWORK' &&
+  currentUserRoles.some((role) =>
+    ['OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER'].includes(role),
+  ) && (
+    <ProjectReworkTab projectId={projectId} />
+  )}
 
 {activeTab === 'PROJECT_EXECUTION' && (
   <div className="space-y-5">

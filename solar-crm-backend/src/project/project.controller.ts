@@ -35,7 +35,11 @@ export class ProjectController {
     private readonly projectStaffNotificationService: ProjectStaffNotificationService,
   ) {}
 
-  @Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER')
+  @Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'STOCK_MANAGER',
+)
 @Post(':id/reworks')
 createProjectRework(
   @Param('id', ParseIntPipe) projectId: number,
@@ -52,7 +56,7 @@ createProjectRework(
 @Roles(
   'OWNER',
   'PROJECT_MANAGER',
-  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get(':id/reworks')
 getProjectReworks(
@@ -68,7 +72,7 @@ getProjectReworks(
 @Roles(
   'OWNER',
   'PROJECT_MANAGER',
-  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
 )
 @Post(':id/reworks/:reworkId/materials')
 addProjectReworkMaterial(
@@ -88,7 +92,7 @@ addProjectReworkMaterial(
 @Roles(
   'OWNER',
   'PROJECT_MANAGER',
-  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
 )
 @Patch(':id/reworks/:reworkId/materials/:materialId')
 updateProjectReworkMaterial(
@@ -102,6 +106,72 @@ updateProjectReworkMaterial(
     projectId,
     reworkId,
     reworkMaterialId,
+    body,
+    currentUser,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
+@Post(':id/reworks/:reworkId/materials/:materialId/issue')
+issueProjectReworkMaterial(
+  @Param('id', ParseIntPipe) projectId: number,
+  @Param('reworkId', ParseIntPipe) reworkId: number,
+  @Param('materialId', ParseIntPipe) materialId: number,
+  @Body() body: any,
+  @CurrentUser() currentUser: any,
+) {
+  return this.projectService.issueProjectReworkMaterial(
+    projectId,
+    reworkId,
+    materialId,
+    body,
+    currentUser,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
+@Post(':id/reworks/:reworkId/expenses')
+addProjectReworkExpense(
+  @Param('id', ParseIntPipe) projectId: number,
+  @Param('reworkId', ParseIntPipe) reworkId: number,
+  @Body() body: any,
+  @CurrentUser() currentUser: any,
+) {
+  return this.projectService.addProjectReworkExpense(
+    projectId,
+    reworkId,
+    body,
+    currentUser,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
+@Post(':id/reworks/:reworkId/payments')
+addProjectReworkPayment(
+  @Param('id', ParseIntPipe) projectId: number,
+  @Param('reworkId', ParseIntPipe) reworkId: number,
+  @Body() body: any,
+  @CurrentUser() currentUser: any,
+) {
+  return this.projectService.addProjectReworkPayment(
+    projectId,
+    reworkId,
+    body,
+    currentUser,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
+@Patch(':id/reworks/:reworkId/status')
+updateProjectReworkStatus(
+  @Param('id', ParseIntPipe) projectId: number,
+  @Param('reworkId', ParseIntPipe) reworkId: number,
+  @Body() body: any,
+  @CurrentUser() currentUser: any,
+) {
+  return this.projectService.updateProjectReworkStatus(
+    projectId,
+    reworkId,
     body,
     currentUser,
   );

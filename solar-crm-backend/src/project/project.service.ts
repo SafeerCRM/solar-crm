@@ -185,9 +185,12 @@ import {
   ProjectStockMovementType,
 } from './project-stock-movement.entity';
 
-import { ProjectRework } from './project-rework.entity';
+import { ProjectRework, ProjectReworkStatus, } from './project-rework.entity';
 import { ProjectReworkMaterial } from './project-rework-material.entity';
-import { ProjectReworkExpense } from './project-rework-expense.entity';
+import {
+  ProjectReworkExpense,
+  ProjectReworkExpenseCategory,
+} from './project-rework-expense.entity';
 import { ProjectReworkPayment } from './project-rework-payment.entity';
 import { ProjectStockFile } from './project-stock-file.entity';
 
@@ -6483,7 +6486,7 @@ async createProjectRework(
   const allowedRoles = [
     'OWNER',
     'PROJECT_MANAGER',
-    'ACCOUNT_MANAGER',
+    'STOCK_MANAGER',
   ];
 
   if (!roles.some((role) => allowedRoles.includes(role))) {
@@ -6752,7 +6755,7 @@ async addProjectReworkMaterial(
   const allowedRoles = [
     'OWNER',
     'PROJECT_MANAGER',
-    'ACCOUNT_MANAGER',
+    'STOCK_MANAGER',
   ];
 
   if (!roles.some((role) => allowedRoles.includes(role))) {
@@ -6887,51 +6890,12 @@ async updateProjectReworkMaterial(
   const allowedRoles = [
     'OWNER',
     'PROJECT_MANAGER',
-    'ACCOUNT_MANAGER',
+    'STOCK_MANAGER',
   ];
 
   if (!roles.some((role) => allowedRoles.includes(role))) {
     throw new ForbiddenException(
-      'You are not allowed to edit Re-work materials',
-    );
-  }
-
-  const rework = await this.projectReworkRepository.findOne({
-    where: {
-      id: reworkId,
-      projectId,
-      isHidden: false,
-    },
-  });
-
-  if (!rework) {
-    throw new NotFoundException(
-      'Re-work job not found for this project',
-    );
-  }
-
-  if (
-    rework.status === 'COMPLETED' ||
-    rework.status === 'CANCELLED'
-  ) {
-    throw new BadRequestException(
-      'Materials cannot be edited for a completed or cancelled Re-work job',
-    );
-  }
-
-  const material =
-    await this.projectReworkMaterialRepository.findOne({
-      where: {
-        id: reworkMaterialId,
-        reworkId,
-        projectId,
-        isHidden: false,
-      },
-    });
-
-  if (!material) {
-    throw new NotFoundException(
-      'Re-work material record not found',
+      'You are not allowed to manage Re-work',
     );
   }
 
@@ -6959,26 +6923,824 @@ async updateProjectReworkMaterial(
     );
   }
 
-  const issuedQuantity = Number(
-    material.issuedQuantity || 0,
-  );
+  return this.projectReworkMaterialRepository.manager.transaction(
+    async (manager) => {
+      const reworkRepository =
+        manager.getRepository(ProjectRework);
 
-  if (plannedQuantity < issuedQuantity) {
-    throw new BadRequestException(
-      `Planned quantity cannot be less than already issued quantity (${issuedQuantity})`,
+      const materialRepository =
+        manager.getRepository(ProjectReworkMaterial);
+
+      const rework = await reworkRepository.findOne({
+        where: {
+          id: reworkId,
+          projectId,
+          isHidden: false,
+        },
+      });
+
+      if (!rework) {
+        throw new NotFoundException(
+          'Re-work job not found for this project',
+        );
+      }
+
+      if (
+        rework.status === 'COMPLETED' ||
+        rework.status === 'CANCELLED'
+      ) {
+        throw new BadRequestException(
+          'Materials cannot be edited for a completed or cancelled Re-work job',
+        );
+      }
+
+      const material = await materialRepository.findOne({
+        where: {
+          id: reworkMaterialId,
+          reworkId,
+          projectId,
+          isHidden: false,
+        },
+        lock: {
+          mode: 'pessimistic_write',
+        },
+      });
+
+      if (!material) {
+        throw new NotFoundException(
+          'Re-work material record not found',
+        );
+      }
+
+      const issuedQuantity = Number(
+        material.issuedQuantity || 0,
+      );
+
+      if (plannedQuantity < issuedQuantity) {
+        throw new BadRequestException(
+          `Planned quantity cannot be less than already issued quantity (${issuedQuantity})`,
+        );
+      }
+
+      material.plannedQuantity = plannedQuantity;
+
+      if (body?.remarks !== undefined) {
+        material.remarks =
+          String(body.remarks ?? '').trim() || null;
+      }
+
+      return materialRepository.save(material);
+    },
+  );
+}
+
+async issueProjectReworkMaterial(
+  projectId: number,
+  reworkId: number,
+  reworkMaterialId: number,
+  body: any,
+  currentUser: any,
+) {
+  await this.findOne(projectId, currentUser);
+
+  const roles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  if (
+    !roles.some((role) =>
+      ['OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER'].includes(role),
+    )
+  ) {
+    throw new ForbiddenException(
+      'You are not allowed to manage Re-work',
     );
   }
 
-  material.plannedQuantity = plannedQuantity;
+  const stockItemId = Number(body?.stockItemId);
+  const quantity = Number(body?.quantity);
 
-  if (body?.remarks !== undefined) {
-    material.remarks =
-      String(body.remarks ?? '').trim() || null;
-  }
+  const requestId = String(
+  body?.requestId ?? '',
+).trim().toLowerCase();
 
-  return this.projectReworkMaterialRepository.save(material);
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+if (!uuidPattern.test(requestId)) {
+  throw new BadRequestException(
+    'A valid issuance requestId UUID is required',
+  );
 }
 
+  if (!Number.isSafeInteger(stockItemId) || stockItemId <= 0) {
+    throw new BadRequestException('Valid stock item is required');
+  }
+
+  if (
+    body?.quantity === undefined ||
+    body?.quantity === null ||
+    body?.quantity === '' ||
+    !Number.isFinite(quantity) ||
+    quantity <= 0 ||
+    Math.round(quantity * 1000) / 1000 !== quantity
+  ) {
+    throw new BadRequestException(
+      'Issue quantity must be positive with at most 3 decimal places',
+    );
+  }
+
+  try {
+  return await this.projectStockItemRepository.manager.transaction(
+    async (manager) => {
+      const reworkRepository =
+        manager.getRepository(ProjectRework);
+
+      const reworkMaterialRepository =
+        manager.getRepository(ProjectReworkMaterial);
+
+      const stockRepository =
+        manager.getRepository(ProjectStockItem);
+
+      const movementRepository =
+        manager.getRepository(ProjectStockMovement);
+
+        const previousMovement = await movementRepository.findOne({
+  where: {
+    requestId,
+    sourceType: 'REWORK',
+  },
+});
+
+if (previousMovement) {
+  const sameRequest =
+    Number(previousMovement.projectId) === projectId &&
+    Number(previousMovement.sourceId) === reworkId &&
+    Number(previousMovement.stockItemId) === stockItemId &&
+    Number(previousMovement.quantity) === quantity;
+
+  if (!sameRequest) {
+    throw new BadRequestException(
+      'This requestId was already used for a different stock issuance',
+    );
+  }
+
+  const previousMaterial =
+    await reworkMaterialRepository.findOne({
+      where: {
+        id: reworkMaterialId,
+        reworkId,
+        projectId,
+      },
+    });
+
+  if (
+    !previousMaterial ||
+    Number(previousMaterial.materialId) !==
+      Number(previousMovement.materialId)
+  ) {
+    throw new BadRequestException(
+      'This requestId does not match the original Re-work material',
+    );
+  }
+
+  return {
+    message: 'Re-work material was already issued',
+    alreadyProcessed: true,
+    material: previousMaterial,
+    movement: previousMovement,
+  };
+}
+
+      const rework = await reworkRepository.findOne({
+  where: {
+    id: reworkId,
+    projectId,
+    isHidden: false,
+  },
+  lock: {
+    mode: 'pessimistic_write',
+  },
+});
+
+      if (!rework) {
+        throw new NotFoundException('Re-work job not found');
+      }
+
+      if (
+        rework.status === 'COMPLETED' ||
+        rework.status === 'CANCELLED'
+      ) {
+        throw new BadRequestException(
+          'Cannot issue materials for completed or cancelled Re-work',
+        );
+      }
+
+      const material = await reworkMaterialRepository.findOne({
+        where: {
+          id: reworkMaterialId,
+          reworkId,
+          projectId,
+          isHidden: false,
+        },
+        lock: {
+          mode: 'pessimistic_write',
+        },
+      });
+
+      if (!material) {
+        throw new NotFoundException(
+          'Re-work material record not found',
+        );
+      }
+
+      const stockItem = await stockRepository.findOne({
+        where: {
+          id: stockItemId,
+          isHidden: false,
+        },
+        lock: {
+          mode: 'pessimistic_write',
+        },
+      });
+
+      if (!stockItem) {
+        throw new NotFoundException('Stock item not found');
+      }
+
+      if (Number(stockItem.materialId) !== Number(material.materialId)) {
+        throw new BadRequestException(
+          'Selected stock item does not match Re-work material',
+        );
+      }
+
+      const plannedQuantity = Number(material.plannedQuantity || 0);
+      const issuedQuantity = Number(material.issuedQuantity || 0);
+      const remainingQuantity =
+        Math.round((plannedQuantity - issuedQuantity) * 1000) / 1000;
+
+      if (quantity > remainingQuantity) {
+        throw new BadRequestException(
+          `Issue quantity exceeds remaining planned quantity (${remainingQuantity})`,
+        );
+      }
+
+      const currentQuantity = Number(
+        stockItem.currentQuantity || 0,
+      );
+
+      const reservedQuantity = Number(
+        stockItem.reservedQuantity || 0,
+      );
+
+      if (
+        reservedQuantity < 0 ||
+        reservedQuantity > currentQuantity
+      ) {
+        throw new BadRequestException(
+          'Stock quantities are inconsistent',
+        );
+      }
+
+      const availableQuantity =
+        currentQuantity - reservedQuantity;
+
+      if (quantity > availableQuantity) {
+        throw new BadRequestException(
+          `Insufficient available stock (${availableQuantity})`,
+        );
+      }
+
+      const rate = Number(stockItem.averageRate || 0);
+      const totalAmount =
+        Math.round(quantity * rate * 100) / 100;
+
+      stockItem.currentQuantity =
+        currentQuantity - quantity;
+
+      stockItem.stockValue =
+        Math.round(
+          Number(stockItem.currentQuantity) * rate * 100,
+        ) / 100;
+
+      const savedStockItem =
+        await stockRepository.save(stockItem);
+
+      const movement = await movementRepository.save(
+        movementRepository.create({
+          stockItemId: savedStockItem.id,
+          materialId: savedStockItem.materialId,
+          materialName: savedStockItem.materialName,
+          branchId: savedStockItem.branchId || undefined,
+          branchName: savedStockItem.branchName || undefined,
+          movementType:
+            ProjectStockMovementType.ISSUE_FROM_AVAILABLE,
+          quantity,
+          rate,
+          totalAmount,
+          sourceType: 'REWORK',
+          sourceId: reworkId,
+          projectId,
+          requestId,
+          remarks:
+            String(body?.remarks ?? '').trim() ||
+            `Re-work #${reworkId}, material record #${reworkMaterialId}`,
+          createdBy:
+            currentUser?.id ||
+            currentUser?.userId ||
+            currentUser?.sub ||
+            undefined,
+          createdByName:
+            currentUser?.name ||
+            currentUser?.email ||
+            '',
+        }),
+      );
+
+      material.issuedQuantity =
+        Math.round((issuedQuantity + quantity) * 1000) / 1000;
+
+      material.issuedCost =
+        Math.round(
+          (Number(material.issuedCost || 0) + totalAmount) * 100,
+        ) / 100;
+
+      material.stockItemId = savedStockItem.id;
+      material.branchId = savedStockItem.branchId || null;
+      material.branchName = savedStockItem.branchName || null;
+
+      const savedMaterial =
+        await reworkMaterialRepository.save(material);
+
+            return {
+        message: 'Re-work material issued successfully',
+        material: savedMaterial,
+        stockItem: savedStockItem,
+        movement,
+        quantities: {
+          currentQuantity: Number(savedStockItem.currentQuantity),
+          reservedQuantity,
+          availableQuantity:
+            Number(savedStockItem.currentQuantity) - reservedQuantity,
+        },
+      };
+    },
+  );
+} catch (error: any) {
+  const databaseError = error?.driverError ?? error;
+
+  if (
+    databaseError?.code !== '23505' ||
+    databaseError?.constraint !== 'UQ_rework_stock_issue_request'
+  ) {
+    throw error;
+  }
+
+  // The competing transaction has committed its movement.
+  // Our failed transaction has been rolled back.
+  const existingMovement =
+    await this.projectStockMovementRepository.findOne({
+      where: {
+        requestId,
+        sourceType: 'REWORK',
+      },
+    });
+
+  if (!existingMovement) {
+    throw error;
+  }
+
+  const matchingRequest =
+    Number(existingMovement.projectId) === projectId &&
+    Number(existingMovement.sourceId) === reworkId &&
+    Number(existingMovement.stockItemId) === stockItemId &&
+    Number(existingMovement.quantity) === quantity;
+
+  if (!matchingRequest) {
+    throw new BadRequestException(
+      'This requestId was already used for a different stock issuance',
+    );
+  }
+
+  const existingMaterial =
+    await this.projectReworkMaterialRepository.findOne({
+      where: {
+        id: reworkMaterialId,
+        reworkId,
+        projectId,
+      },
+    });
+
+  if (
+    !existingMaterial ||
+    Number(existingMaterial.materialId) !==
+      Number(existingMovement.materialId)
+  ) {
+    throw new BadRequestException(
+      'This requestId does not match the original Re-work material',
+    );
+  }
+
+  return {
+    message: 'Re-work material was already issued',
+    alreadyProcessed: true,
+    material: existingMaterial,
+    movement: existingMovement,
+  };
+}
+}
+
+async addProjectReworkExpense(
+  projectId: number,
+  reworkId: number,
+  body: any,
+  currentUser: any,
+) {
+  await this.findOne(projectId, currentUser);
+
+  const roles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  if (
+    !roles.some((role) =>
+      ['OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER'].includes(role),
+    )
+  ) {
+    throw new ForbiddenException(
+      'You are not allowed to manage Re-work',
+    );
+  }
+
+  return this.projectStockItemRepository.manager.transaction(
+  async (manager) => {
+    const rework = await manager
+      .getRepository(ProjectRework)
+      .findOne({
+        where: {
+          id: reworkId,
+          projectId,
+          isHidden: false,
+        },
+        lock: {
+          mode: 'pessimistic_write',
+        },
+      });
+
+  if (!rework) {
+    throw new NotFoundException('Re-work job not found');
+  }
+
+  if (
+    rework.status === ProjectReworkStatus.COMPLETED ||
+    rework.status === ProjectReworkStatus.CANCELLED
+  ) {
+    throw new BadRequestException(
+      'Cannot add expenses to completed or cancelled Re-work',
+    );
+  }
+
+  const category = String(body?.category ?? '')
+    .trim()
+    .toUpperCase() as ProjectReworkExpenseCategory;
+
+  if (
+    !Object.values(ProjectReworkExpenseCategory).includes(
+      category,
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid Re-work expense category',
+    );
+  }
+
+  const description = String(
+    body?.description ?? '',
+  ).trim();
+
+  if (!description) {
+    throw new BadRequestException(
+      'Expense description is required',
+    );
+  }
+
+  const amount = Number(body?.amount);
+
+  if (
+    body?.amount === undefined ||
+    body?.amount === null ||
+    body?.amount === '' ||
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    Math.round(amount * 100) / 100 !== amount
+  ) {
+    throw new BadRequestException(
+      'Expense amount must be positive with at most 2 decimal places',
+    );
+  }
+
+  const expenseDate =
+    body?.expenseDate === undefined ||
+    body?.expenseDate === null ||
+    body?.expenseDate === ''
+      ? null
+      : String(body.expenseDate).trim();
+
+  if (
+    expenseDate !== null &&
+    !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate)
+  ) {
+    throw new BadRequestException(
+      'Expense date must use YYYY-MM-DD',
+    );
+  }
+
+  const userId = Number(
+    currentUser?.id ??
+    currentUser?.userId ??
+    currentUser?.sub,
+  );
+
+  const expenseRepository =
+  manager.getRepository(ProjectReworkExpense);
+
+  const expense = expenseRepository.create({
+    projectId,
+    reworkId,
+    category,
+    description,
+    amount,
+    expenseDate,
+    remarks: String(body?.remarks ?? '').trim() || null,
+    createdBy: Number.isSafeInteger(userId) ? userId : null,
+    createdByName:
+      currentUser?.name || currentUser?.email || null,
+    isHidden: false,
+  });
+
+  const savedExpense = await expenseRepository.save(expense);
+
+  return {
+  message: 'Re-work expense added successfully',
+  expense: savedExpense,
+};
+  },
+);
+}
+
+async addProjectReworkPayment(
+  projectId: number,
+  reworkId: number,
+  body: any,
+  currentUser: any,
+) {
+  await this.findOne(projectId, currentUser);
+
+  const roles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  if (
+    !roles.some((role) =>
+      ['OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER'].includes(role),
+    )
+  ) {
+    throw new ForbiddenException(
+      'You are not allowed to manage Re-work',
+    );
+  }
+
+  const amount = Number(body?.amount);
+
+  if (
+    body?.amount === undefined ||
+    body?.amount === null ||
+    body?.amount === '' ||
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    Math.round(amount * 100) / 100 !== amount
+  ) {
+    throw new BadRequestException(
+      'Payment amount must be positive with at most 2 decimal places',
+    );
+  }
+
+  const paymentDate = String(
+    body?.paymentDate ?? '',
+  ).trim();
+
+  const isValidDate = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return false;
+    }
+
+    const parsed = new Date(`${value}T00:00:00Z`);
+
+    return (
+      !Number.isNaN(parsed.getTime()) &&
+      parsed.toISOString().slice(0, 10) === value
+    );
+  };
+
+  if (!isValidDate(paymentDate)) {
+    throw new BadRequestException(
+      'Valid payment date is required in YYYY-MM-DD format',
+    );
+  }
+
+  const userId = Number(
+    currentUser?.id ??
+    currentUser?.userId ??
+    currentUser?.sub,
+  );
+
+  return this.projectStockItemRepository.manager.transaction(
+    async (manager) => {
+      const reworkRepository =
+        manager.getRepository(ProjectRework);
+
+      const paymentRepository =
+        manager.getRepository(ProjectReworkPayment);
+
+      const rework = await reworkRepository.findOne({
+        where: {
+          id: reworkId,
+          projectId,
+          isHidden: false,
+        },
+        lock: {
+          mode: 'pessimistic_write',
+        },
+      });
+
+      if (!rework) {
+        throw new NotFoundException(
+          'Re-work job not found',
+        );
+      }
+
+      if (rework.status === 'CANCELLED') {
+        throw new BadRequestException(
+          'Cannot record payments for cancelled Re-work',
+        );
+      }
+
+      // Payments remain allowed after completion because
+      // customers may settle their balance later.
+
+      const payment = paymentRepository.create({
+        projectId,
+        reworkId,
+        amount,
+        paymentDate,
+        paymentMode:
+          String(body?.paymentMode ?? '').trim() || null,
+        transactionId:
+          String(body?.transactionId ?? '').trim() || null,
+        proofUrl:
+          String(body?.proofUrl ?? '').trim() || null,
+        remarks:
+          String(body?.remarks ?? '').trim() || null,
+        collectedBy:
+          Number.isSafeInteger(userId) && userId > 0
+            ? userId
+            : null,
+        collectedByName:
+          currentUser?.name ||
+          currentUser?.email ||
+          null,
+        createdBy:
+          Number.isSafeInteger(userId) && userId > 0
+            ? userId
+            : null,
+        createdByName:
+          currentUser?.name ||
+          currentUser?.email ||
+          null,
+        isHidden: false,
+      });
+
+      const savedPayment =
+        await paymentRepository.save(payment);
+
+      return {
+        message: 'Re-work payment recorded successfully',
+        payment: savedPayment,
+      };
+    },
+  );
+}
+
+async updateProjectReworkStatus(
+  projectId: number,
+  reworkId: number,
+  body: any,
+  currentUser: any,
+) {
+  await this.findOne(projectId, currentUser);
+
+  const roles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  if (
+    !roles.some((role) =>
+      ['OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER'].includes(role),
+    )
+  ) {
+    throw new ForbiddenException(
+      'You are not allowed to manage Re-work',
+    );
+  }
+
+  const status = String(
+    body?.status ?? '',
+  ).trim().toUpperCase() as ProjectReworkStatus;
+
+  if (!Object.values(ProjectReworkStatus).includes(status)) {
+    throw new BadRequestException(
+      'Invalid Re-work status',
+    );
+  }
+
+  const userId = Number(
+    currentUser?.id ??
+    currentUser?.userId ??
+    currentUser?.sub,
+  );
+
+  return this.projectStockItemRepository.manager.transaction(
+    async (manager) => {
+      const reworkRepository =
+        manager.getRepository(ProjectRework);
+
+      const rework = await reworkRepository.findOne({
+        where: {
+          id: reworkId,
+          projectId,
+          isHidden: false,
+        },
+        lock: {
+          mode: 'pessimistic_write',
+        },
+      });
+
+      if (!rework) {
+        throw new NotFoundException(
+          'Re-work job not found',
+        );
+      }
+
+      if (
+        rework.status === ProjectReworkStatus.CANCELLED &&
+        status !== ProjectReworkStatus.CANCELLED
+      ) {
+        throw new BadRequestException(
+          'Cancelled Re-work cannot be reopened',
+        );
+      }
+
+      if (
+        rework.status === ProjectReworkStatus.COMPLETED &&
+        status !== ProjectReworkStatus.COMPLETED
+      ) {
+        throw new BadRequestException(
+          'Completed Re-work cannot be reopened',
+        );
+      }
+
+      if (status === ProjectReworkStatus.COMPLETED) {
+        rework.completedDate =
+          new Date().toISOString().slice(0, 10);
+      }
+
+      rework.status = status;
+
+      if (body?.remarks !== undefined) {
+        rework.remarks =
+          String(body.remarks ?? '').trim() || null;
+      }
+
+      rework.updatedBy =
+        Number.isSafeInteger(userId) && userId > 0
+          ? userId
+          : null;
+
+      rework.updatedByName =
+        currentUser?.name ||
+        currentUser?.email ||
+        null;
+
+      const savedRework =
+        await reworkRepository.save(rework);
+
+      return {
+        message: 'Re-work status updated successfully',
+        rework: savedRework,
+      };
+    },
+  );
+}
 
   async findOne(id: number, user?: any) {
     const project = await this.projectRepository.findOne({

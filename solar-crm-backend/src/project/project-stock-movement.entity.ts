@@ -58,6 +58,14 @@ export class ProjectStockMovement {
   @Column({ type: 'float', default: 0 })
   totalAmount: number;
 
+  @Column({
+  type: 'uuid',
+  nullable: true,
+})
+requestId: string | null;
+
+// Keep the existing sourceType decorator and property unchanged.
+
   @Column({ nullable: true })
   sourceType: string;
 
