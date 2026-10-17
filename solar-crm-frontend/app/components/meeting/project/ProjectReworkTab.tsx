@@ -12,6 +12,17 @@ type MaterialMasterOption = {
   brand?: string | null;
 };
 
+type ReworkStockItem = {
+  id: number;
+  materialId: number;
+  materialName: string;
+  branchId?: number | null;
+  branchName?: string | null;
+  currentQuantity: number | string;
+  reservedQuantity: number | string;
+  averageRate: number | string;
+};
+
 type ReworkMaterial = {
   id: number;
   materialId: number;
@@ -86,9 +97,34 @@ const [materialForms, setMaterialForms] = useState<
     remarks: string;
   }>
 >({});
+const [materialSearch, setMaterialSearch] = useState<
+  Record<number, string>
+>({});
+
+const [openMaterialSearchId, setOpenMaterialSearchId] =
+  useState<number | null>(null);
 const [editingMaterialId, setEditingMaterialId] = useState<number | null>(null);
 const [editPlannedQuantity, setEditPlannedQuantity] = useState('');
 const [editMaterialRemarks, setEditMaterialRemarks] = useState('');
+const [issuingMaterialId, setIssuingMaterialId] =
+  useState<number | null>(null);
+
+const [stockOptions, setStockOptions] = useState<
+  ReworkStockItem[]
+>([]);
+
+const [stockLoading, setStockLoading] = useState(false);
+const [issueBusy, setIssueBusy] = useState(false);
+
+const [issueForm, setIssueForm] = useState({
+  stockItemId: '',
+  quantity: '',
+  remarks: '',
+});
+
+const [issueRequestId, setIssueRequestId] = useState<string | null>(
+  null,
+);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -229,6 +265,166 @@ const [editMaterialRemarks, setEditMaterialRemarks] = useState('');
     }
   };
 
+  const openIssueMaterial = async (material: ReworkMaterial) => {
+  setIssuingMaterialId(material.id);
+  setStockOptions([]);
+  setIssueForm({
+    stockItemId: '',
+    quantity: '',
+    remarks: '',
+  });
+  setIssueRequestId(null);
+
+  try {
+    setStockLoading(true);
+
+    const matchingStock: ReworkStockItem[] = [];
+    let page = 1;
+    let totalPages = 1;
+
+    do {
+      const response = await axios.get(
+        `${API_BASE_URL}/project/stock/items`,
+        {
+          params: {
+            page,
+            limit: 100,
+            material: material.materialName,
+          },
+          headers: headers(),
+        },
+      );
+
+      const data = response.data;
+
+      const rows: ReworkStockItem[] = Array.isArray(data?.data)
+        ? data.data
+        : [];
+
+      matchingStock.push(
+        ...rows.filter(
+          (item) =>
+            Number(item.materialId) === Number(material.materialId),
+        ),
+      );
+
+      totalPages = Math.ceil(
+        Number(data?.total || 0) / 100,
+      );
+
+      page += 1;
+    } while (page <= totalPages);
+
+    setStockOptions(matchingStock);
+  } catch (err: any) {
+    alert(
+      err?.response?.data?.message ||
+        'Unable to load branch stock.',
+    );
+    setIssuingMaterialId(null);
+  } finally {
+    setStockLoading(false);
+  }
+};
+
+const issueReworkMaterial = async (
+  job: ReworkJob,
+  material: ReworkMaterial,
+) => {
+  const stockItemId = Number(issueForm.stockItemId);
+  const quantity = Number(issueForm.quantity);
+
+  const selectedStock = stockOptions.find(
+    (item) => item.id === stockItemId,
+  );
+
+  const remaining = Math.round(
+    (Number(material.plannedQuantity) -
+      Number(material.issuedQuantity)) * 1000,
+  ) / 1000;
+
+  const available = selectedStock
+    ? Number(selectedStock.currentQuantity || 0) -
+      Number(selectedStock.reservedQuantity || 0)
+    : 0;
+
+  if (!selectedStock) {
+    alert('Select a valid branch stock item.');
+    return;
+  }
+
+  if (
+    !issueForm.quantity.trim() ||
+    !Number.isFinite(quantity) ||
+    quantity <= 0 ||
+    Math.round(quantity * 1000) / 1000 !== quantity
+  ) {
+    alert('Enter a valid issue quantity (up to 3 decimals).');
+    return;
+  }
+
+  if (quantity > remaining) {
+    alert(`Remaining planned quantity is ${remaining}.`);
+    return;
+  }
+
+  if (quantity > available) {
+    alert(`Available branch stock is ${available}.`);
+    return;
+  }
+
+  if (
+    !window.confirm(
+      `Issue ${quantity} ${material.unit || ''} of ` +
+      `${material.materialName} from ` +
+      `${selectedStock.branchName || 'selected branch'}?\n\n` +
+      `This will deduct physical stock and record the cost ` +
+      `against Re-work #${job.id}.`,
+    )
+  ) {
+    return;
+  }
+
+  // Keep the same UUID when retrying an uncertain request.
+  const requestId = issueRequestId || crypto.randomUUID();
+  setIssueRequestId(requestId);
+
+  try {
+    setIssueBusy(true);
+
+    await axios.post(
+      `${API_BASE_URL}/project/${projectId}/reworks/${job.id}/materials/${material.id}/issue`,
+      {
+        stockItemId,
+        quantity,
+        requestId,
+        remarks: issueForm.remarks.trim(),
+      },
+      { headers: headers() },
+    );
+
+    setIssuingMaterialId(null);
+    setStockOptions([]);
+    setIssueForm({
+      stockItemId: '',
+      quantity: '',
+      remarks: '',
+    });
+    setIssueRequestId(null);
+
+    await loadJobs();
+
+    alert('Re-work material issued successfully.');
+  } catch (err: any) {
+    alert(
+      err?.response?.data?.message ||
+        'Issuance could not be confirmed. Retry with the same details.',
+    );
+  } finally {
+    setIssueBusy(false);
+  }
+};
+
   const updateReworkMaterial = async (
   job: ReworkJob,
   material: ReworkMaterial,
@@ -321,6 +517,14 @@ const [editMaterialRemarks, setEditMaterialRemarks] = useState('');
       delete next[job.id];
       return next;
     });
+
+    setMaterialSearch((prev) => {
+  const next = { ...prev };
+  delete next[job.id];
+  return next;
+});
+
+setOpenMaterialSearchId(null);
 
     await loadJobs();
   } catch (err: any) {
@@ -705,11 +909,24 @@ const [editMaterialRemarks, setEditMaterialRemarks] = useState('');
           setEditMaterialRemarks(material.remarks || '');
         }}
         className="rounded border px-3 py-1 text-blue-700"
-      >
+            >
         Edit
       </button>
     )
   )}
+
+  {!isFinal &&
+    Number(material.plannedQuantity) >
+      Number(material.issuedQuantity) && (
+      <button
+        type="button"
+        disabled={issueBusy || stockLoading}
+        onClick={() => void openIssueMaterial(material)}
+        className="ml-2 rounded border border-green-700 px-3 py-1 text-green-700 disabled:opacity-50"
+      >
+        Issue
+      </button>
+    )}
 </td>
             </tr>
           ))}
@@ -719,6 +936,139 @@ const [editMaterialRemarks, setEditMaterialRemarks] = useState('');
   )}
 </div>
 
+{!isFinal &&
+  job.materials?.map((material) =>
+    issuingMaterialId === material.id ? (
+      <div
+        key={material.id}
+        className="space-y-3 rounded-xl border bg-gray-50 p-4"
+      >
+        <h4 className="font-semibold">
+          Issue Material — {material.materialName}
+        </h4>
+
+        <p className="text-sm text-gray-600">
+          Remaining planned:{' '}
+          {Math.max(
+            0,
+            Number(material.plannedQuantity) -
+              Number(material.issuedQuantity),
+          )}{' '}
+          {material.unit || ''}
+        </p>
+
+        <select
+          className="w-full rounded-lg border bg-white p-3"
+          disabled={stockLoading || issueBusy}
+          value={issueForm.stockItemId}
+          onChange={(e) => {
+            setIssueForm((prev) => ({
+              ...prev,
+              stockItemId: e.target.value,
+            }));
+            setIssueRequestId(null);
+          }}
+        >
+          <option value="">
+            {stockLoading
+              ? 'Loading branch stock...'
+              : 'Select Branch Stock'}
+          </option>
+
+          {stockOptions.map((stock) => {
+            const available =
+              Number(stock.currentQuantity || 0) -
+              Number(stock.reservedQuantity || 0);
+
+            return (
+              <option
+                key={stock.id}
+                value={stock.id}
+                disabled={available <= 0}
+              >
+                {stock.branchName || 'Unnamed Branch'}
+                {' — '}
+                Available: {Math.max(0, available)}
+                {' — '}
+                Rate: {money(stock.averageRate)}
+              </option>
+            );
+          })}
+        </select>
+
+        {!stockLoading && stockOptions.length === 0 && (
+          <p className="text-sm text-amber-700">
+            No matching branch stock found for this material.
+          </p>
+        )}
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <input
+            type="number"
+            min="0.001"
+            step="0.001"
+            placeholder="Quantity to Issue"
+            className="rounded-lg border bg-white p-3"
+            value={issueForm.quantity}
+            disabled={issueBusy}
+            onChange={(e) => {
+              setIssueForm((prev) => ({
+                ...prev,
+                quantity: e.target.value,
+              }));
+              setIssueRequestId(null);
+            }}
+          />
+
+          <input
+            type="text"
+            placeholder="Issue Remarks (optional)"
+            className="rounded-lg border bg-white p-3"
+            value={issueForm.remarks}
+            disabled={issueBusy}
+            onChange={(e) => {
+              setIssueForm((prev) => ({
+                ...prev,
+                remarks: e.target.value,
+              }));
+              setIssueRequestId(null);
+            }}
+          />
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={
+              issueBusy ||
+              stockLoading ||
+              !issueForm.stockItemId
+            }
+            onClick={() =>
+              void issueReworkMaterial(job, material)
+            }
+            className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {issueBusy ? 'Issuing...' : 'Confirm Issue'}
+          </button>
+
+          <button
+            type="button"
+            disabled={issueBusy}
+            onClick={() => {
+              setIssuingMaterialId(null);
+              setStockOptions([]);
+              setIssueRequestId(null);
+            }}
+            className="rounded-lg border px-4 py-2 text-sm"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    ) : null,
+  )}
+
 {!isFinal && (
   <div className="rounded-xl border bg-gray-50 p-4">
     <h4 className="mb-3 font-semibold">
@@ -726,44 +1076,93 @@ const [editMaterialRemarks, setEditMaterialRemarks] = useState('');
     </h4>
 
     <div className="grid gap-3 md:grid-cols-3">
-      <select
-        className="rounded-lg border bg-white p-3"
-        value={materialForms[job.id]?.materialId || ''}
-        disabled={materialLoading || materialBusyId === job.id}
-        onChange={(e) =>
-          setMaterialForms((prev) => ({
-            ...prev,
-            [job.id]: {
-              materialId: e.target.value,
-              plannedQuantity:
-                prev[job.id]?.plannedQuantity || '',
-              remarks: prev[job.id]?.remarks || '',
-            },
-          }))
-        }
-      >
-        <option value="">
-          {materialLoading
-            ? 'Loading materials...'
-            : 'Select Material'}
-        </option>
+      <div className="relative min-w-0">
+  <input
+    type="text"
+    className="w-full rounded-lg border bg-white p-3"
+    placeholder={
+      materialLoading
+        ? 'Loading materials...'
+        : 'Search material name or brand...'
+    }
+    disabled={materialLoading || materialBusyId === job.id}
+    value={materialSearch[job.id] || ''}
+    onFocus={() => setOpenMaterialSearchId(job.id)}
+    onChange={(e) => {
+      setMaterialSearch((prev) => ({
+        ...prev,
+        [job.id]: e.target.value,
+      }));
 
-        {materialOptions
-          .filter(
-            (item) =>
-              !job.materials?.some(
-                (existing) =>
-                  Number(existing.materialId) === Number(item.id),
-              ),
-          )
-          .map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-              {item.brand ? ` - ${item.brand}` : ''}
-              {item.unit ? ` (${item.unit})` : ''}
-            </option>
-          ))}
-      </select>
+      setMaterialForms((prev) => ({
+        ...prev,
+        [job.id]: {
+          materialId: '',
+          plannedQuantity: prev[job.id]?.plannedQuantity || '',
+          remarks: prev[job.id]?.remarks || '',
+        },
+      }));
+
+      setOpenMaterialSearchId(job.id);
+    }}
+  />
+
+  {openMaterialSearchId === job.id && !materialLoading && (
+    <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border bg-white shadow-xl">
+      {materialOptions
+        .filter((item) => {
+          const search = (materialSearch[job.id] || '')
+            .trim()
+            .toLowerCase();
+
+          const name = String(item.name || '').toLowerCase();
+          const brand = String(item.brand || '').toLowerCase();
+
+
+          return (
+  !job.materials?.some(
+    (existing) =>
+      Number(existing.materialId) === Number(item.id),
+  ) &&
+  (name.includes(search) || brand.includes(search))
+);
+        })
+        .slice(0, 50)
+        .map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className="block w-full border-b px-3 py-2 text-left text-sm hover:bg-blue-50"
+            onClick={() => {
+              setMaterialForms((prev) => ({
+                ...prev,
+                [job.id]: {
+                  materialId: String(item.id),
+                  plannedQuantity:
+                    prev[job.id]?.plannedQuantity || '',
+                  remarks: prev[job.id]?.remarks || '',
+                },
+              }));
+
+              setMaterialSearch((prev) => ({
+                ...prev,
+                [job.id]: [
+                  item.name,
+                  item.brand,
+                ].filter(Boolean).join(' - '),
+              }));
+
+              setOpenMaterialSearchId(null);
+            }}
+          >
+            {item.name}
+            {item.brand ? ` — ${item.brand}` : ''}
+            {item.unit ? ` (${item.unit})` : ''}
+          </button>
+        ))}
+    </div>
+  )}
+</div>
 
       <input
         type="number"
