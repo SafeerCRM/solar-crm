@@ -6821,6 +6821,22 @@ async addProjectReworkMaterial(
     );
   }
 
+  const existingMaterial =
+  await this.projectReworkMaterialRepository.findOne({
+    where: {
+      reworkId,
+      projectId,
+      materialId,
+      isHidden: false,
+    },
+  });
+
+if (existingMaterial) {
+  throw new BadRequestException(
+    'This material is already added to the Re-work. Edit its planned quantity instead.',
+  );
+}
+
   const userId = Number(
     currentUser?.id ?? currentUser?.sub,
   );
@@ -6853,6 +6869,114 @@ async addProjectReworkMaterial(
   });
 
   return this.projectReworkMaterialRepository.save(newMaterial);
+}
+
+async updateProjectReworkMaterial(
+  projectId: number,
+  reworkId: number,
+  reworkMaterialId: number,
+  body: any,
+  currentUser: any,
+) {
+  await this.findOne(projectId, currentUser);
+
+  const roles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  const allowedRoles = [
+    'OWNER',
+    'PROJECT_MANAGER',
+    'ACCOUNT_MANAGER',
+  ];
+
+  if (!roles.some((role) => allowedRoles.includes(role))) {
+    throw new ForbiddenException(
+      'You are not allowed to edit Re-work materials',
+    );
+  }
+
+  const rework = await this.projectReworkRepository.findOne({
+    where: {
+      id: reworkId,
+      projectId,
+      isHidden: false,
+    },
+  });
+
+  if (!rework) {
+    throw new NotFoundException(
+      'Re-work job not found for this project',
+    );
+  }
+
+  if (
+    rework.status === 'COMPLETED' ||
+    rework.status === 'CANCELLED'
+  ) {
+    throw new BadRequestException(
+      'Materials cannot be edited for a completed or cancelled Re-work job',
+    );
+  }
+
+  const material =
+    await this.projectReworkMaterialRepository.findOne({
+      where: {
+        id: reworkMaterialId,
+        reworkId,
+        projectId,
+        isHidden: false,
+      },
+    });
+
+  if (!material) {
+    throw new NotFoundException(
+      'Re-work material record not found',
+    );
+  }
+
+  if (
+    body?.plannedQuantity === undefined ||
+    body?.plannedQuantity === null ||
+    body?.plannedQuantity === ''
+  ) {
+    throw new BadRequestException(
+      'Planned quantity is required',
+    );
+  }
+
+  const plannedQuantity = Number(body.plannedQuantity);
+
+  if (
+    !Number.isFinite(plannedQuantity) ||
+    plannedQuantity <= 0 ||
+    plannedQuantity > 99999999999.999 ||
+    Math.round(plannedQuantity * 1000) / 1000 !==
+      plannedQuantity
+  ) {
+    throw new BadRequestException(
+      'Planned quantity must be positive and have at most 3 decimal places',
+    );
+  }
+
+  const issuedQuantity = Number(
+    material.issuedQuantity || 0,
+  );
+
+  if (plannedQuantity < issuedQuantity) {
+    throw new BadRequestException(
+      `Planned quantity cannot be less than already issued quantity (${issuedQuantity})`,
+    );
+  }
+
+  material.plannedQuantity = plannedQuantity;
+
+  if (body?.remarks !== undefined) {
+    material.remarks =
+      String(body.remarks ?? '').trim() || null;
+  }
+
+  return this.projectReworkMaterialRepository.save(material);
 }
 
 
