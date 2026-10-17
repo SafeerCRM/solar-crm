@@ -704,11 +704,47 @@ setOpenMaterialSearchId(null);
   ) => {
     if (status === job.status) return;
 
-    if (
-      !window.confirm(
-        `Change Re-work #${job.id} to ${status.replaceAll('_', ' ')}?`,
-      )
-    ) {
+        const isCompletion = status === 'COMPLETED';
+    const isCancellation = status === 'CANCELLED';
+
+    const remainingMaterials = (job.materials || []).filter(
+      (material) =>
+        Number(material.plannedQuantity) >
+        Number(material.issuedQuantity),
+    );
+
+    let confirmationMessage =
+      `Change Re-work #${job.id} to ${status.replaceAll('_', ' ')}?`;
+
+    if (isCompletion) {
+      confirmationMessage =
+        `COMPLETE RE-WORK #${job.id}?\n\n` +
+        `Project: ${projectId}\n` +
+        `Re-work: ${job.title}\n\n` +
+        `Agreed Amount: ${money(job.financials?.agreedAmount || 0)}\n` +
+        `Payment Received: ${money(job.financials?.receivedAmount || 0)}\n` +
+        `Outstanding: ${money(job.financials?.outstandingAmount || 0)}\n\n` +
+        (remainingMaterials.length > 0
+          ? `WARNING: ${remainingMaterials.length} planned material item(s) ` +
+            `still have unissued quantities.\n\n`
+          : '') +
+        `After completion:\n` +
+        `• Material issuance will be locked.\n` +
+        `• New expenses will be locked.\n` +
+        `• Customer payments can still be recorded.\n` +
+        `• The Re-work cannot be reopened.\n\n` +
+        `This action is irreversible. Continue?`;
+    } else if (isCancellation) {
+      confirmationMessage =
+        `CANCEL RE-WORK #${job.id}?\n\n` +
+        `Re-work: ${job.title}\n\n` +
+        `Cancellation will lock further material issuance, ` +
+        `expenses and customer payments.\n\n` +
+        `Existing financial records will remain in history.\n\n` +
+        `This action is irreversible. Continue?`;
+    }
+
+    if (!window.confirm(confirmationMessage)) {
       return;
     }
 
