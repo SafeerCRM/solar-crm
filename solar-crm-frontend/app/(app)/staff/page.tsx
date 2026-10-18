@@ -96,6 +96,8 @@ const USER_ROLE_OPTIONS = [
   'SOLAR_FRANCHISE',
   'DEALER',
   'OFFICE_ASSISTANT',
+  'FRANCHISE_HEAD',
+  'FRANCHISE_MANAGER',
 ];
 
 export default function StaffPage() {

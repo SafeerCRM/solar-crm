@@ -45,7 +45,9 @@ const USER_ROLE_OPTIONS = [
 'PROJECT_CONTRACTOR',
 
   'CUSTOMER',
-  'SOLAR_FRANCHISE'
+  'SOLAR_FRANCHISE',
+  'FRANCHISE_HEAD',
+  'FRANCHISE_MANAGER',
 ];
 
 const PENALTY_TYPES = [
@@ -110,6 +112,18 @@ export default function PenaltiesPage() {
 
   const [staff, setStaff] =
   useState<any[]>([]);
+
+  const [departmentOptions, setDepartmentOptions] =
+  useState<string[]>([]);
+
+const [branchOptions, setBranchOptions] =
+  useState<string[]>([]);
+
+  const [departmentSearch, setDepartmentSearch] = useState('');
+const [showDepartmentOptions, setShowDepartmentOptions] = useState(false);
+
+const [branchSearch, setBranchSearch] = useState('');
+const [showBranchOptions, setShowBranchOptions] = useState(false);
 
 const [allActiveRules, setAllActiveRules] =
   useState<any[]>([]);
@@ -214,6 +228,72 @@ const [
   );
 };
 
+const fetchDepartmentBranchOptions = async () => {
+  try {
+    const firstResponse = await axios.get(
+      `${API_BASE_URL}/staff`,
+      {
+        params: {
+          page: 1,
+          limit: 100,
+          showHidden: false,
+        },
+        headers: headers(),
+      },
+    );
+
+    const firstPage = Array.isArray(firstResponse.data?.data)
+      ? firstResponse.data.data
+      : [];
+
+    const totalPages = Math.max(
+      1,
+      Number(firstResponse.data?.totalPages || 1),
+    );
+
+    const remainingPages = await Promise.all(
+      Array.from(
+        { length: totalPages - 1 },
+        (_, index) =>
+          axios.get(`${API_BASE_URL}/staff`, {
+            params: {
+              page: index + 2,
+              limit: 100,
+              showHidden: false,
+            },
+            headers: headers(),
+          }),
+      ),
+    );
+
+    const allStaff = [
+      ...firstPage,
+      ...remainingPages.flatMap((response) =>
+        Array.isArray(response.data?.data)
+          ? response.data.data
+          : [],
+      ),
+    ];
+
+    const uniqueOptions = (field: 'department' | 'branchName') =>
+      Array.from(
+        new Set(
+          allStaff
+            .map((item) => String(item[field] || '').trim())
+            .filter(Boolean),
+        ),
+      ).sort((a, b) => a.localeCompare(b));
+
+    setDepartmentOptions(uniqueOptions('department'));
+    setBranchOptions(uniqueOptions('branchName'));
+  } catch (error) {
+    console.error(
+      'Failed to load staff departments and branches',
+      error,
+    );
+  }
+};
+
 const fetchActivePenaltyRules =
   async () => {
     const res = await axios.get(
@@ -287,6 +367,7 @@ const fetchPenalties = async () => {
 useEffect(() => {
   fetchStaff();
   fetchActivePenaltyRules();
+  fetchDepartmentBranchOptions();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
@@ -474,43 +555,57 @@ const applicablePenaltyRules =
         return false;
       }
 
-      if (
-        String(
-          rule.department || '',
-        ).trim() &&
-        String(
-          rule.department,
-        )
-          .trim()
-          .toLowerCase() !==
-          String(
-            selectedStaff.department ||
-              '',
-          )
-            .trim()
-            .toLowerCase()
-      ) {
-        return false;
-      }
+      const ruleDepartment = String(
+  rule.department || '',
+)
+  .trim()
+  .toUpperCase();
 
-      if (
-        String(
-          rule.branchName || '',
-        ).trim() &&
-        String(
-          rule.branchName,
-        )
-          .trim()
-          .toLowerCase() !==
-          String(
-            selectedStaff.branchName ||
-              '',
-          )
-            .trim()
-            .toLowerCase()
-      ) {
-        return false;
-      }
+const staffDepartment = String(
+  selectedStaff.department || '',
+)
+  .trim()
+  .toUpperCase();
+
+const allDepartments = [
+  '',
+  'ALL',
+  'ALL DEPARTMENT',
+  'ALL DEPARTMENTS',
+];
+
+if (
+  !allDepartments.includes(ruleDepartment) &&
+  ruleDepartment !== staffDepartment
+) {
+  return false;
+}
+
+      const ruleBranch = String(
+  rule.branchName || '',
+)
+  .trim()
+  .toUpperCase();
+
+const staffBranch = String(
+  selectedStaff.branchName || '',
+)
+  .trim()
+  .toUpperCase();
+
+const allBranches = [
+  '',
+  'ALL',
+  'ALL BRANCH',
+  'ALL BRANCHES',
+];
+
+if (
+  !allBranches.includes(ruleBranch) &&
+  ruleBranch !== staffBranch
+) {
+  return false;
+}
 
       return true;
     },
@@ -1433,19 +1528,125 @@ const hideRestorePenaltyCase =
             ))}
           </select>
 
-          <input
-            placeholder="Department"
-            value={form.department}
-            onChange={(e) => setForm({ ...form, department: e.target.value })}
-            className="rounded-xl border p-3"
-          />
+          <div className="relative">
+  <input
+    placeholder="Search / Select Department"
+    value={
+      showDepartmentOptions
+        ? departmentSearch
+        : form.department || 'All Departments'
+    }
+    onFocus={() => {
+      setDepartmentSearch('');
+      setShowDepartmentOptions(true);
+    }}
+    onChange={(e) => {
+      setDepartmentSearch(e.target.value);
+      setShowDepartmentOptions(true);
+    }}
+    onBlur={() => {
+      window.setTimeout(() => {
+        setShowDepartmentOptions(false);
+      }, 150);
+    }}
+    className="w-full rounded-xl border p-3"
+  />
 
-          <input
-            placeholder="Branch"
-            value={form.branchName}
-            onChange={(e) => setForm({ ...form, branchName: e.target.value })}
-            className="rounded-xl border p-3"
-          />
+  {showDepartmentOptions && (
+    <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border bg-white shadow-lg">
+      {[
+        { label: 'All Departments', value: '' },
+        ...departmentOptions
+          .filter((department) =>
+            department
+              .toLowerCase()
+              .includes(departmentSearch.toLowerCase()),
+          )
+          .map((department) => ({
+            label: department,
+            value: department,
+          })),
+      ].map((option) => (
+        <button
+          key={option.value || '__all__'}
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            setForm({
+              ...form,
+              department: option.value,
+            });
+            setDepartmentSearch('');
+            setShowDepartmentOptions(false);
+          }}
+          className="block w-full border-b px-3 py-2 text-left text-sm hover:bg-blue-50"
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )}
+</div>
+
+          <div className="relative">
+  <input
+    placeholder="Search / Select Branch"
+    value={
+      showBranchOptions
+        ? branchSearch
+        : form.branchName || 'All Branches'
+    }
+    onFocus={() => {
+      setBranchSearch('');
+      setShowBranchOptions(true);
+    }}
+    onChange={(e) => {
+      setBranchSearch(e.target.value);
+      setShowBranchOptions(true);
+    }}
+    onBlur={() => {
+      window.setTimeout(() => {
+        setShowBranchOptions(false);
+      }, 150);
+    }}
+    className="w-full rounded-xl border p-3"
+  />
+
+  {showBranchOptions && (
+    <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border bg-white shadow-lg">
+      {[
+        { label: 'All Branches', value: '' },
+        ...branchOptions
+          .filter((branch) =>
+            branch
+              .toLowerCase()
+              .includes(branchSearch.toLowerCase()),
+          )
+          .map((branch) => ({
+            label: branch,
+            value: branch,
+          })),
+      ].map((option) => (
+        <button
+          key={option.value || '__all__'}
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            setForm({
+              ...form,
+              branchName: option.value,
+            });
+            setBranchSearch('');
+            setShowBranchOptions(false);
+          }}
+          className="block w-full border-b px-3 py-2 text-left text-sm hover:bg-blue-50"
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )}
+</div>
 
           {form.calculationType ===
   'FIXED' && (
@@ -1671,6 +1872,40 @@ const hideRestorePenaltyCase =
                         ? rule.applicableRoles.join(', ')
                         : 'Any / Not specified'}
                     </p>
+
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+  <span className="rounded-lg bg-blue-50 px-3 py-2 text-blue-800">
+    <strong>Department:</strong>{' '}
+    {[
+      '',
+      'ALL',
+      'ALL DEPARTMENT',
+      'ALL DEPARTMENTS',
+    ].includes(
+      String(rule.department || '')
+        .trim()
+        .toUpperCase(),
+    )
+      ? 'All Departments'
+      : rule.department}
+  </span>
+
+  <span className="rounded-lg bg-purple-50 px-3 py-2 text-purple-800">
+    <strong>Branch:</strong>{' '}
+    {[
+      '',
+      'ALL',
+      'ALL BRANCH',
+      'ALL BRANCHES',
+    ].includes(
+      String(rule.branchName || '')
+        .trim()
+        .toUpperCase(),
+    )
+      ? 'All Branches'
+      : rule.branchName}
+  </span>
+</div>
 
                     {rule.description && (
                       <p className="mt-2 text-sm text-gray-700">
