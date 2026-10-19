@@ -82,12 +82,29 @@ qrPosterInstallationPhotoUrl2?: string | null;
   franchiseManagerId?: number | null;
 franchiseManagerName?: string | null;
 
-createdBy?: number | null;
-createdByName?: string | null;
-createdByRole?: string | null;
+  createdBy?: number | null;
+  createdByName?: string | null;
+  createdByRole?: string | null;
 
-createdAt?: string;
-updatedAt?: string;
+  interestStatus?:
+    | 'PENDING'
+    | 'INTERESTED'
+    | 'NOT_INTERESTED';
+
+  interestUpdatedAt?: string | null;
+  interestUpdatedBy?: number | null;
+  interestUpdatedByName?: string | null;
+
+  printingStatus?:
+    | 'UNPRINTED'
+    | 'PRINTED';
+
+  printingUpdatedAt?: string | null;
+  printingUpdatedBy?: number | null;
+  printingUpdatedByName?: string | null;
+
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type SolarMitraReferral = {
@@ -462,6 +479,16 @@ const [uploadingShopPhoto, setUploadingShopPhoto] =
   const [mitraStatus, setMitraStatus] = useState('');
 
   const [
+  mitraInterestStatus,
+  setMitraInterestStatus,
+] = useState('');
+
+const [
+  mitraPrintingStatus,
+  setMitraPrintingStatus,
+] = useState('');
+
+  const [
   mitraCreatedBy,
   setMitraCreatedBy,
 ] = useState('');
@@ -705,6 +732,50 @@ const canAssignFranchiseManager =
     );
   };
 
+  const [updatingMitraStatusId, setUpdatingMitraStatusId] =
+  useState<number | null>(null);
+
+const updateMitraVerificationStatus = async (
+  item: SolarMitra,
+  field: 'interestStatus' | 'printingStatus',
+  value: string,
+) => {
+  if (updatingMitraStatusId !== null) return;
+
+  const isInterest = field === 'interestStatus';
+
+  const confirmed = window.confirm(
+    `Update ${item.name}'s ${
+      isInterest ? 'calling verification' : 'QR printing'
+    } status to ${cleanLabel(value)}?`,
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setUpdatingMitraStatusId(item.id);
+
+    await axios.patch(
+      `${API_BASE_URL}/solar-mitra/${item.id}/${
+        isInterest ? 'interest-status' : 'printing-status'
+      }`,
+      { [field]: value },
+      { headers: getAuthHeaders() },
+    );
+
+    await loadMitras();
+  } catch (error) {
+    alert(
+      getErrorMessage(
+        error,
+        'Failed to update Solar Mitra status',
+      ),
+    );
+  } finally {
+    setUpdatingMitraStatusId(null);
+  }
+};
+
   const loadReferrals = async () => {
     const res = await axios.get(
       `${API_BASE_URL}/solar-mitra/referrals/list`,
@@ -841,6 +912,22 @@ const canAssignFranchiseManager =
         }
 
         if (
+  mitraInterestStatus &&
+  (item.interestStatus || 'PENDING') !==
+    mitraInterestStatus
+) {
+  return false;
+}
+
+if (
+  mitraPrintingStatus &&
+  (item.printingStatus || 'UNPRINTED') !==
+    mitraPrintingStatus
+) {
+  return false;
+}
+
+        if (
   mitraCreatedBy &&
   Number(item.createdBy) !==
     Number(mitraCreatedBy)
@@ -867,11 +954,13 @@ const canAssignFranchiseManager =
         );
       });
     }, [
-      mitras,
-      mitraSearch,
-      mitraStatus,
-      mitraCreatedBy,
-    ]);
+  mitras,
+  mitraSearch,
+  mitraStatus,
+  mitraInterestStatus,
+  mitraPrintingStatus,
+  mitraCreatedBy,
+]);
 
     const mitraCreators =
   useMemo(() => {
@@ -3402,8 +3491,51 @@ const convertMeetingToSolarMitra =
               <option value="INACTIVE">
                 Inactive
               </option>
-              <option value="BLOCKED">
+                            <option value="BLOCKED">
                 Blocked
+              </option>
+            </select>
+
+            <select
+              value={mitraInterestStatus}
+              onChange={(event) =>
+                setMitraInterestStatus(
+                  event.target.value,
+                )
+              }
+              className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
+            >
+              <option value="">
+                All Calling Status
+              </option>
+              <option value="PENDING">
+                Pending Verification
+              </option>
+              <option value="INTERESTED">
+                Interested
+              </option>
+              <option value="NOT_INTERESTED">
+                Not Interested
+              </option>
+            </select>
+
+            <select
+              value={mitraPrintingStatus}
+              onChange={(event) =>
+                setMitraPrintingStatus(
+                  event.target.value,
+                )
+              }
+              className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
+            >
+              <option value="">
+                All Printing Status
+              </option>
+              <option value="UNPRINTED">
+                Unprinted
+              </option>
+              <option value="PRINTED">
+                Printed
               </option>
             </select>
 
@@ -3617,6 +3749,103 @@ const convertMeetingToSolarMitra =
                       </p>
                     </div>
                   </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+  {/* Calling Interest Verification */}
+  <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3">
+    <p className="text-xs font-bold text-gray-700">
+      📞 Calling Verification
+    </p>
+
+    <div className="mt-2">
+      <StatusBadge
+        value={item.interestStatus || 'PENDING'}
+      />
+    </div>
+
+    <select
+      value={item.interestStatus || 'PENDING'}
+      disabled={updatingMitraStatusId !== null}
+      onChange={(event) =>
+        updateMitraVerificationStatus(
+          item,
+          'interestStatus',
+          event.target.value,
+        )
+      }
+      className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+    >
+      <option value="PENDING" disabled>
+        Pending Verification
+      </option>
+      <option value="INTERESTED">
+        Interested
+      </option>
+      <option value="NOT_INTERESTED">
+        Not Interested
+      </option>
+    </select>
+
+    {item.interestUpdatedAt && (
+      <p className="mt-2 text-xs text-gray-500">
+        Updated by{' '}
+        {item.interestUpdatedByName ||
+          `User #${item.interestUpdatedBy || '—'}`}
+        {' • '}
+        {formatDate(item.interestUpdatedAt)}
+      </p>
+    )}
+  </div>
+
+  {/* QR Poster Printing */}
+  <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-3">
+    <p className="text-xs font-bold text-gray-700">
+      🖨️ QR Poster Printing
+    </p>
+
+    <div className="mt-2">
+      <StatusBadge
+        value={item.printingStatus || 'UNPRINTED'}
+      />
+    </div>
+
+    {isOwner || isFranchiseHead ? (
+      <select
+        value={item.printingStatus || 'UNPRINTED'}
+        disabled={updatingMitraStatusId !== null}
+        onChange={(event) =>
+          updateMitraVerificationStatus(
+            item,
+            'printingStatus',
+            event.target.value,
+          )
+        }
+        className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+      >
+        <option value="UNPRINTED">
+          Unprinted
+        </option>
+        <option value="PRINTED">
+          Printed
+        </option>
+      </select>
+    ) : (
+      <p className="mt-3 text-xs text-gray-500">
+        Managed by Franchise Head
+      </p>
+    )}
+
+    {item.printingUpdatedAt && (
+      <p className="mt-2 text-xs text-gray-500">
+        Updated by{' '}
+        {item.printingUpdatedByName ||
+          `User #${item.printingUpdatedBy || '—'}`}
+        {' • '}
+        {formatDate(item.printingUpdatedAt)}
+      </p>
+    )}
+  </div>
+</div>
 
                   {item.address && (
                     <div className="mt-4 rounded-xl bg-gray-50 p-3">

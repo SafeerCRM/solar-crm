@@ -800,6 +800,68 @@ async uploadMeetingDocument(
     );
 }
 
+@Patch(':id/printing-status')
+async updatePrintingStatus(
+  @Req() req: any,
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  const roles: string[] =
+    Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+
+  if (
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.FRANCHISE_HEAD)
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Franchise Head can update QR poster printing status',
+    );
+  }
+
+  return this.service.updateSolarMitraPrintingStatus(
+    id,
+    body,
+    req.user,
+  );
+}
+
+@Patch(':id/interest-status')
+async updateInterestStatus(
+  @Req() req: any,
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  this.assertManagementAccess(req.user);
+
+  const mitra =
+    await this.service.getSolarMitra(id);
+
+  if (
+    !this.hasFullSolarMitraVisibility(req.user)
+  ) {
+    const allowed =
+      this.isFranchiseManager(req.user)
+        ? Number(mitra.franchiseManagerId) ===
+          Number(req.user.id)
+        : Number(mitra.createdBy) ===
+          Number(req.user.id);
+
+    if (!allowed) {
+      throw new ForbiddenException(
+        'You can only verify interest for your accessible Solar Mitras',
+      );
+    }
+  }
+
+  return this.service.updateSolarMitraInterestStatus(
+    id,
+    body,
+    req.user,
+  );
+}
+
 @Post(':id/poster-installation/upload')
 @UseInterceptors(
   FileInterceptor('file', {

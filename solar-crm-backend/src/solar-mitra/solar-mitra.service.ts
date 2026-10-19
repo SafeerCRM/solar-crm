@@ -27,6 +27,8 @@ import {
 import {
   SolarMitra,
   SolarMitraStatus,
+  SolarMitraInterestStatus,
+  SolarMitraPrintingStatus,
 } from './solar-mitra.entity';
 
 import {
@@ -1206,6 +1208,52 @@ updatedBy:
       );
     }
 
+    const interestStatus =
+  String(query?.interestStatus || '')
+    .trim()
+    .toUpperCase();
+
+if (interestStatus) {
+  if (
+    ![
+      'PENDING',
+      'INTERESTED',
+      'NOT_INTERESTED',
+    ].includes(interestStatus)
+  ) {
+    throw new BadRequestException(
+      'Invalid interest status filter',
+    );
+  }
+
+  qb.andWhere(
+    'mitra."interestStatus" = :interestStatus',
+    { interestStatus },
+  );
+}
+
+const printingStatus =
+  String(query?.printingStatus || '')
+    .trim()
+    .toUpperCase();
+
+if (printingStatus) {
+  if (
+    !['PRINTED', 'UNPRINTED'].includes(
+      printingStatus,
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid printing status filter',
+    );
+  }
+
+  qb.andWhere(
+    'mitra."printingStatus" = :printingStatus',
+    { printingStatus },
+  );
+}
+
     if (query?.city) {
       qb.andWhere(
         'LOWER(mitra.city) = LOWER(:city)',
@@ -1262,6 +1310,96 @@ updatedBy:
 
     return mitra;
   }
+
+  async updateSolarMitraInterestStatus(
+  mitraId: number,
+  body: any,
+  user: any,
+) {
+  const status = String(
+    body?.interestStatus || '',
+  ).trim().toUpperCase();
+
+  if (
+    ![
+      SolarMitraInterestStatus.INTERESTED,
+      SolarMitraInterestStatus.NOT_INTERESTED,
+    ].includes(status as SolarMitraInterestStatus)
+  ) {
+    throw new BadRequestException(
+      'Interest status must be INTERESTED or NOT_INTERESTED',
+    );
+  }
+
+  const mitra = await this.getSolarMitra(mitraId);
+
+  mitra.interestStatus =
+    status as SolarMitraInterestStatus;
+
+  mitra.interestUpdatedAt = new Date();
+
+  mitra.interestUpdatedBy = Number(user.id);
+
+  mitra.interestUpdatedByName =
+  String(user?.name || '').trim();
+
+  await this.solarMitraRepository.save(mitra);
+
+  return {
+    message: 'Solar Mitra interest status updated successfully',
+    id: mitra.id,
+    interestStatus: mitra.interestStatus,
+    interestUpdatedAt: mitra.interestUpdatedAt,
+    interestUpdatedBy: mitra.interestUpdatedBy,
+    interestUpdatedByName: mitra.interestUpdatedByName,
+  };
+}
+
+async updateSolarMitraPrintingStatus(
+  mitraId: number,
+  body: any,
+  user: any,
+) {
+  const status = String(
+    body?.printingStatus || '',
+  ).trim().toUpperCase();
+
+  if (
+    ![
+      SolarMitraPrintingStatus.PRINTED,
+      SolarMitraPrintingStatus.UNPRINTED,
+    ].includes(status as SolarMitraPrintingStatus)
+  ) {
+    throw new BadRequestException(
+      'Printing status must be PRINTED or UNPRINTED',
+    );
+  }
+
+  const mitra = await this.getSolarMitra(mitraId);
+
+  mitra.printingStatus =
+    status as SolarMitraPrintingStatus;
+
+  mitra.printingUpdatedAt = new Date();
+
+  mitra.printingUpdatedBy = Number(user.id);
+
+  mitra.printingUpdatedByName =
+    String(user?.name || '').trim();
+
+  await this.solarMitraRepository.save(mitra);
+
+  return {
+    message:
+      'Solar Mitra printing status updated successfully',
+    id: mitra.id,
+    printingStatus: mitra.printingStatus,
+    printingUpdatedAt: mitra.printingUpdatedAt,
+    printingUpdatedBy: mitra.printingUpdatedBy,
+    printingUpdatedByName:
+      mitra.printingUpdatedByName,
+  };
+}
 
   async getSolarMitraByLinkedUserId(
   userId: number,

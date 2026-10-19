@@ -13,6 +13,17 @@ export enum SolarMitraStatus {
   BLOCKED = 'BLOCKED',
 }
 
+export enum SolarMitraInterestStatus {
+  PENDING = 'PENDING',
+  INTERESTED = 'INTERESTED',
+  NOT_INTERESTED = 'NOT_INTERESTED',
+}
+
+export enum SolarMitraPrintingStatus {
+  UNPRINTED = 'UNPRINTED',
+  PRINTED = 'PRINTED',
+}
+
 @Entity('solar_mitra')
 export class SolarMitra {
   @PrimaryGeneratedColumn()
@@ -81,6 +92,36 @@ shopPhotoUrl: string;
 
   @Column({ type: 'text', nullable: true })
 qrPosterInstallationPhotoUrl2: string;
+
+@Column({
+  type: 'text',
+  default: SolarMitraInterestStatus.PENDING,
+})
+interestStatus: SolarMitraInterestStatus;
+
+@Column({ type: 'timestamp', nullable: true })
+interestUpdatedAt: Date;
+
+@Column({ nullable: true })
+interestUpdatedBy: number;
+
+@Column({ type: 'text', nullable: true })
+interestUpdatedByName: string;
+
+@Column({
+  type: 'text',
+  default: SolarMitraPrintingStatus.UNPRINTED,
+})
+printingStatus: SolarMitraPrintingStatus;
+
+@Column({ type: 'timestamp', nullable: true })
+printingUpdatedAt: Date;
+
+@Column({ nullable: true })
+printingUpdatedBy: number;
+
+@Column({ type: 'text', nullable: true })
+printingUpdatedByName: string;
 
 /*
  * CRM User account linked to this Solar Mitra profile.
