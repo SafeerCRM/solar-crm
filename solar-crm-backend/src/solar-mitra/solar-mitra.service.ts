@@ -97,6 +97,145 @@ private readonly dataSource: DataSource,
     return digits;
   }
 
+  private async uploadMitraImage(
+  file: any,
+  folder: string,
+  userId: number,
+) {
+  if (!file) {
+    throw new BadRequestException(
+      'Image is required',
+    );
+  }
+
+  const mimeType = String(
+    file.mimetype || '',
+  ).toLowerCase();
+
+  const extensions: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+  };
+
+  const extension = extensions[mimeType];
+
+  if (!extension) {
+    throw new BadRequestException(
+      'Only JPG, PNG and WEBP images are allowed',
+    );
+  }
+
+  if (
+    !file.buffer ||
+    file.size > 10 * 1024 * 1024
+  ) {
+    throw new BadRequestException(
+      'Image must be less than 10 MB',
+    );
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env.SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase = createClient(
+    supabaseUrl,
+    serviceKey,
+  );
+
+  const filePath =
+    `solar-mitra/${folder}/` +
+    `user-${userId}/` +
+    `${Date.now()}-${randomUUID()}.${extension}`;
+
+  const { error } = await supabase.storage
+    .from(bucket)
+    .upload(filePath, file.buffer, {
+      contentType: mimeType,
+      upsert: false,
+    });
+
+  if (error) {
+    throw new BadRequestException(
+      error.message,
+    );
+  }
+
+  const { data } = supabase.storage
+    .from(bucket)
+    .getPublicUrl(filePath);
+
+  return data.publicUrl;
+}
+
+async uploadMyPaymentQr(
+  userId: number,
+  file: any,
+) {
+  const mitra =
+    await this.getSolarMitraByLinkedUserId(
+      userId,
+    );
+
+  const fileUrl =
+    await this.uploadMitraImage(
+      file,
+      'payment-qr',
+      userId,
+    );
+
+  mitra.paymentQrCodeUrl = fileUrl;
+
+  await this.solarMitraRepository.save(
+    mitra,
+  );
+
+  return {
+    message: 'Payment QR uploaded successfully',
+    fileUrl,
+  };
+}
+
+async uploadPosterInstallationPhoto(
+  mitraId: number,
+  file: any,
+  userId: number,
+) {
+  const mitra =
+    await this.getSolarMitra(mitraId);
+
+  const fileUrl =
+    await this.uploadMitraImage(
+      file,
+      'poster-installation',
+      userId,
+    );
+
+  mitra.qrPosterInstallationPhotoUrl =
+    fileUrl;
+
+  await this.solarMitraRepository.save(
+    mitra,
+  );
+
+  return {
+    message:
+      'Poster installation photo uploaded successfully',
+    fileUrl,
+  };
+}
+
   async uploadShopPhoto(
   file: any,
   user: any,
@@ -917,16 +1056,21 @@ async getSolarMitraPortalReferral(
               body?.gpsAddress || '',
             ).trim() || null,
 
-          shopPhotoUrl:
+                    shopPhotoUrl:
             String(
               body?.shopPhotoUrl || '',
+            ).trim() || null,
+
+          qrPosterInstallationPhotoUrl:
+            String(
+              body?.qrPosterInstallationPhotoUrl || '',
             ).trim() || null,
 
           linkedUserId:
             savedUser.id,
 
           portalPassword:
-  undefined,
+            undefined,
 
           publicReferralToken,
 
@@ -1139,6 +1283,66 @@ updatedBy:
   return mitra;
 }
 
+async updateMyPaymentDetails(
+  userId: number,
+  body: any,
+) {
+  const mitra =
+    await this.getSolarMitraByLinkedUserId(
+      userId,
+    );
+
+  if (
+    body?.bankAccountNumber !== undefined
+  ) {
+    const accountNumber = String(
+      body.bankAccountNumber ?? '',
+    ).trim();
+
+    if (
+      accountNumber &&
+      !/^[0-9]{6,20}$/.test(accountNumber)
+    ) {
+      throw new BadRequestException(
+        'Enter a valid bank account number',
+      );
+    }
+
+    mitra.bankAccountNumber =
+      accountNumber;
+  }
+
+  if (
+    body?.bankIfscCode !== undefined
+  ) {
+    const ifsc = String(
+      body.bankIfscCode ?? '',
+    ).trim().toUpperCase();
+
+    if (
+      ifsc &&
+      !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)
+    ) {
+      throw new BadRequestException(
+        'Enter a valid IFSC code',
+      );
+    }
+
+    mitra.bankIfscCode = ifsc;
+  }
+
+  // Payment QR is handled separately by
+  // an authenticated image-upload endpoint.
+
+  await this.solarMitraRepository.save(
+    mitra,
+  );
+
+  return this.getMySolarMitraProfile(
+    userId,
+  );
+}
+
 async getMySolarMitraProfile(
   userId: number,
 ) {
@@ -1172,8 +1376,21 @@ async getMySolarMitraProfile(
       mitra.gpsLongitude ?? null,
     gpsAddress:
       mitra.gpsAddress || null,
-    shopPhotoUrl:
+        shopPhotoUrl:
       mitra.shopPhotoUrl || null,
+
+    bankAccountNumber:
+      mitra.bankAccountNumber || null,
+
+    bankIfscCode:
+      mitra.bankIfscCode || null,
+
+    paymentQrCodeUrl:
+      mitra.paymentQrCodeUrl || null,
+
+    qrPosterInstallationPhotoUrl:
+      mitra.qrPosterInstallationPhotoUrl || null,
+
     publicReferralToken:
       mitra.publicReferralToken,
     status:
@@ -1575,6 +1792,7 @@ async getMySolarMitraProfile(
         'state',
         'gpsAddress',
         'shopPhotoUrl',
+        'qrPosterInstallationPhotoUrl',
         'franchiseManagerName',
       ];
 

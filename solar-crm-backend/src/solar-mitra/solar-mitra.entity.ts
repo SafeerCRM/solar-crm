@@ -67,6 +67,18 @@ export class SolarMitra {
   @Column({ type: 'text', nullable: true })
 shopPhotoUrl: string;
 
+  @Column({ type: 'text', nullable: true })
+  bankAccountNumber: string;
+
+  @Column({ type: 'text', nullable: true })
+  bankIfscCode: string;
+
+  @Column({ type: 'text', nullable: true })
+  paymentQrCodeUrl: string;
+
+  @Column({ type: 'text', nullable: true })
+  qrPosterInstallationPhotoUrl: string;
+
 /*
  * CRM User account linked to this Solar Mitra profile.
  *

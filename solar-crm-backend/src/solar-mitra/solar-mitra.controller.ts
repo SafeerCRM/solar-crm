@@ -799,6 +799,48 @@ async uploadMeetingDocument(
     );
 }
 
+@Post(':id/poster-installation/upload')
+@UseInterceptors(
+  FileInterceptor('file', {
+    limits: {
+      fileSize: 10 * 1024 * 1024,
+    },
+  }),
+)
+async uploadPosterInstallationPhoto(
+  @Req() req: any,
+  @Param('id', ParseIntPipe) id: number,
+  @UploadedFile() file: any,
+) {
+  this.assertManagementAccess(req.user);
+
+  const mitra =
+    await this.service.getSolarMitra(id);
+
+  if (
+    !this.hasFullSolarMitraVisibility(req.user)
+  ) {
+    const allowed =
+      this.isFranchiseManager(req.user)
+        ? Number(mitra.franchiseManagerId) ===
+          Number(req.user.id)
+        : Number(mitra.createdBy) ===
+          Number(req.user.id);
+
+    if (!allowed) {
+      throw new ForbiddenException(
+        'You can only update your accessible Solar Mitras',
+      );
+    }
+  }
+
+  return this.service.uploadPosterInstallationPhoto(
+    id,
+    file,
+    req.user.id,
+  );
+}
+
 @Patch(':id')
 async update(
   @Req() req: any,
@@ -882,6 +924,43 @@ myProfile(
     .getMySolarMitraProfile(
       req.user.id,
     );
+}
+
+@Patch('me/payment-details')
+updateMyPaymentDetails(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  this.assertSolarMitraAccess(
+    req.user,
+  );
+
+  return this.service.updateMyPaymentDetails(
+    req.user.id,
+    body,
+  );
+}
+
+@Post('me/payment-qr/upload')
+@UseInterceptors(
+  FileInterceptor('file', {
+    limits: {
+      fileSize: 10 * 1024 * 1024,
+    },
+  }),
+)
+uploadMyPaymentQr(
+  @Req() req: any,
+  @UploadedFile() file: any,
+) {
+  this.assertSolarMitraAccess(
+    req.user,
+  );
+
+  return this.service.uploadMyPaymentQr(
+    req.user.id,
+    file,
+  );
 }
 
 @Get('me/referrals')
