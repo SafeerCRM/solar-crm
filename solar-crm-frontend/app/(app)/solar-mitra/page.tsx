@@ -488,6 +488,20 @@ const [
   setMitraPrintingStatus,
 ] = useState('');
 
+const [
+  mitraDateFilterType,
+  setMitraDateFilterType,
+] = useState<'ALL' | 'MONTH' | 'CUSTOM'>('ALL');
+
+const [mitraSelectedMonth, setMitraSelectedMonth] =
+  useState(dayjs().format('YYYY-MM'));
+
+const [mitraDateFrom, setMitraDateFrom] =
+  useState('');
+
+const [mitraDateTo, setMitraDateTo] =
+  useState('');
+
   const [
   mitraCreatedBy,
   setMitraCreatedBy,
@@ -927,6 +941,46 @@ if (
   return false;
 }
 
+if (mitraDateFilterType !== 'ALL') {
+  if (!item.createdAt) {
+    return false;
+  }
+
+  const createdDate = dayjs(item.createdAt);
+
+  if (!createdDate.isValid()) {
+    return false;
+  }
+
+  if (mitraDateFilterType === 'MONTH') {
+    if (
+      createdDate.format('YYYY-MM') !==
+      mitraSelectedMonth
+    ) {
+      return false;
+    }
+  }
+
+  if (mitraDateFilterType === 'CUSTOM') {
+    const createdDay =
+      createdDate.format('YYYY-MM-DD');
+
+    if (
+      mitraDateFrom &&
+      createdDay < mitraDateFrom
+    ) {
+      return false;
+    }
+
+    if (
+      mitraDateTo &&
+      createdDay > mitraDateTo
+    ) {
+      return false;
+    }
+  }
+}
+
         if (
   mitraCreatedBy &&
   Number(item.createdBy) !==
@@ -960,6 +1014,10 @@ if (
   mitraInterestStatus,
   mitraPrintingStatus,
   mitraCreatedBy,
+  mitraDateFilterType,
+  mitraSelectedMonth,
+  mitraDateFrom,
+  mitraDateTo,
 ]);
 
     const mitraCreators =
@@ -3520,6 +3578,68 @@ const convertMeetingToSolarMitra =
             </select>
 
             <select
+  value={mitraDateFilterType}
+  onChange={(event) =>
+    setMitraDateFilterType(
+      event.target.value as
+        | 'ALL'
+        | 'MONTH'
+        | 'CUSTOM',
+    )
+  }
+  className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
+>
+  <option value="ALL">All Dates</option>
+  <option value="MONTH">Monthly</option>
+  <option value="CUSTOM">Custom Date Range</option>
+</select>
+
+{mitraDateFilterType === 'MONTH' && (
+  <input
+    type="month"
+    value={mitraSelectedMonth}
+    onChange={(event) =>
+      setMitraSelectedMonth(event.target.value)
+    }
+    className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
+  />
+)}
+
+{mitraDateFilterType === 'CUSTOM' && (
+  <>
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-semibold text-gray-600">
+        From Date
+      </label>
+      <input
+        type="date"
+        value={mitraDateFrom}
+        max={mitraDateTo || undefined}
+        onChange={(event) =>
+          setMitraDateFrom(event.target.value)
+        }
+        className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
+      />
+    </div>
+
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-semibold text-gray-600">
+        To Date
+      </label>
+      <input
+        type="date"
+        value={mitraDateTo}
+        min={mitraDateFrom || undefined}
+        onChange={(event) =>
+          setMitraDateTo(event.target.value)
+        }
+        className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
+      />
+    </div>
+  </>
+)}
+
+            <select
               value={mitraPrintingStatus}
               onChange={(event) =>
                 setMitraPrintingStatus(
@@ -3571,6 +3691,24 @@ const convertMeetingToSolarMitra =
   </select>
 )}
 
+<button
+  type="button"
+  onClick={() => {
+    setMitraSearch('');
+    setMitraStatus('');
+    setMitraCreatedBy('');
+    setMitraInterestStatus('');
+    setMitraPrintingStatus('');
+    setMitraDateFilterType('ALL');
+    setMitraSelectedMonth(dayjs().format('YYYY-MM'));
+    setMitraDateFrom('');
+    setMitraDateTo('');
+  }}
+  className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-200"
+>
+  Clear Filters
+</button>
+
             <button
               type="button"
               onClick={() =>
@@ -3602,7 +3740,26 @@ const convertMeetingToSolarMitra =
             </button>
           </div>
 
-          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+  <div>
+    <p className="text-sm font-semibold text-gray-600">
+      Solar Mitra Results
+    </p>
+
+    <p className="mt-1 text-2xl font-black text-gray-900">
+      {filteredMitras.length}
+      <span className="ml-2 text-sm font-medium text-gray-500">
+        of {mitras.length} Solar Mitras
+      </span>
+    </p>
+  </div>
+
+  <p className="text-xs font-medium text-gray-500">
+    Count updates automatically with selected filters
+  </p>
+</div>
+
+<div className="mt-5 grid gap-4 xl:grid-cols-2">
             {filteredMitras.map(
               (item) => (
                 <div
