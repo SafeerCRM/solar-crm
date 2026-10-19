@@ -597,6 +597,17 @@ const shareTradingMeetingCsv = async () => {
                       Open
                     </Link>
 
+                    {meeting.dealerPhone?.trim() && (
+  <a
+    href={`tel:${meeting.dealerPhone.replace(/[^\d+]/g, '')}`}
+    className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700"
+    title={`Call ${meeting.dealerName || 'Dealer'}`}
+    aria-label={`Call ${meeting.dealerName || 'Dealer'} at ${meeting.dealerPhone}`}
+  >
+    📞 Call
+  </a>
+)}
+
                     <button
                       onClick={() =>
                         hideOrRestoreMeeting(
