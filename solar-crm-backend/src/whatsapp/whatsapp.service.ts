@@ -6,6 +6,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { randomUUID } from 'crypto';
+
+import {
+  ProjectExecutionActivity,
+  ProjectExecutionActivityStatus,
+  ProjectExecutionActivityType,
+} from '../project/project-execution-activity.entity';
 
 import {
   WhatsappMessage,
@@ -32,6 +39,7 @@ import {
   ProjectCustomerConfirmationEventType,
 } from '../project/project-customer-confirmation-history.entity';
 
+
 export interface WhatsappSendContext {
   recipientType?: WhatsappRecipientType;
   recipientName?: string;
@@ -39,7 +47,9 @@ export interface WhatsappSendContext {
   referenceType?: string;
   referenceId?: string | number;
   deduplicationKey?: string;
+  flowToken?: string;
 }
+
 
 interface WhatsappAutomationDefinition {
   automationKey: string;
@@ -64,6 +74,8 @@ export interface WhatsappAutomationExecution {
   referenceId: string | number;
 
   occurrenceKey?: string;
+
+  flowToken?: string;
 
   components?: Record<string, unknown>[];
 }
@@ -100,6 +112,21 @@ export class WhatsappService
   description:
     'Request customer confirmation of agreed solar project details before physical installation begins.',
 },
+
+{
+  automationKey: 'CUSTOMER_EXECUTION_RATING_REQUEST',
+  name: 'Customer Execution Rating Request',
+  triggerType: WhatsappAutomationTriggerType.EVENT,
+  recipientType: WhatsappRecipientType.CUSTOMER,
+  templateName: 'customer_execution_rating_request',
+  templateLanguage: 'en',
+  triggerOffsetMinutes: null,
+  repeatAfterMinutes: null,
+  maxRepeatCount: null,
+  description:
+    'Request customer star ratings after structure work, panel installation, or inverter installation is completed.',
+},
+
   {
     automationKey: 'CUSTOMER_PROJECT_UPDATE',
     name: 'Customer Project Update',
@@ -714,6 +741,44 @@ async executeAutomation(
   let components =
     input.components || [];
 
+
+  // Require a Flow button with a matching token.
+  if (
+    input.automationKey ===
+    'CUSTOMER_EXECUTION_RATING_REQUEST'
+  ) {
+    const flowButton = components.find(
+      (component) =>
+        component.type === 'button' &&
+        component.sub_type === 'flow' &&
+        component.index === '0',
+    );
+
+    const parameters = Array.isArray(
+      flowButton?.parameters,
+    )
+      ? flowButton.parameters
+      : [];
+
+    const flowParameter = parameters.find(
+      (parameter: any) =>
+        parameter?.type === 'action' &&
+        parameter?.action?.flow_token ===
+          input.flowToken,
+    );
+
+    if (
+      !input.flowToken ||
+      !flowParameter
+    ) {
+      return {
+        sent: false,
+        reason: 'INVALID_FLOW_TEMPLATE_COMPONENTS',
+      };
+    }
+  }
+
+
   /*
    * Meta test WABA does not contain the production
    * Aditya Solars templates.
@@ -723,6 +788,22 @@ async executeAutomation(
    * automationKey/reference/deduplication metadata
    * in whatsapp_message.
    */
+
+
+  // WhatsApp Flow requires its actual approved Flow template.
+  // Never substitute a normal test template for a Flow request.
+  if (
+    input.automationKey ===
+      'CUSTOMER_EXECUTION_RATING_REQUEST' &&
+    this.sendMode === 'TEST'
+  ) {
+    return {
+      sent: false,
+      reason: 'FLOW_TEMPLATE_UNAVAILABLE_IN_TEST_MODE',
+    };
+  }
+
+
   if (this.sendMode === 'TEST') {
     templateName =
       'jaspers_market_order_confirmation_v1';
@@ -778,6 +859,7 @@ async executeAutomation(
         referenceId:
           input.referenceId,
         deduplicationKey,
+        flowToken: input.flowToken,
       },
     );
 
@@ -832,6 +914,54 @@ async executeAutomation(
       );
     }
   }
+
+
+public generateExecutionRatingFlowToken(
+  activityId: number,
+): string {
+  if (
+    !Number.isSafeInteger(activityId) ||
+    activityId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid execution activity ID is required',
+    );
+  }
+
+  return `execution_rating_${activityId}_${randomUUID()}`;
+}
+
+
+private async findExecutionRatingRequestByFlowToken(
+  flowToken: string,
+): Promise<WhatsappMessage | null> {
+  if (
+    !flowToken ||
+    !/^execution_rating_[1-9]\d*_[0-9a-f-]{36}$/i.test(
+      flowToken,
+    )
+  ) {
+    return null;
+  }
+
+  return this.messageRepository
+    .createQueryBuilder('message')
+    .where('message.direction = :direction', {
+      direction: WhatsappMessageDirection.OUTBOUND,
+    })
+    .andWhere('message.automationKey = :automationKey', {
+      automationKey: 'CUSTOMER_EXECUTION_RATING_REQUEST',
+    })
+    .andWhere('message.referenceType = :referenceType', {
+      referenceType: 'EXECUTION_ACTIVITY',
+    })
+    .andWhere(
+      `message."templateParameters" ->> 'flowToken' = :flowToken`,
+      { flowToken },
+    )
+    .getOne();
+}
+
 
   private normalizePhone(phone: string): string {
   let digits = String(phone || '')
@@ -1097,9 +1227,14 @@ private async callConfiguredMessagesApi(
       templateName: templateName.trim(),
       templateLanguage: languageCode,
       messageBody: null,
-      templateParameters: {
-        components,
-      },
+      
+templateParameters: {
+  components,
+  ...(context.flowToken
+    ? { flowToken: context.flowToken }
+    : {}),
+},
+
       metaMessageId: null,
       status: WhatsappMessageStatus.PENDING,
       automationKey: context.automationKey || null,
@@ -1636,12 +1771,48 @@ async processCustomerExecutionRatingReply(params: {
   messageBody: string | null;
   payload: Record<string, any>;
 }): Promise<void> {
-  const response = String(params.messageBody || '').trim();
+  
+const isFlowReply =
+  params.payload?.type === 'interactive' &&
+  params.payload?.interactive?.type === 'nfm_reply';
 
-  // Accept only a single rating from 1 to 5.
-  if (!/^[1-5]$/.test(response)) {
+let flowResponse: Record<string, unknown> | null = null;
+
+if (isFlowReply) {
+  const responseJson =
+    params.payload?.interactive?.nfm_reply?.response_json;
+
+  try {
+    const parsed =
+      typeof responseJson === 'string'
+        ? JSON.parse(responseJson)
+        : responseJson;
+
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      !Array.isArray(parsed)
+    ) {
+      flowResponse = parsed as Record<string, unknown>;
+    }
+  } catch {
     return;
   }
+}
+
+const response = isFlowReply
+  ? String(flowResponse?.rating ?? '').trim()
+  : String(params.messageBody || '').trim();
+
+// Accept only ratings from 1 to 5.
+if (!/^[1-5]$/.test(response)) {
+  return;
+}
+
+const feedback = isFlowReply
+  ? String(flowResponse?.feedback ?? '').trim().slice(0, 2000)
+  : '';
+
 
   const phone = this.normalizePhone(params.from);
   const incomingMessageId = String(params.messageId || '').trim();
@@ -1649,24 +1820,98 @@ async processCustomerExecutionRatingReply(params: {
     params.payload?.context?.id || '',
   ).trim();
 
-  // A standalone rating must never be assigned automatically.
-  if (!phone || !incomingMessageId || !originalMessageId) {
+  let verifiedFlowRequest: WhatsappMessage | null = null;
+
+
+if (isFlowReply) {
+  const flowToken = String(
+    flowResponse?.flow_token ?? '',
+  ).trim();
+
+  if (!flowToken || !phone || !incomingMessageId) {
     return;
   }
 
-  const outgoing = await this.messageRepository.findOne({
-    where: {
-      metaMessageId: originalMessageId,
-      direction: WhatsappMessageDirection.OUTBOUND,
-      automationKey: 'CUSTOMER_PROJECT_UPDATE',
-      referenceType: 'EXECUTION_ACTIVITY',
-      recipientPhone: phone,
-    },
-  });
+  const flowRequest =
+    await this.findExecutionRatingRequestByFlowToken(
+      flowToken,
+    );
+
+  if (
+    !flowRequest ||
+    flowRequest.recipientPhone !== phone ||
+    ![
+      WhatsappMessageStatus.SENT,
+      WhatsappMessageStatus.DELIVERED,
+      WhatsappMessageStatus.READ,
+    ].includes(flowRequest.status)
+  ) {
+    return;
+  }
+
+  
+const flowActivityId = Number(flowRequest.referenceId);
+
+if (
+  !Number.isSafeInteger(flowActivityId) ||
+  flowActivityId <= 0
+) {
+  return;
+}
+
+const allowedFlowTypes = [
+  'STRUCTURE_WORK',
+  'PANEL_INSTALLED',
+  'INVERTER_INSTALLED',
+];
+
+const flowOccurrenceKey = String(
+  flowRequest.deduplicationKey || '',
+).split(':').slice(3).join(':');
+
+const validFlowMilestone = allowedFlowTypes.some(
+  (type) =>
+    flowOccurrenceKey ===
+    `execution-${type}-${flowActivityId}`,
+);
+
+if (!validFlowMilestone) {
+  return;
+}
+
+verifiedFlowRequest = flowRequest;
+
+}
+
+
+  
+  // A standalone rating must never be assigned automatically.
+  if (!phone || !incomingMessageId) {
+    return;
+  }
+
+  // Flow replies use the previously verified token.
+  // Numeric replies must reference an original WhatsApp message.
+  if (!isFlowReply && !originalMessageId) {
+    return;
+  }
+
+  const outgoing = isFlowReply
+    ? verifiedFlowRequest
+    : await this.messageRepository.findOne({
+        where: {
+          metaMessageId: originalMessageId,
+          direction: WhatsappMessageDirection.OUTBOUND,
+          automationKey: 'CUSTOMER_PROJECT_UPDATE',
+          referenceType: 'EXECUTION_ACTIVITY',
+          recipientPhone: phone,
+        },
+      });
 
   if (!outgoing) {
     return;
   }
+
 
   if (
     ![
@@ -1695,13 +1940,59 @@ async processCustomerExecutionRatingReply(params: {
     outgoing.deduplicationKey || '',
   ).split(':').slice(3).join(':');
 
-  const allowed = allowedActivityTypes.some(
-    (type) => occurrenceKey === `execution-${type}-${activityId}`,
-  );
+  
+const allowed = allowedActivityTypes.some((type) => {
+  const expectedOccurrenceKey =
+    `execution-${type}-${activityId}`;
+
+  return occurrenceKey === expectedOccurrenceKey;
+});
+
 
   if (!allowed) {
     return;
   }
+
+
+  // Verify the actual execution activity in the database.
+  const activityRepository =
+    this.messageRepository.manager.getRepository(
+      ProjectExecutionActivity,
+    );
+
+  const executionActivity =
+    await activityRepository.findOne({
+      where: { id: activityId },
+    });
+
+  if (!executionActivity) {
+    return;
+  }
+
+  const permittedActivityTypes = [
+    ProjectExecutionActivityType.STRUCTURE_WORK,
+    ProjectExecutionActivityType.PANEL_INSTALLED,
+    ProjectExecutionActivityType.INVERTER_INSTALLED,
+  ];
+
+  if (
+    !permittedActivityTypes.includes(
+      executionActivity.activityType,
+    ) ||
+    executionActivity.status !==
+      ProjectExecutionActivityStatus.COMPLETED
+  ) {
+    return;
+  }
+
+  // The outgoing request must match the activity's actual type.
+  if (
+    occurrenceKey !==
+    `execution-${executionActivity.activityType}-${activityId}`
+  ) {
+    return;
+  }
+
 
   await this.messageRepository.manager.transaction(
     async (manager) => {
@@ -1738,11 +2029,20 @@ async processCustomerExecutionRatingReply(params: {
         return;
       }
 
-      incoming.automationKey = 'CUSTOMER_EXECUTION_RATING';
-      incoming.referenceType = 'EXECUTION_ACTIVITY';
-      incoming.referenceId = String(activityId);
+      
+incoming.automationKey = 'CUSTOMER_EXECUTION_RATING';
+incoming.referenceType = 'EXECUTION_ACTIVITY';
+incoming.referenceId = String(activityId);
 
-      await messages.save(incoming);
+// Store the numeric rating in the existing report-compatible field.
+incoming.messageBody = response;
+
+// Preserve the complete original WhatsApp payload.
+// For Flow submissions, this includes the optional feedback.
+incoming.metaPayload = params.payload;
+
+await messages.save(incoming);
+
 
       console.log('Customer execution activity rating recorded:', {
         activityId,

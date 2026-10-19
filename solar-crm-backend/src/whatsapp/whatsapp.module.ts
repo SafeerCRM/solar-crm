@@ -8,6 +8,7 @@ import { WhatsappAutomation } from './whatsapp-automation.entity';
 import { WhatsappAutomationAudit } from './whatsapp-automation-audit.entity';
 import { ProjectCustomerConfirmation } from '../project/project-customer-confirmation.entity';
 import { ProjectCustomerConfirmationHistory } from '../project/project-customer-confirmation-history.entity';
+import { ProjectExecutionActivity } from '../project/project-execution-activity.entity';
 
 @Module({
   imports: [
@@ -15,8 +16,9 @@ import { ProjectCustomerConfirmationHistory } from '../project/project-customer-
   WhatsappMessage,
   WhatsappAutomation,
   WhatsappAutomationAudit,
-  ProjectCustomerConfirmation,
+    ProjectCustomerConfirmation,
   ProjectCustomerConfirmationHistory,
+  ProjectExecutionActivity,
 ]),
   ],
 

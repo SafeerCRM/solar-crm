@@ -3522,6 +3522,92 @@ private async sendCustomerPaymentReceivedWhatsapp(
   }
 }
 
+
+private async sendCustomerExecutionRatingFlowWhatsapp(
+  project: Project,
+  activity: ProjectExecutionActivity,
+): Promise<boolean> {
+  try {
+    if (
+      activity.status !==
+      ProjectExecutionActivityStatus.COMPLETED
+    ) {
+      return false;
+    }
+
+    const allowedTypes = [
+      ProjectExecutionActivityType.STRUCTURE_WORK,
+      ProjectExecutionActivityType.PANEL_INSTALLED,
+      ProjectExecutionActivityType.INVERTER_INSTALLED,
+    ];
+
+    if (!allowedTypes.includes(activity.activityType)) {
+      return false;
+    }
+
+    const customerPhone = String(
+      project.customerPhone || '',
+    ).trim();
+
+    if (!customerPhone) {
+      return false;
+    }
+
+    const customerName =
+      String(project.customerName || '').trim() ||
+      'Customer';
+
+    const flowToken =
+      this.whatsappService.generateExecutionRatingFlowToken(
+        activity.id,
+      );
+
+    const result =
+      await this.whatsappService.executeAutomation({
+        automationKey:
+          'CUSTOMER_EXECUTION_RATING_REQUEST',
+        recipientPhone: customerPhone,
+        recipientName: customerName,
+        referenceType: 'EXECUTION_ACTIVITY',
+        referenceId: activity.id,
+        occurrenceKey:
+          `execution-${activity.activityType}-${activity.id}`,
+        flowToken,
+        components: [
+          {
+            type: 'button',
+            sub_type: 'flow',
+            index: '0',
+            parameters: [
+              {
+                type: 'action',
+                action: {
+                  flow_token: flowToken,
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+    if (!result.sent) {
+      console.log(
+        `[WhatsApp] Execution rating Flow skipped for activity ${activity.id}: ${result.reason}`,
+      );
+    }
+
+    return result.sent === true;
+  } catch (error) {
+    console.error(
+      `[WhatsApp] Execution rating Flow failed for activity ${activity.id}:`,
+      error,
+    );
+
+    return false;
+  }
+}
+
+
 private async sendCustomerExecutionMilestoneWhatsapp(
   activity: ProjectExecutionActivity,
 ): Promise<void> {
@@ -3577,18 +3663,38 @@ private async sendCustomerExecutionMilestoneWhatsapp(
     return;
   }
 
-  await this.sendCustomerProjectUpdateWhatsapp(
-  project,
-  updateText,
-  `execution-${activity.activityType}-${activity.id}`,
-  [
+  
+  const ratingMilestone = [
     ProjectExecutionActivityType.STRUCTURE_WORK,
     ProjectExecutionActivityType.PANEL_INSTALLED,
     ProjectExecutionActivityType.INVERTER_INSTALLED,
-  ].includes(activity.activityType)
-    ? activity.id
-    : undefined,
-);
+  ].includes(activity.activityType);
+
+  // Attempt the dedicated Flow only when explicitly activated.
+  // Until then, preserve the existing numeric-rating message.
+  if (
+    ratingMilestone &&
+    process.env.WHATSAPP_EXECUTION_RATING_FLOW_ENABLED ===
+      'true'
+  ) {
+    const flowSent =
+      await this.sendCustomerExecutionRatingFlowWhatsapp(
+        project,
+        activity,
+      );
+
+    if (flowSent) {
+      return;
+    }
+  }
+
+  await this.sendCustomerProjectUpdateWhatsapp(
+    project,
+    updateText,
+    `execution-${activity.activityType}-${activity.id}`,
+    ratingMilestone ? activity.id : undefined,
+  );
+
 }
 
   private async buildProjectJourneySnapshot(
