@@ -73,6 +73,7 @@ type SolarMitra = {
 bankIfscCode?: string | null;
 paymentQrCodeUrl?: string | null;
 qrPosterInstallationPhotoUrl?: string | null;
+qrPosterInstallationPhotoUrl2?: string | null;
   portalPassword?: string | null;
   publicReferralToken?: string | null;
   status: 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
@@ -231,6 +232,7 @@ const emptyMitraForm = {
   gpsAddress: '',
   shopPhotoUrl: '',
   qrPosterInstallationPhotoUrl: '',
+  qrPosterInstallationPhotoUrl2: '',
   portalPassword: '',
   payoutAmountOverride: '',
   requiredPaymentPercentageOverride: '',
@@ -1122,6 +1124,8 @@ const canAssignFranchiseManager =
         item.shopPhotoUrl || '',
         qrPosterInstallationPhotoUrl:
   item.qrPosterInstallationPhotoUrl || '',
+  qrPosterInstallationPhotoUrl2:
+  item.qrPosterInstallationPhotoUrl2 || '',
       portalPassword:
         item.portalPassword || '',
       payoutAmountOverride:
@@ -1620,6 +1624,7 @@ const captureMeetingLocation =
 
 const uploadPosterInstallationPhoto = async (
   file: File,
+  photoSlot: 1 | 2 = 1,
 ) => {
   if (!editingMitra?.id) {
     alert('Please save the Solar Mitra first.');
@@ -1651,7 +1656,7 @@ const uploadPosterInstallationPhoto = async (
     formData.append('file', file);
 
     const response = await axios.post(
-      `${API_BASE_URL}/solar-mitra/${editingMitra.id}/poster-installation/upload`,
+      `${API_BASE_URL}/solar-mitra/${editingMitra.id}/poster-installation/upload?photoSlot=${photoSlot}`,
       formData,
       {
         headers: {
@@ -1670,18 +1675,22 @@ const uploadPosterInstallationPhoto = async (
     }
 
     setMitraForm((prev: any) => ({
-      ...prev,
-      qrPosterInstallationPhotoUrl: fileUrl,
-    }));
+  ...prev,
+  [photoSlot === 1
+    ? 'qrPosterInstallationPhotoUrl'
+    : 'qrPosterInstallationPhotoUrl2']: fileUrl,
+}));
 
     setEditingMitra((prev: any) =>
-      prev
-        ? {
-            ...prev,
-            qrPosterInstallationPhotoUrl: fileUrl,
-          }
-        : prev,
-    );
+  prev
+    ? {
+        ...prev,
+        [photoSlot === 1
+          ? 'qrPosterInstallationPhotoUrl'
+          : 'qrPosterInstallationPhotoUrl2']: fileUrl,
+      }
+    : prev,
+);
 
     alert(
       'Poster installation photo uploaded successfully.',
@@ -3363,7 +3372,7 @@ const convertMeetingToSolarMitra =
 
       {activeTab === 'MITRAS' && (
         <div className="rounded-2xl bg-white p-4 shadow-sm md:p-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="flex flex-col flex-wrap gap-3 lg:flex-row lg:items-center">
             <input
               value={mitraSearch}
               onChange={(event) =>
@@ -3372,7 +3381,7 @@ const convertMeetingToSolarMitra =
                 )
               }
               placeholder="Search name, business, phone, city, area or manager..."
-              className="min-w-0 flex-1 rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-orange-500"
+              className="w-full min-w-[220px] flex-[2_1_280px] rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-orange-500"
             />
 
             <select
@@ -3406,7 +3415,7 @@ const convertMeetingToSolarMitra =
         event.target.value,
       )
     }
-    className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
+    className="w-full min-w-0 lg:w-[220px] lg:max-w-[220px] rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
   >
     <option value="">
       All Creators
@@ -4669,29 +4678,54 @@ const convertMeetingToSolarMitra =
         </button>
       </div>
 
-      {viewingPosterMitra.qrPosterInstallationPhotoUrl ? (
-        <div className="mt-5">
+      {viewingPosterMitra.qrPosterInstallationPhotoUrl ||
+viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
+  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+    {(
+      [
+        {
+          label: 'Poster Photo 1',
+          url: viewingPosterMitra.qrPosterInstallationPhotoUrl,
+        },
+        {
+          label: 'Poster Photo 2',
+          url: viewingPosterMitra.qrPosterInstallationPhotoUrl2,
+        },
+      ] as const
+    ).map((photo) => (
+      <div
+        key={photo.label}
+        className="rounded-xl border border-gray-200 p-3"
+      >
+        <p className="mb-3 text-sm font-bold text-gray-800">
+          {photo.label}
+        </p>
+
+        {photo.url ? (
           <a
-            href={viewingPosterMitra.qrPosterInstallationPhotoUrl}
+            href={photo.url}
             target="_blank"
             rel="noopener noreferrer"
           >
             <img
-              src={viewingPosterMitra.qrPosterInstallationPhotoUrl}
-              alt="Installed Solar Mitra referral QR poster"
-              className="max-h-[65vh] w-full rounded-xl border border-gray-200 bg-gray-50 object-contain"
+              src={photo.url}
+              alt={photo.label}
+              className="h-52 w-full rounded-lg bg-gray-50 object-contain"
             />
           </a>
-
-          <p className="mt-3 text-xs text-gray-500">
-            Click the photo to view it in full size.
-          </p>
-        </div>
-      ) : (
-        <div className="mt-5 rounded-xl bg-gray-50 p-6 text-center text-sm text-gray-500">
-          No poster installation photo uploaded yet.
-        </div>
-      )}
+        ) : (
+          <div className="flex h-52 items-center justify-center rounded-lg bg-gray-50 text-sm text-gray-400">
+            Not uploaded
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
+) : (
+  <div className="mt-5 rounded-xl bg-gray-50 p-6 text-center text-sm text-gray-500">
+    No poster installation photos uploaded yet.
+  </div>
+)}
     </div>
   </div>
 )}
@@ -5122,7 +5156,7 @@ const convertMeetingToSolarMitra =
               {editingMitra && (
   <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
     <h3 className="text-sm font-black text-gray-900">
-      QR Poster Installation Photo
+      QR Poster Installation Photos
     </h3>
 
     <p className="mt-1 text-xs text-gray-500">
@@ -5131,6 +5165,9 @@ const convertMeetingToSolarMitra =
       This is separate from the UPI payment QR.
     </p>
 
+<h4 className="mb-2 text-sm font-bold text-gray-800">
+  Poster Photo 1
+</h4>
     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
       <label className="flex cursor-pointer items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white">
         📷 Take Photo
@@ -5145,7 +5182,7 @@ const convertMeetingToSolarMitra =
             const file = event.target.files?.[0];
 
             if (file) {
-              await uploadPosterInstallationPhoto(file);
+              await uploadPosterInstallationPhoto(file, 1);
             }
 
             event.target.value = '';
@@ -5165,7 +5202,7 @@ const convertMeetingToSolarMitra =
             const file = event.target.files?.[0];
 
             if (file) {
-              await uploadPosterInstallationPhoto(file);
+              await uploadPosterInstallationPhoto(file, 1);
             }
 
             event.target.value = '';
@@ -5173,6 +5210,8 @@ const convertMeetingToSolarMitra =
         />
       </label>
     </div>
+
+    
 
     {uploadingPosterPhoto && (
       <p className="mt-3 text-xs font-semibold text-blue-600">
@@ -5199,6 +5238,80 @@ const convertMeetingToSolarMitra =
         </p>
       </div>
     )}
+
+    <div className="mt-6 border-t border-gray-200 pt-5">
+  <h4 className="text-sm font-bold text-gray-800">
+    Poster Photo 2
+  </h4>
+
+  <p className="mt-1 text-xs text-gray-500">
+    Upload an additional poster installation photo.
+    This photo is optional and independent of Photo 1.
+  </p>
+
+  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <label className="flex cursor-pointer items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white">
+      📷 Take Photo
+
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        capture="environment"
+        disabled={uploadingPosterPhoto}
+        className="hidden"
+        onChange={async (event) => {
+          const file = event.target.files?.[0];
+
+          if (file) {
+            await uploadPosterInstallationPhoto(file, 2);
+          }
+
+          event.target.value = '';
+        }}
+      />
+    </label>
+
+    <label className="flex cursor-pointer items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-700">
+      🖼️ Upload from Gallery
+
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        disabled={uploadingPosterPhoto}
+        className="hidden"
+        onChange={async (event) => {
+          const file = event.target.files?.[0];
+
+          if (file) {
+            await uploadPosterInstallationPhoto(file, 2);
+          }
+
+          event.target.value = '';
+        }}
+      />
+    </label>
+  </div>
+
+  {mitraForm.qrPosterInstallationPhotoUrl2 && (
+    <div className="mt-4">
+      <a
+        href={mitraForm.qrPosterInstallationPhotoUrl2}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <img
+          src={mitraForm.qrPosterInstallationPhotoUrl2}
+          alt="Solar Mitra poster installation photo 2"
+          className="h-48 w-full max-w-sm rounded-xl border border-gray-200 bg-white object-contain"
+        />
+      </a>
+
+      <p className="mt-2 text-xs text-gray-500">
+        Upload another photo to replace Photo 2.
+      </p>
+    </div>
+  )}
+</div>
   </div>
 )}
 

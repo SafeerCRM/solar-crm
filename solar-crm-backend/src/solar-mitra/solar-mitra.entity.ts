@@ -79,6 +79,9 @@ shopPhotoUrl: string;
   @Column({ type: 'text', nullable: true })
   qrPosterInstallationPhotoUrl: string;
 
+  @Column({ type: 'text', nullable: true })
+qrPosterInstallationPhotoUrl2: string;
+
 /*
  * CRM User account linked to this Solar Mitra profile.
  *

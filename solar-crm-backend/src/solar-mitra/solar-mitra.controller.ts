@@ -13,6 +13,7 @@ import {
   UploadedFiles,
   UseGuards,
   UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
 
 import {
@@ -811,6 +812,7 @@ async uploadPosterInstallationPhoto(
   @Req() req: any,
   @Param('id', ParseIntPipe) id: number,
   @UploadedFile() file: any,
+@Query('photoSlot') photoSlot?: string,
 ) {
   this.assertManagementAccess(req.user);
 
@@ -834,11 +836,26 @@ async uploadPosterInstallationPhoto(
     }
   }
 
-  return this.service.uploadPosterInstallationPhoto(
-    id,
-    file,
-    req.user.id,
+  const slot =
+  photoSlot === undefined
+    ? 1
+    : Number(photoSlot);
+
+if (
+  !Number.isInteger(slot) ||
+  ![1, 2].includes(slot)
+) {
+  throw new BadRequestException(
+    'Photo slot must be 1 or 2',
   );
+}
+
+return this.service.uploadPosterInstallationPhoto(
+  id,
+  file,
+  req.user.id,
+  slot,
+);
 }
 
 @Patch(':id')

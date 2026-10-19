@@ -211,7 +211,14 @@ async uploadPosterInstallationPhoto(
   mitraId: number,
   file: any,
   userId: number,
+  photoSlot: number = 1,
 ) {
+  if (![1, 2].includes(photoSlot)) {
+    throw new BadRequestException(
+      'Photo slot must be 1 or 2',
+    );
+  }
+
   const mitra =
     await this.getSolarMitra(mitraId);
 
@@ -222,16 +229,21 @@ async uploadPosterInstallationPhoto(
       userId,
     );
 
-  mitra.qrPosterInstallationPhotoUrl =
-    fileUrl;
+  if (photoSlot === 1) {
+    mitra.qrPosterInstallationPhotoUrl =
+      fileUrl;
+  } else {
+    mitra.qrPosterInstallationPhotoUrl2 =
+      fileUrl;
+  }
 
   await this.solarMitraRepository.save(
     mitra,
   );
 
   return {
-    message:
-      'Poster installation photo uploaded successfully',
+    message: `Poster installation photo ${photoSlot} uploaded successfully`,
+    photoSlot,
     fileUrl,
   };
 }
@@ -1390,6 +1402,9 @@ async getMySolarMitraProfile(
 
     qrPosterInstallationPhotoUrl:
       mitra.qrPosterInstallationPhotoUrl || null,
+
+      qrPosterInstallationPhotoUrl2:
+  mitra.qrPosterInstallationPhotoUrl2 || null,
 
     publicReferralToken:
       mitra.publicReferralToken,
