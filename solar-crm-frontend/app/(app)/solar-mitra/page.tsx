@@ -69,6 +69,10 @@ type SolarMitra = {
   gpsLongitude?: number | null;
   gpsAddress?: string | null;
   shopPhotoUrl?: string | null;
+  bankAccountNumber?: string | null;
+bankIfscCode?: string | null;
+paymentQrCodeUrl?: string | null;
+qrPosterInstallationPhotoUrl?: string | null;
   portalPassword?: string | null;
   publicReferralToken?: string | null;
   status: 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
@@ -226,6 +230,7 @@ const emptyMitraForm = {
   gpsLongitude: '',
   gpsAddress: '',
   shopPhotoUrl: '',
+  qrPosterInstallationPhotoUrl: '',
   portalPassword: '',
   payoutAmountOverride: '',
   requiredPaymentPercentageOverride: '',
@@ -445,6 +450,11 @@ export default function SolarMitraPage() {
 
 const [uploadingShopPhoto, setUploadingShopPhoto] =
   useState(false);
+
+  const [
+  uploadingPosterPhoto,
+  setUploadingPosterPhoto,
+] = useState(false);
 
   const [mitraSearch, setMitraSearch] = useState('');
   const [mitraStatus, setMitraStatus] = useState('');
@@ -1105,6 +1115,8 @@ const canAssignFranchiseManager =
         item.gpsAddress || '',
       shopPhotoUrl:
         item.shopPhotoUrl || '',
+        qrPosterInstallationPhotoUrl:
+  item.qrPosterInstallationPhotoUrl || '',
       portalPassword:
         item.portalPassword || '',
       payoutAmountOverride:
@@ -1599,6 +1611,90 @@ const captureMeetingLocation =
     .format(
       'YYYY-MM-DDTHH:mm',
     );
+};
+
+const uploadPosterInstallationPhoto = async (
+  file: File,
+) => {
+  if (!editingMitra?.id) {
+    alert('Please save the Solar Mitra first.');
+    return;
+  }
+
+  if (
+    ![
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    ].includes(file.type)
+  ) {
+    alert(
+      'Only JPG, PNG and WEBP images are allowed.',
+    );
+    return;
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    alert('Image must be less than 10 MB.');
+    return;
+  }
+
+  try {
+    setUploadingPosterPhoto(true);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await axios.post(
+      `${API_BASE_URL}/solar-mitra/${editingMitra.id}/poster-installation/upload`,
+      formData,
+      {
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'multipart/form-data',
+        },
+      },
+    );
+
+    const fileUrl = response.data?.fileUrl;
+
+    if (!fileUrl) {
+      throw new Error(
+        'Upload URL was not returned.',
+      );
+    }
+
+    setMitraForm((prev: any) => ({
+      ...prev,
+      qrPosterInstallationPhotoUrl: fileUrl,
+    }));
+
+    setEditingMitra((prev: any) =>
+      prev
+        ? {
+            ...prev,
+            qrPosterInstallationPhotoUrl: fileUrl,
+          }
+        : prev,
+    );
+
+    alert(
+      'Poster installation photo uploaded successfully.',
+    );
+  } catch (error: any) {
+    console.error(
+      'Poster installation photo upload failed:',
+      error,
+    );
+
+    alert(
+      error?.response?.data?.message ||
+        error?.message ||
+        'Failed to upload poster installation photo.',
+    );
+  } finally {
+    setUploadingPosterPhoto(false);
+  }
 };
 
 const uploadShopPhoto = async (
@@ -4816,6 +4912,150 @@ const convertMeetingToSolarMitra =
 </div>
                 </div>
               </div>
+
+              {editingMitra && (
+  <div className="rounded-xl border border-gray-200 bg-white p-4">
+    <h3 className="text-sm font-black text-gray-900">
+      Solar Mitra Payment Details
+    </h3>
+
+    <p className="mt-1 text-xs text-gray-500">
+      These details are managed by the Solar Mitra
+      through their own login. CRM staff can view
+      them but cannot edit them.
+    </p>
+
+    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <div>
+        <p className="text-xs font-semibold text-gray-500">
+          Bank Account Number
+        </p>
+
+        <p className="mt-1 break-all text-sm font-bold text-gray-900">
+          {editingMitra.bankAccountNumber || 'Not provided'}
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold text-gray-500">
+          IFSC Code
+        </p>
+
+        <p className="mt-1 text-sm font-bold text-gray-900">
+          {editingMitra.bankIfscCode || 'Not provided'}
+        </p>
+      </div>
+    </div>
+
+    <div className="mt-5 border-t border-gray-200 pt-4">
+      <p className="text-xs font-semibold text-gray-500">
+        UPI Payment QR
+      </p>
+
+      {editingMitra.paymentQrCodeUrl ? (
+        <a
+          href={editingMitra.paymentQrCodeUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-block"
+        >
+          <img
+            src={editingMitra.paymentQrCodeUrl}
+            alt="Solar Mitra UPI Payment QR"
+            className="h-48 w-48 rounded-xl border border-gray-200 bg-white object-contain p-2"
+          />
+        </a>
+      ) : (
+        <p className="mt-2 text-sm text-gray-500">
+          No payment QR uploaded yet.
+        </p>
+      )}
+    </div>
+  </div>
+)}
+
+              {editingMitra && (
+  <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
+    <h3 className="text-sm font-black text-gray-900">
+      QR Poster Installation Photo
+    </h3>
+
+    <p className="mt-1 text-xs text-gray-500">
+      Upload a photo showing the Solar Mitra referral
+      QR poster installed at the shop or location.
+      This is separate from the UPI payment QR.
+    </p>
+
+    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <label className="flex cursor-pointer items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white">
+        📷 Take Photo
+
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          capture="environment"
+          disabled={uploadingPosterPhoto}
+          className="hidden"
+          onChange={async (event) => {
+            const file = event.target.files?.[0];
+
+            if (file) {
+              await uploadPosterInstallationPhoto(file);
+            }
+
+            event.target.value = '';
+          }}
+        />
+      </label>
+
+      <label className="flex cursor-pointer items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-700">
+        🖼️ Upload from Gallery
+
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          disabled={uploadingPosterPhoto}
+          className="hidden"
+          onChange={async (event) => {
+            const file = event.target.files?.[0];
+
+            if (file) {
+              await uploadPosterInstallationPhoto(file);
+            }
+
+            event.target.value = '';
+          }}
+        />
+      </label>
+    </div>
+
+    {uploadingPosterPhoto && (
+      <p className="mt-3 text-xs font-semibold text-blue-600">
+        Uploading poster installation photo...
+      </p>
+    )}
+
+    {mitraForm.qrPosterInstallationPhotoUrl && (
+      <div className="mt-4">
+        <a
+          href={mitraForm.qrPosterInstallationPhotoUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <img
+            src={mitraForm.qrPosterInstallationPhotoUrl}
+            alt="Solar Mitra QR poster installation"
+            className="h-48 w-full max-w-sm rounded-xl border border-gray-200 bg-white object-contain"
+          />
+        </a>
+
+        <p className="mt-2 text-xs text-gray-500">
+          Upload another photo to replace the existing one.
+        </p>
+      </div>
+    )}
+  </div>
+)}
 
               <div>
                 <h3 className="mb-3 font-black text-gray-900">

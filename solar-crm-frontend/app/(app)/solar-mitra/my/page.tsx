@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useRef,
 } from 'react';
 
 import axios from 'axios';
@@ -20,7 +21,8 @@ type TabType =
   | 'ADD_REFERRAL'
   | 'REFERRALS'
   | 'QR'
-  | 'EARNINGS';
+  | 'EARNINGS'
+  |'BANK_DETAILS';
 
 type SolarMitraProfile = {
   id: number;
@@ -37,6 +39,10 @@ type SolarMitraProfile = {
   gpsLongitude?: number | null;
   gpsAddress?: string | null;
   shopPhotoUrl?: string | null;
+  bankAccountNumber?: string | null;
+bankIfscCode?: string | null;
+paymentQrCodeUrl?: string | null;
+qrPosterInstallationPhotoUrl?: string | null;
   publicReferralToken: string;
   status: string;
 };
@@ -148,6 +154,36 @@ export default function SolarMitraMyPage() {
   const [profile, setProfile] =
     useState<SolarMitraProfile | null>(null);
 
+    const [bankAccountNumber, setBankAccountNumber] =
+  useState('');
+
+const [bankIfscCode, setBankIfscCode] =
+  useState('');
+
+const [savingBankDetails, setSavingBankDetails] =
+  useState(false);
+
+const [bankMessage, setBankMessage] =
+  useState('');
+
+const [bankError, setBankError] =
+  useState('');
+
+  const [uploadingPaymentQr, setUploadingPaymentQr] =
+  useState(false);
+
+const [paymentQrError, setPaymentQrError] =
+  useState('');
+
+const [paymentQrMessage, setPaymentQrMessage] =
+  useState('');
+
+const paymentQrCameraRef =
+  useRef<HTMLInputElement>(null);
+
+const paymentQrGalleryRef =
+  useRef<HTMLInputElement>(null);
+
   const [referrals, setReferrals] =
     useState<Referral[]>([]);
 
@@ -186,6 +222,114 @@ export default function SolarMitraMyPage() {
 
   const [payoutSearch, setPayoutSearch] =
     useState('');
+
+    const saveBankDetails = async () => {
+  setBankMessage('');
+  setBankError('');
+
+  try {
+    setSavingBankDetails(true);
+
+    const response = await axios.patch(
+      `${API_BASE_URL}/solar-mitra/me/payment-details`,
+      {
+        bankAccountNumber:
+          bankAccountNumber.trim(),
+        bankIfscCode:
+          bankIfscCode.trim().toUpperCase(),
+      },
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setProfile(response.data);
+
+    setBankAccountNumber(
+      response.data?.bankAccountNumber || '',
+    );
+
+    setBankIfscCode(
+      response.data?.bankIfscCode || '',
+    );
+
+    setBankMessage(
+      'Bank details saved successfully.',
+    );
+  } catch (err: any) {
+    setBankError(
+      err?.response?.data?.message ||
+        'Unable to save bank details.',
+    );
+  } finally {
+    setSavingBankDetails(false);
+  }
+};
+
+const uploadPaymentQr = async (
+  file?: File,
+) => {
+  if (!file) return;
+
+  setPaymentQrError('');
+  setPaymentQrMessage('');
+
+  if (
+    ![
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    ].includes(file.type)
+  ) {
+    setPaymentQrError(
+      'Only JPG, PNG and WEBP images are allowed.',
+    );
+    return;
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    setPaymentQrError(
+      'Image must be less than 10 MB.',
+    );
+    return;
+  }
+
+  try {
+    setUploadingPaymentQr(true);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await axios.post(
+      `${API_BASE_URL}/solar-mitra/me/payment-qr/upload`,
+      formData,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setProfile((current) =>
+      current
+        ? {
+            ...current,
+            paymentQrCodeUrl:
+              response.data.fileUrl,
+          }
+        : current,
+    );
+
+    setPaymentQrMessage(
+      'Payment QR uploaded successfully.',
+    );
+  } catch (err: any) {
+    setPaymentQrError(
+      err?.response?.data?.message ||
+        'Unable to upload payment QR.',
+    );
+  } finally {
+    setUploadingPaymentQr(false);
+  }
+};
 
   const loadData = async () => {
     if (!API_BASE_URL) {
@@ -228,6 +372,14 @@ export default function SolarMitraMyPage() {
       ]);
 
       setProfile(profileResponse.data);
+
+      setBankAccountNumber(
+  profileResponse.data?.bankAccountNumber || '',
+);
+
+setBankIfscCode(
+  profileResponse.data?.bankIfscCode || '',
+);
 
       setReferrals(
         Array.isArray(referralsResponse.data)
@@ -843,6 +995,10 @@ export default function SolarMitraMyPage() {
       label: 'Overview',
     },
     {
+  key: 'BANK_DETAILS',
+  label: 'Payment Details',
+},
+    {
       key: 'ADD_REFERRAL',
       label: 'Add Referral',
     },
@@ -938,6 +1094,185 @@ export default function SolarMitraMyPage() {
           ))}
         </div>
       </section>
+
+      {activeTab === 'BANK_DETAILS' && (
+  <section className="rounded-2xl bg-white p-5 shadow">
+    <h2 className="text-lg font-black text-gray-900">
+      My Payment Details
+    </h2>
+
+    <p className="mt-1 text-sm text-gray-500">
+      Add your bank details to receive Solar Mitra payouts.
+      These details are optional.
+    </p>
+
+    <div className="mt-5 grid gap-4 sm:grid-cols-2">
+      <div>
+        <label className="mb-1 block text-sm font-semibold text-gray-700">
+          Bank Account Number
+        </label>
+
+        <input
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          value={bankAccountNumber}
+          onChange={(event) =>
+            setBankAccountNumber(event.target.value)
+          }
+          placeholder="Enter account number"
+          className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-semibold text-gray-700">
+          IFSC Code
+        </label>
+
+        <input
+          type="text"
+          autoComplete="off"
+          value={bankIfscCode}
+          onChange={(event) =>
+            setBankIfscCode(
+              event.target.value.toUpperCase(),
+            )
+          }
+          placeholder="Example: SBIN0001234"
+          maxLength={11}
+          className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm uppercase"
+        />
+      </div>
+    </div>
+
+    <div className="mt-6 border-t border-gray-200 pt-5">
+  <h3 className="text-base font-bold text-gray-900">
+    My UPI Payment QR Code
+  </h3>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Upload your UPI payment QR code to receive payouts.
+    This is separate from your Solar Mitra referral QR.
+  </p>
+
+  <input
+    ref={paymentQrCameraRef}
+    type="file"
+    accept="image/jpeg,image/png,image/webp"
+    capture="environment"
+    className="hidden"
+    onChange={(event) => {
+      const file = event.target.files?.[0];
+      void uploadPaymentQr(file);
+      event.target.value = '';
+    }}
+  />
+
+  <input
+    ref={paymentQrGalleryRef}
+    type="file"
+    accept="image/jpeg,image/png,image/webp"
+    className="hidden"
+    onChange={(event) => {
+      const file = event.target.files?.[0];
+      void uploadPaymentQr(file);
+      event.target.value = '';
+    }}
+  />
+
+  <div className="mt-4 flex flex-wrap gap-3">
+    <button
+      type="button"
+      onClick={() =>
+        paymentQrCameraRef.current?.click()
+      }
+      disabled={uploadingPaymentQr}
+      className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+    >
+      Take Photo
+    </button>
+
+    <button
+      type="button"
+      onClick={() =>
+        paymentQrGalleryRef.current?.click()
+      }
+      disabled={uploadingPaymentQr}
+      className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+    >
+      Upload from Gallery
+    </button>
+  </div>
+
+  {uploadingPaymentQr && (
+    <p className="mt-3 text-sm text-gray-600">
+      Uploading payment QR...
+    </p>
+  )}
+
+  {paymentQrError && (
+    <p className="mt-3 text-sm font-semibold text-red-600">
+      {paymentQrError}
+    </p>
+  )}
+
+  {paymentQrMessage && (
+    <p className="mt-3 text-sm font-semibold text-green-700">
+      {paymentQrMessage}
+    </p>
+  )}
+
+  {profile?.paymentQrCodeUrl && (
+    <div className="mt-5">
+      <p className="mb-2 text-sm font-semibold text-gray-700">
+        Saved Payment QR
+      </p>
+
+      <a
+        href={profile.paymentQrCodeUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-block"
+      >
+        <img
+          src={profile.paymentQrCodeUrl}
+          alt="Solar Mitra UPI Payment QR"
+          className="h-56 w-56 rounded-xl border border-gray-200 bg-white object-contain p-2"
+        />
+      </a>
+
+      <p className="mt-2 text-xs text-gray-500">
+        Upload another image to replace this QR.
+      </p>
+    </div>
+  )}
+</div>
+
+    {bankError && (
+      <p className="mt-4 text-sm font-semibold text-red-600">
+        {bankError}
+      </p>
+    )}
+
+    {bankMessage && (
+      <p className="mt-4 text-sm font-semibold text-green-700">
+        {bankMessage}
+      </p>
+    )}
+
+    <button
+      type="button"
+      onClick={() => void saveBankDetails()}
+      disabled={savingBankDetails}
+      className="mt-5 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
+    >
+      {savingBankDetails
+        ? 'Saving...'
+        : 'Save Bank Details'}
+    </button>
+  </section>
+)}
 
       {activeTab === 'OVERVIEW' && (
         <div className="space-y-5">
