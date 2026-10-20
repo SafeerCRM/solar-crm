@@ -32,12 +32,35 @@ export default function CustomerAppDeepLinkHandler() {
     return;
   }
 
+      let lastHandledUrl = "";
+    let lastHandledAt = 0;
+
+    const shouldHandleUrl = (url: string) => {
+      const now = Date.now();
+
+      if (
+        url === lastHandledUrl &&
+        now - lastHandledAt < 5000
+      ) {
+        return false;
+      }
+
+      lastHandledUrl = url;
+      lastHandledAt = now;
+
+      return true;
+    };
+
     const handleDeepLink = async (url: string) => {
       let parsedUrl: URL;
 
       try {
         parsedUrl = new URL(url);
       } catch {
+        return;
+      }
+
+            if (!shouldHandleUrl(url)) {
         return;
       }
 
