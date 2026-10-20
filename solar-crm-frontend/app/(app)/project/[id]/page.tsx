@@ -1122,6 +1122,49 @@ const [electricityForm, setElectricityForm] =
 const [electricityLoading, setElectricityLoading] =
   useState(false);
 
+  type ElectricityWorkType =
+  | 'NAME_CHANGE'
+  | 'NEW_CONNECTION';
+
+type ElectricityWorkStatus =
+  | 'DOCUMENT_PENDING'
+  | 'FILE_SUBMITTED'
+  | 'IN_PROCESS'
+  | 'APPROVED'
+  | 'COMPLETED'
+  | 'REJECTED';
+
+type ElectricityWorkForm = {
+  workType: ElectricityWorkType;
+  status: ElectricityWorkStatus;
+  applicationDate: string;
+  completionDate: string;
+  remarks: string;
+};
+
+const createElectricityWorkForm = (
+  workType: ElectricityWorkType,
+): ElectricityWorkForm => ({
+  workType,
+  status: 'DOCUMENT_PENDING',
+  applicationDate: '',
+  completionDate: '',
+  remarks: '',
+});
+
+const [electricityWorks, setElectricityWorks] = useState<
+  Record<ElectricityWorkType, ElectricityWorkForm>
+>({
+  NAME_CHANGE: createElectricityWorkForm('NAME_CHANGE'),
+  NEW_CONNECTION: createElectricityWorkForm('NEW_CONNECTION'),
+});
+
+const [electricityWorkSaving, setElectricityWorkSaving] =
+  useState<ElectricityWorkType | null>(null);
+
+const [electricityWorkLoading, setElectricityWorkLoading] =
+  useState(false);
+
   const [executionActivities, setExecutionActivities] =
   useState<ExecutionActivity[]>([]);
 
@@ -3362,6 +3405,64 @@ const fetchElectricityDetail = async () => {
   }
 };
 
+const fetchElectricityWorks = async () => {
+  if (!projectId) return;
+
+  try {
+    setElectricityWorkLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/${projectId}/electricity-works`,
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    const records = Array.isArray(res.data)
+      ? res.data
+      : [];
+
+    const nextWorks = {
+      NAME_CHANGE: createElectricityWorkForm('NAME_CHANGE'),
+      NEW_CONNECTION: createElectricityWorkForm('NEW_CONNECTION'),
+    };
+
+    for (const record of records) {
+      const workType = record.workType as ElectricityWorkType;
+
+      if (
+        workType !== 'NAME_CHANGE' &&
+        workType !== 'NEW_CONNECTION'
+      ) {
+        continue;
+      }
+
+      nextWorks[workType] = {
+        workType,
+        status: record.status || 'DOCUMENT_PENDING',
+        applicationDate:
+          record.applicationDate?.split('T')[0] || '',
+        completionDate:
+          record.completionDate?.split('T')[0] || '',
+        remarks: record.remarks || '',
+      };
+    }
+
+    setElectricityWorks(nextWorks);
+  } catch (error) {
+    console.error(
+      'Failed to load electricity works:',
+      error,
+    );
+  } finally {
+    setElectricityWorkLoading(false);
+  }
+};
+
 const saveElectricityDetail = async () => {
   try {
     setElectricityLoading(true);
@@ -3394,6 +3495,50 @@ const saveElectricityDetail = async () => {
     );
   } finally {
     setElectricityLoading(false);
+  }
+};
+
+const saveElectricityWork = async (
+  workType: ElectricityWorkType,
+) => {
+  if (!projectId) return;
+
+  try {
+    setElectricityWorkSaving(workType);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/${projectId}/electricity-work`,
+      electricityWorks[workType],
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    alert(
+      `${
+        workType === 'NAME_CHANGE'
+          ? 'Name Change'
+          : 'New Connection'
+      } details saved successfully`,
+    );
+
+    await fetchElectricityWorks();
+  } catch (error: any) {
+    console.error(
+      'Failed to save electricity work:',
+      error,
+    );
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to save electricity work',
+    );
+  } finally {
+    setElectricityWorkSaving(null);
   }
 };
 
@@ -5149,8 +5294,9 @@ if (
   }
 
   if (activeTab === 'ELECTRICITY_DEPARTMENT') {
-    fetchElectricityDetail();
-  }
+  fetchElectricityDetail();
+  fetchElectricityWorks();
+}
 
   if (activeTab === 'PROJECT_EXECUTION') {
     fetchExecutionActivities();
@@ -11230,6 +11376,169 @@ if (!canViewLagatProfitability) {
         : 'Save Electricity Detail'}
     </button>
 )}
+
+<div className="mt-8 border-t pt-6">
+  <h3 className="text-lg font-bold text-gray-800">
+    Additional Electricity Work
+  </h3>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Track Name Change and New Connection independently.
+    Both can be required for the same project.
+  </p>
+
+  {electricityWorkLoading && (
+    <p className="mt-3 text-sm text-gray-500">
+      Loading electricity work details...
+    </p>
+  )}
+
+  <div className="mt-5 grid gap-5 xl:grid-cols-2">
+    {(
+      ['NAME_CHANGE', 'NEW_CONNECTION'] as ElectricityWorkType[]
+    ).map((workType) => {
+      const form = electricityWorks[workType];
+
+      const label =
+        workType === 'NAME_CHANGE'
+          ? 'Name Change'
+          : 'New Connection';
+
+      const updateForm = (
+        changes: Partial<ElectricityWorkForm>,
+      ) => {
+        setElectricityWorks((previous) => ({
+          ...previous,
+          [workType]: {
+            ...previous[workType],
+            ...changes,
+          },
+        }));
+      };
+
+      return (
+        <div
+          key={workType}
+          className="rounded-2xl border border-gray-200 bg-gray-50 p-5"
+        >
+          <h4 className="text-base font-bold text-gray-800">
+            {label}
+          </h4>
+
+          <div className="mt-4 space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-gray-700">
+                Status
+              </label>
+
+              <select
+                value={form.status}
+                disabled={!canManageElectricity}
+                onChange={(e) =>
+                  updateForm({
+                    status:
+                      e.target.value as ElectricityWorkStatus,
+                  })
+                }
+                className="w-full rounded-xl border bg-white p-3"
+              >
+                <option value="DOCUMENT_PENDING">
+                  Document Pending
+                </option>
+                <option value="FILE_SUBMITTED">
+                  File Submitted
+                </option>
+                <option value="IN_PROCESS">
+                  In Process
+                </option>
+                <option value="APPROVED">
+                  Approved
+                </option>
+                <option value="COMPLETED">
+                  Completed
+                </option>
+                <option value="REJECTED">
+                  Rejected
+                </option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-gray-700">
+                Application Date
+              </label>
+
+              <input
+                type="date"
+                value={form.applicationDate}
+                disabled={!canManageElectricity}
+                onChange={(e) =>
+                  updateForm({
+                    applicationDate: e.target.value,
+                  })
+                }
+                className="w-full rounded-xl border bg-white p-3"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-gray-700">
+                Completion Date
+              </label>
+
+              <input
+                type="date"
+                value={form.completionDate}
+                disabled={!canManageElectricity}
+                onChange={(e) =>
+                  updateForm({
+                    completionDate: e.target.value,
+                  })
+                }
+                className="w-full rounded-xl border bg-white p-3"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-gray-700">
+                Remarks
+              </label>
+
+              <textarea
+                value={form.remarks}
+                disabled={!canManageElectricity}
+                onChange={(e) =>
+                  updateForm({
+                    remarks: e.target.value,
+                  })
+                }
+                placeholder={`${label} remarks`}
+                rows={3}
+                className="w-full rounded-xl border bg-white p-3"
+              />
+            </div>
+
+            {canManageElectricity && (
+              <button
+                type="button"
+                onClick={() => saveElectricityWork(workType)}
+                disabled={
+                  electricityWorkSaving !== null ||
+                  electricityWorkLoading
+                }
+                className="w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {electricityWorkSaving === workType
+                  ? 'Saving...'
+                  : `Save ${label}`}
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    })}
+  </div>
+</div>
   </div>
 )}
 

@@ -4149,6 +4149,35 @@ saveProjectElectricityDetail(
   );
 }
 
+@Get(':id/electricity-works')
+getProjectElectricityWorks(
+  @Param('id') id: string,
+) {
+  return this.projectService.getProjectElectricityWorks(
+    Number(id),
+  );
+}
+
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'ELECTRICITY_MANAGER',
+  'SOLAR_FRANCHISE',
+)
+@Post(':id/electricity-work')
+saveProjectElectricityWork(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.saveProjectElectricityWork(
+    Number(id),
+    body,
+    user,
+  );
+}
+
 @Get('owners/list')
 getProjectOwners() {
   return this.projectService.getProjectOwners();

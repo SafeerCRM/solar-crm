@@ -68,6 +68,11 @@ import {
   ProjectElectricityStatus,
 } from './project-electricity-detail.entity';
 import {
+  ProjectElectricityWork,
+  ProjectElectricityWorkType,
+  ProjectElectricityWorkStatus,
+} from './project-electricity-work.entity';
+import {
   ProjectExecutionActivity,
   ProjectExecutionActivityStatus,
   ProjectExecutionActivityType,
@@ -2564,6 +2569,9 @@ private readonly projectSubsidyDetailRepository: Repository<ProjectSubsidyDetail
 
 @InjectRepository(ProjectElectricityDetail)
 private readonly projectElectricityDetailRepository: Repository<ProjectElectricityDetail>,
+
+@InjectRepository(ProjectElectricityWork)
+private readonly projectElectricityWorkRepository: Repository<ProjectElectricityWork>,
 
 @InjectRepository(ProjectExecutionActivity)
 private readonly projectExecutionActivityRepository: Repository<ProjectExecutionActivity>,
@@ -48037,6 +48045,94 @@ if (
 
 return savedDetail;
 
+}
+
+async getProjectElectricityWorks(projectId: number) {
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  return this.projectElectricityWorkRepository.find({
+    where: { projectId },
+    order: { createdAt: 'ASC' },
+  });
+}
+
+async saveProjectElectricityWork(
+  projectId: number,
+  body: any,
+  user: any,
+) {
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  const validTypes = Object.values(
+    ProjectElectricityWorkType,
+  );
+
+  const validStatuses = Object.values(
+    ProjectElectricityWorkStatus,
+  );
+
+  if (!validTypes.includes(body?.workType)) {
+    throw new BadRequestException(
+      'Invalid electricity work type',
+    );
+  }
+
+  if (!validStatuses.includes(body?.status)) {
+    throw new BadRequestException(
+      'Invalid electricity work status',
+    );
+  }
+
+  const parseDate = (value: any): Date | null => {
+    if (!value) return null;
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestException(
+        'Invalid electricity work date',
+      );
+    }
+
+    return date;
+  };
+
+  let work =
+    await this.projectElectricityWorkRepository.findOne({
+      where: {
+        projectId,
+        workType: body.workType,
+      },
+    });
+
+  if (!work) {
+    work = this.projectElectricityWorkRepository.create({
+      projectId,
+      workType: body.workType,
+    });
+  }
+
+  work.status = body.status;
+  work.applicationDate = parseDate(body.applicationDate);
+  work.completionDate = parseDate(body.completionDate);
+  work.remarks = String(body.remarks || '').trim();
+  work.updatedBy = Number(user?.id || user?.userId) || null;
+  work.updatedByName =
+    user?.name || user?.email || '';
+
+  return this.projectElectricityWorkRepository.save(work);
 }
 
 async assignContractorToProject(body: any, user: any) {
