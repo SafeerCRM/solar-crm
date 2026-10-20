@@ -96,7 +96,8 @@ const filteredReceipts = receipts.filter((item: any) => {
       const token = localStorage.getItem('customer_token');
 
       if (!token) {
-        window.location.href = '/customer-login';
+        window.location.href =
+  '/customer-login?next=/customer-portal/payments';
         return;
       }
 
@@ -109,7 +110,8 @@ const filteredReceipts = receipts.filter((item: any) => {
       const data = await res.json();
 
       if (!res.ok) {
-        window.location.href = '/customer-login';
+        window.location.href =
+  '/customer-login?next=/customer-portal/payments';
         return;
       }
 

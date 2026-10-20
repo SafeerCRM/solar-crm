@@ -129,7 +129,8 @@ const remainingActivities = projectActivities.filter(
       const token = localStorage.getItem('customer_token');
 
       if (!token) {
-        window.location.href = '/customer-login';
+        window.location.href =
+  '/customer-login?next=/customer-portal/project-tracker';
         return;
       }
 
@@ -140,7 +141,8 @@ const remainingActivities = projectActivities.filter(
       const data = await res.json();
 
       if (!res.ok) {
-        window.location.href = '/customer-login';
+        window.location.href =
+  '/customer-login?next=/customer-portal/project-tracker';
         return;
       }
 

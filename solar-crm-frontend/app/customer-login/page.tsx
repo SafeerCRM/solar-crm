@@ -4,6 +4,40 @@ import { FormEvent, useEffect, useState } from 'react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+const getCustomerLoginDestination = () => {
+  const fallback = '/customer-portal';
+
+  const next = new URLSearchParams(
+    window.location.search,
+  ).get('next');
+
+  if (!next) {
+    return fallback;
+  }
+
+  // Only allow exact Customer Portal paths
+  // or their child routes.
+  if (
+    next !== fallback &&
+    !next.startsWith(`${fallback}/`)
+  ) {
+    return fallback;
+  }
+
+  // Reject backslashes, encoded paths,
+  // and other ambiguous URL formats.
+  if (
+    next.includes('\\') ||
+    next.includes('%') ||
+    next.includes('?') ||
+    next.includes('#')
+  ) {
+    return fallback;
+  }
+
+  return next;
+};
+
 export default function CustomerLoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -16,8 +50,9 @@ export default function CustomerLoginPage() {
     const customer = localStorage.getItem('customer');
 
     if (token && customer) {
-      window.location.href = '/customer-portal';
-    }
+  window.location.href =
+    getCustomerLoginDestination();
+}
   }, []);
 
   const handleLogin = async (e: FormEvent) => {
@@ -43,9 +78,10 @@ export default function CustomerLoginPage() {
       }
 
       localStorage.setItem('customer_token', data.access_token);
-      localStorage.setItem('customer', JSON.stringify(data.customer));
+localStorage.setItem('customer', JSON.stringify(data.customer));
 
-      window.location.href = '/customer-portal';
+window.location.href =
+  getCustomerLoginDestination();
     } catch (error) {
       console.error(error);
       setMessage('Login error. Please try again.');
