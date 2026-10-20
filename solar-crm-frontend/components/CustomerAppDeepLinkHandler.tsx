@@ -46,32 +46,14 @@ export default function CustomerAppDeepLinkHandler() {
         parsedUrl.hostname === "adityasolars.co.in";
 
       if (isWhatsappSmartLink) {
-  const destination =
-    smartLinkRoutes[parsedUrl.pathname];
+        const destination =
+          smartLinkRoutes[parsedUrl.pathname];
 
-  if (!destination) return;
+        if (!destination) return;
 
-  const loginUrl =
-    `/customer-login?next=${encodeURIComponent(destination)}`;
-
-  if (window.location.pathname === '/customer-login') {
-    window.history.replaceState(null, '', loginUrl);
-
-    const token = localStorage.getItem('customer_token');
-    const customer = localStorage.getItem('customer');
-
-    if (token && customer) {
-      window.location.replace(destination);
-    } else {
-      window.location.replace(loginUrl);
-    }
-
-    return;
-  }
-
-  window.location.href = loginUrl;
-  return;
-}
+        window.location.href = destination;
+        return;
+      }
 
       const isPaymentCallback =
         parsedUrl.protocol === "adityasolarscustomer:" &&
