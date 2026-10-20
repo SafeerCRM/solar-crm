@@ -7,17 +7,20 @@ async function bootstrap() {
   rawBody: true,
 });
 
-  app.use(
-  rateLimit({
-    windowMs: 60 * 1000,
-    max: 120,
-  }),
-);
-
+    // Apply CORS before rate limiting so that even
+  // rejected requests return the correct CORS headers.
   app.enableCors({
     origin: true,
     credentials: true,
   });
+
+  // Preserve the existing global rate limit.
+  app.use(
+    rateLimit({
+      windowMs: 60 * 1000,
+      max: 120,
+    }),
+  );
 
   app.use((req: any, res: any, next: any) => {
   const start = Date.now();
