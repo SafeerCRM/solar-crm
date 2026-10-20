@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { App } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { Capacitor } from "@capacitor/core";
+import { useRouter } from "next/navigation";
 
 const smartLinkRoutes: Record<string, string> = {
   "/open/payment": "/customer-portal/payments",
@@ -24,6 +25,8 @@ const paymentCallbackRoutes: Record<string, string> = {
 };
 
 export default function CustomerAppDeepLinkHandler() {
+  const router = useRouter();
+
   useEffect(() => {
   if (
     !Capacitor.isNativePlatform() ||
@@ -74,7 +77,11 @@ export default function CustomerAppDeepLinkHandler() {
 
         if (!destination) return;
 
-        window.location.href = destination;
+        if (window.location.pathname === destination) {
+  return;
+}
+
+router.replace(destination);
         return;
       }
 
@@ -151,7 +158,7 @@ return () => {
     void listenerHandle.remove();
   }
 };
-  }, []);
+    }, [router]);
 
   return null;
 }
