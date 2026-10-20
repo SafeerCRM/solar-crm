@@ -151,9 +151,28 @@ const remainingActivities = projectActivities.filter(
       if (data?.projects?.[0]?.id) {
         setSelectedProjectId(String(data.projects[0].id));
       }
-    } catch (error) {
-      console.error(error);
-      alert('Failed to load project tracker');
+        } catch (error: unknown) {
+      console.error(
+        'Project Tracker dashboard error:',
+        error,
+      );
+
+      const errorMessage =
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error);
+
+      alert(
+        [
+          'Project Tracker Diagnostic',
+          `Error: ${errorMessage}`,
+          `Page: ${window.location.href}`,
+          `Origin: ${window.location.origin}`,
+          `API: ${API_BASE_URL || 'NOT CONFIGURED'}`,
+          `Online: ${navigator.onLine}`,
+          `Token present: ${Boolean(localStorage.getItem('customer_token'))}`,
+        ].join('\n'),
+      );
     } finally {
       setLoading(false);
     }
