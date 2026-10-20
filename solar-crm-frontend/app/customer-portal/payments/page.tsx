@@ -116,10 +116,21 @@ const filteredReceipts = receipts.filter((item: any) => {
       }
 
       setDashboard(data);
-    } catch (error) {
-      console.error(error);
-      alert('Failed to load payments');
-    } finally {
+    } catch (error: any) {
+  console.error('CUSTOMER_PAYMENTS_LOAD_ERROR', {
+    message: error?.message,
+    name: error?.name,
+    apiBaseUrl: API_BASE_URL,
+    currentUrl: window.location.href,
+    online: navigator.onLine,
+  });
+
+  alert(
+    `Failed to load payments: ${
+      error?.message || 'Unknown error'
+    }`,
+  );
+} finally {
       setLoading(false);
     }
   };
