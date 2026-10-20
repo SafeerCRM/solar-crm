@@ -90,50 +90,79 @@ const filteredReceipts = receipts.filter((item: any) => {
 });
 
   const loadDashboard = async () => {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      const token = localStorage.getItem('customer_token');
+    const token = localStorage.getItem('customer_token');
 
-      if (!token) {
-        window.location.href =
-  '/customer-login?next=/customer-portal/payments';
-        return;
-      }
-
-      const res = await fetch(`${API_BASE_URL}/customer-auth/dashboard`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        window.location.href =
-  '/customer-login?next=/customer-portal/payments';
-        return;
-      }
-
-      setDashboard(data);
-    } catch (error: any) {
-  console.error('CUSTOMER_PAYMENTS_LOAD_ERROR', {
-    message: error?.message,
-    name: error?.name,
-    apiBaseUrl: API_BASE_URL,
-    currentUrl: window.location.href,
-    online: navigator.onLine,
-  });
-
-  alert(
-    `Failed to load payments: ${
-      error?.message || 'Unknown error'
-    }`,
-  );
-} finally {
-      setLoading(false);
+    if (!token) {
+      window.location.href =
+        '/customer-login?next=/customer-portal/payments';
+      return;
     }
-  };
+
+    const dashboardUrl =
+      `${API_BASE_URL}/customer-auth/dashboard`;
+
+    let res: Response | null = null;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        res = await fetch(dashboardUrl, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: 'no-store',
+        });
+
+        break;
+      } catch (error) {
+        console.error(
+          `Customer dashboard network attempt ${attempt} failed:`,
+          error,
+        );
+
+        if (attempt === 3) {
+          throw error;
+        }
+
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, attempt * 1500);
+        });
+      }
+    }
+
+    if (!res) {
+      throw new Error('Dashboard response unavailable');
+    }
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      window.location.href =
+        '/customer-login?next=/customer-portal/payments';
+      return;
+    }
+
+    setDashboard(data);
+  } catch (error: any) {
+    console.error('CUSTOMER_PAYMENTS_LOAD_ERROR', {
+      message: error?.message,
+      name: error?.name,
+      apiBaseUrl: API_BASE_URL,
+      currentUrl: window.location.href,
+      online: navigator.onLine,
+    });
+
+    alert(
+      `Failed to load payments: ${
+        error?.message || 'Unknown error'
+      }`,
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   const payInstallmentOnline = async (
   installmentId: number,
