@@ -97,7 +97,7 @@ findAllUsers(
 }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER')
+  @Roles('OWNER', 'HR_MANAGER',)
   @Patch(':id/password')
   updateUserPassword(
     @Param('id', ParseIntPipe) id: number,
@@ -107,7 +107,7 @@ findAllUsers(
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER')
+  @Roles('OWNER', 'HR_MANAGER',)
   @Patch(':id/roles')
   updateUserRoles(
     @Param('id', ParseIntPipe) id: number,
@@ -118,7 +118,7 @@ findAllUsers(
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('OWNER')
+@Roles('OWNER', 'HR_MANAGER',)
 @Delete(':id')
 deleteUser(
   @Param('id', ParseIntPipe) id: number,
@@ -129,7 +129,7 @@ deleteUser(
 }
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('OWNER')
+@Roles('OWNER', 'HR_MANAGER',)
 @Patch(':id/restore')
 restoreUser(
   @Param('id', ParseIntPipe) id: number,
