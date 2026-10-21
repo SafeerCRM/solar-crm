@@ -47271,6 +47271,17 @@ coApplicantReason:
 const currentLoanStatus =
   savedDetail.status || null;
 
+  if (
+  currentLoanStatus === ProjectLoanStatus.LOAN_DISBURSED &&
+  previousLoanStatus !== ProjectLoanStatus.LOAN_DISBURSED
+) {
+  await this.sendCustomerProjectUpdateWhatsapp(
+    project,
+    'Your solar project loan has been disbursed successfully.',
+    `loan-disbursed-${savedDetail.id}`,
+  );
+}
+
 if (
   currentLoanStatus &&
   currentLoanStatus !==
