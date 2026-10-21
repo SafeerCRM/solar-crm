@@ -48491,7 +48491,7 @@ const contractorUpdateText = [
   ...(scheduledDate
     ? [`Scheduled Date: ${scheduledDate}`]
     : []),
-].join('\n');
+].join(' | ');
 
 await this.sendCustomerProjectUpdateWhatsapp(
   project,
@@ -52409,7 +52409,7 @@ if (reassignedProject) {
     ...(scheduledDate
       ? [`Scheduled Date: ${scheduledDate}`]
       : []),
-  ].join('\n');
+  ].join(' | ');
 
   await this.sendCustomerProjectUpdateWhatsapp(
     reassignedProject,
