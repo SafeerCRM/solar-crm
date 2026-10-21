@@ -8800,14 +8800,20 @@ async retryFailedInitialCustomerConfirmation(
   user: any,
 ) {
   const roles = Array.isArray(user?.roles)
-    ? user.roles
-    : [];
+  ? user.roles
+  : [];
 
-  if (!roles.includes('OWNER')) {
-    throw new ForbiddenException(
-      'Only Owner can retry failed customer confirmation',
-    );
-  }
+const canManageConfirmations = [
+  'OWNER',
+  'PROJECT_MANAGER',
+  'CUSTOMER_MANAGER',
+].some((role) => roles.includes(role));
+
+if (!canManageConfirmations) {
+  throw new ForbiddenException(
+    'You do not have permission to retry customer confirmations',
+  );
+}
 
   if (!Number.isInteger(projectId) || projectId <= 0) {
     throw new BadRequestException('Invalid project ID');
@@ -9109,14 +9115,20 @@ async resendCustomerConfirmation(
   user: any,
 ) {
   const roles = Array.isArray(user?.roles)
-    ? user.roles
-    : [];
+  ? user.roles
+  : [];
 
-  if (!roles.includes('OWNER')) {
-    throw new ForbiddenException(
-      'Only Owner can resend customer confirmation',
-    );
-  }
+const canManageConfirmations = [
+  'OWNER',
+  'PROJECT_MANAGER',
+  'CUSTOMER_MANAGER',
+].some((role) => roles.includes(role));
+
+if (!canManageConfirmations) {
+  throw new ForbiddenException(
+    'You do not have permission to resend customer confirmations',
+  );
+}
 
   if (!Number.isInteger(projectId) || projectId <= 0) {
     throw new BadRequestException(

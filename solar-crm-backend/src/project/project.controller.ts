@@ -6566,7 +6566,7 @@ getProjectEditHistory(
   return this.projectService.getProjectEditHistory(id);
 }
 
-@Roles('OWNER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
 @Get('customer-confirmations')
 listCustomerConfirmations(
   @Query('page') page?: string,
@@ -6661,7 +6661,7 @@ update(
 
 
 
-@Roles('OWNER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
 @Get(':id/customer-confirmation')
 getCustomerConfirmationDetails(
   @Param('id', ParseIntPipe) id: number,
@@ -6673,7 +6673,7 @@ getCustomerConfirmationDetails(
   );
 }
 
-@Roles('OWNER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
 @Post(':id/customer-confirmation/retry-failed-initial')
 retryFailedInitialCustomerConfirmation(
   @Param('id', ParseIntPipe) id: number,
@@ -6685,7 +6685,7 @@ retryFailedInitialCustomerConfirmation(
   );
 }
 
-@Roles('OWNER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
 @Post(':id/customer-confirmation/resend')
 resendCustomerConfirmation(
   @Param('id') id: string,
