@@ -141,10 +141,20 @@ const remainingActivities = projectActivities.filter(
       const data = await res.json();
 
       if (!res.ok) {
-        window.location.href =
-  '/customer-login?next=/customer-portal/project-tracker';
-        return;
-      }
+  if (res.status === 401 || res.status === 403) {
+    localStorage.removeItem('customer_token');
+    localStorage.removeItem('customer');
+
+    window.location.replace(
+      '/customer-login?next=/customer-portal/project-tracker'
+    );
+    return;
+  }
+
+  throw new Error(
+    `Failed to load customer dashboard: ${res.status}`
+  );
+}
 
       setDashboard(data);
 

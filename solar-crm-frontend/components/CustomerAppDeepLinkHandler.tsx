@@ -77,12 +77,23 @@ export default function CustomerAppDeepLinkHandler() {
 
         if (!destination) return;
 
-        if (window.location.pathname === destination) {
+        const token = localStorage.getItem("customer_token");
+const customer = localStorage.getItem("customer");
+
+const target =
+  token && customer
+    ? destination
+    : `/customer-login?next=${encodeURIComponent(destination)}`;
+
+const currentUrl =
+  window.location.pathname + window.location.search;
+
+if (currentUrl === target) {
   return;
 }
 
-router.replace(destination);
-        return;
+router.replace(target);
+return;
       }
 
       const isPaymentCallback =
