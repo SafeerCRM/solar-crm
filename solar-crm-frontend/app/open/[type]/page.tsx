@@ -1,8 +1,6 @@
-import { redirect, notFound } from 'next/navigation';
-
-import {
-  getCustomerSmartLinkDestination,
-} from '@/lib/customerSmartLinks';
+import { notFound } from 'next/navigation';
+import CustomerSmartLinkFallback from '@/components/CustomerSmartLinkFallback';
+import { getCustomerSmartLinkDestination } from '@/lib/customerSmartLinks';
 
 export default async function CustomerSmartLinkPage({
   params,
@@ -11,12 +9,11 @@ export default async function CustomerSmartLinkPage({
 }) {
   const { type } = await params;
 
-  const destination =
-    getCustomerSmartLinkDestination(type);
+  const destination = getCustomerSmartLinkDestination(type);
 
   if (!destination) {
     notFound();
   }
 
-  redirect(destination);
+  return <CustomerSmartLinkFallback destination={destination} />;
 }
