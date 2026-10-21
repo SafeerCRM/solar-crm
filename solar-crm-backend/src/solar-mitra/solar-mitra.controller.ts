@@ -835,6 +835,19 @@ async updateInterestStatus(
 ) {
   this.assertManagementAccess(req.user);
 
+    const roles: UserRole[] = Array.isArray(req.user?.roles)
+    ? req.user.roles
+    : [];
+
+  if (
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.FRANCHISE_HEAD)
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Franchise Head can update Solar Mitra calling verification status',
+    );
+  }
+
   const mitra =
     await this.service.getSolarMitra(id);
 

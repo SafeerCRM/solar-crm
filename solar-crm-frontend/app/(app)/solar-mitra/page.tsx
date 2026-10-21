@@ -3922,7 +3922,10 @@ const convertMeetingToSolarMitra =
 
     <select
       value={item.interestStatus || 'PENDING'}
-      disabled={updatingMitraStatusId !== null}
+            disabled={
+        (!isOwner && !isFranchiseHead) ||
+        updatingMitraStatusId !== null
+      }
       onChange={(event) =>
         updateMitraVerificationStatus(
           item,
