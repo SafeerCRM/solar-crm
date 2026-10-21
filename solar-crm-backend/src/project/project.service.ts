@@ -47886,6 +47886,42 @@ Object.assign(detail, {
 const currentElectricityStatus =
   savedDetail.status || null;
 
+  if (
+  currentElectricityStatus &&
+  currentElectricityStatus !== previousElectricityStatus
+) {
+  const electricityStatusMessages: Record<string, string> = {
+    FILE_SUBMITTED:
+      'Your electricity department file has been submitted.',
+
+    SITE_VISIT_DONE:
+      'Your electricity department site visit has been completed.',
+
+    DEMAND_DEPOSITED:
+      'Your electricity department demand deposit has been completed.',
+
+    METER_TESTING_DONE:
+      'Your electricity meter testing has been completed.',
+
+    NET_METER_INSTALLED:
+      'Your net meter has been installed.',
+
+    CONNECTION_ACTIVE:
+      'Your electricity connection is now active.',
+  };
+
+  const updateText =
+    electricityStatusMessages[currentElectricityStatus];
+
+  if (updateText) {
+    await this.sendCustomerProjectUpdateWhatsapp(
+      project,
+      updateText,
+      `electricity-${savedDetail.id}-${previousElectricityStatus || 'NONE'}-to-${currentElectricityStatus}`,
+    );
+  }
+}
+
 if (
   currentElectricityStatus &&
   currentElectricityStatus !==
@@ -48129,6 +48165,8 @@ async saveProjectElectricityWork(
       },
     });
 
+    const previousWorkStatus = work?.status || null;
+
   if (!work) {
     work = this.projectElectricityWorkRepository.create({
       projectId,
@@ -48144,7 +48182,49 @@ async saveProjectElectricityWork(
   work.updatedByName =
     user?.name || user?.email || '';
 
-  return this.projectElectricityWorkRepository.save(work);
+    const savedWork =
+    await this.projectElectricityWorkRepository.save(work);
+
+  const currentWorkStatus = savedWork.status;
+
+  if (
+    currentWorkStatus &&
+    currentWorkStatus !== previousWorkStatus
+  ) {
+    const workLabel =
+      savedWork.workType ===
+      ProjectElectricityWorkType.NAME_CHANGE
+        ? 'electricity connection name change'
+        : 'new electricity connection';
+
+    const statusMessages: Partial<
+      Record<ProjectElectricityWorkStatus, string>
+    > = {
+      [ProjectElectricityWorkStatus.FILE_SUBMITTED]:
+        `Your ${workLabel} application has been submitted.`,
+
+      [ProjectElectricityWorkStatus.IN_PROCESS]:
+        `Your ${workLabel} application is being processed.`,
+
+      [ProjectElectricityWorkStatus.APPROVED]:
+        `Your ${workLabel} application has been approved.`,
+
+      [ProjectElectricityWorkStatus.COMPLETED]:
+        `Your ${workLabel} process has been completed.`,
+    };
+
+    const updateText = statusMessages[currentWorkStatus];
+
+    if (updateText) {
+      await this.sendCustomerProjectUpdateWhatsapp(
+        project,
+        updateText,
+        `electricity-work-${savedWork.id}-${previousWorkStatus || 'NONE'}-to-${currentWorkStatus}`,
+      );
+    }
+  }
+
+  return savedWork;
 }
 
 async assignContractorToProject(body: any, user: any) {
