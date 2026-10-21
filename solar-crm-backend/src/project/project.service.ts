@@ -48449,6 +48449,56 @@ if (assignmentRemarks) {
   }
 }
 
+// Notify customer after contractor assignment is saved.
+const contractorName =
+  String(savedAssignment.contractorName || '').trim() ||
+  'Assigned Contractor';
+
+const contractorPhone =
+  String(savedAssignment.contractorPhone || '').trim() ||
+  'Not available';
+
+const assignedWorks = Array.isArray(
+  savedAssignment.assignedWorkItems,
+)
+  ? savedAssignment.assignedWorkItems
+      .map((item: string) => String(item).trim())
+      .filter(Boolean)
+      .join(', ')
+  : '';
+
+const workDescription =
+  assignedWorks ||
+  String(savedAssignment.workScope || '')
+    .replace(/_/g, ' ')
+    .trim() ||
+  'Solar installation work';
+
+const scheduledDate = savedAssignment.scheduledDate
+  ? new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    }).format(new Date(savedAssignment.scheduledDate))
+  : null;
+
+const contractorUpdateText = [
+  'A contractor has been assigned to your solar project.',
+  `Contractor: ${contractorName}`,
+  `Contact Number: ${contractorPhone}`,
+  `Assigned Work: ${workDescription}`,
+  ...(scheduledDate
+    ? [`Scheduled Date: ${scheduledDate}`]
+    : []),
+].join('\n');
+
+await this.sendCustomerProjectUpdateWhatsapp(
+  project,
+  contractorUpdateText,
+  `contractor-assigned-${savedAssignment.id}`,
+);
+
 return savedAssignment;
 }
 
@@ -52308,6 +52358,65 @@ async reassignContractorAssignment(
       return saved;
     },
   );
+
+  // Notify customer after contractor reassignment succeeds.
+const reassignedProject =
+  await this.projectRepository.findOne({
+    where: {
+      id: Number(savedNewAssignment.projectId),
+    },
+  });
+
+if (reassignedProject) {
+  const contractorName =
+    String(savedNewAssignment.contractorName || '').trim() ||
+    'Assigned Contractor';
+
+  const contractorPhone =
+    String(savedNewAssignment.contractorPhone || '').trim() ||
+    'Not available';
+
+  const assignedWorks = Array.isArray(
+    savedNewAssignment.assignedWorkItems,
+  )
+    ? savedNewAssignment.assignedWorkItems
+        .map((item: string) => String(item).trim())
+        .filter(Boolean)
+        .join(', ')
+    : '';
+
+  const workDescription =
+    assignedWorks ||
+    String(savedNewAssignment.workScope || '')
+      .replace(/_/g, ' ')
+      .trim() ||
+    'Solar installation work';
+
+  const scheduledDate = savedNewAssignment.scheduledDate
+    ? new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      }).format(new Date(savedNewAssignment.scheduledDate))
+    : null;
+
+  const contractorUpdateText = [
+    'Your solar project contractor has been reassigned.',
+    `New Contractor: ${contractorName}`,
+    `Contact Number: ${contractorPhone}`,
+    `Assigned Work: ${workDescription}`,
+    ...(scheduledDate
+      ? [`Scheduled Date: ${scheduledDate}`]
+      : []),
+  ].join('\n');
+
+  await this.sendCustomerProjectUpdateWhatsapp(
+    reassignedProject,
+    contractorUpdateText,
+    `contractor-reassigned-${savedNewAssignment.id}`,
+  );
+}
 
   return {
     message:
