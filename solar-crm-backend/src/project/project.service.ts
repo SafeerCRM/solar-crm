@@ -12939,7 +12939,8 @@ async issueProjectStock(
     );
   }
 
-  return this.projectStockItemRepository.manager.transaction(
+  const stockIssueResult =
+  await this.projectStockItemRepository.manager.transaction(
     async (manager) => {
       const stockRepository =
         manager.getRepository(
@@ -13371,8 +13372,38 @@ const rate = Number(
 
         consumption,
       };
-    },
+        },
   );
+
+  if (
+    sourceType === 'PROJECT' &&
+    projectId &&
+    stockIssueResult?.movement?.id
+  ) {
+    try {
+      const project =
+        await this.projectRepository.findOne({
+          where: {
+            id: projectId,
+          },
+        });
+
+      if (project) {
+        await this.sendCustomerProjectUpdateWhatsapp(
+          project,
+          'Material for your solar project has been dispatched.',
+          `project-material-dispatch-${stockIssueResult.movement.id}`,
+        );
+      }
+    } catch (error) {
+      console.error(
+        `[WhatsApp] Material dispatch notification failed for project ${projectId}:`,
+        error,
+      );
+    }
+  }
+
+  return stockIssueResult;
 }
 
 async transferProjectStock(
