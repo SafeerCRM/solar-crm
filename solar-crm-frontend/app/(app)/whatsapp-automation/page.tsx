@@ -259,7 +259,7 @@ const [confirmationResendSuccess, setConfirmationResendSuccess] =
     if (!response.ok) {
       throw new Error(
         response.status === 403
-          ? 'OWNER permission is required.'
+          ? 'You do not have permission to access WhatsApp Automation.'
           : `Unable to load confirmation details (HTTP ${response.status}).`,
       );
     }
@@ -476,7 +476,12 @@ const [auditError, setAuditError] = useState('');
   useEffect(() => {
     try {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
-      setAuthorized(Array.isArray(user.roles) && user.roles.includes('OWNER'));
+      setAuthorized(
+  Array.isArray(user.roles) &&
+    user.roles.some((role: string) =>
+      ['OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER'].includes(role)
+    )
+);
     } catch {
       setAuthorized(false);
     }
@@ -502,7 +507,7 @@ const [auditError, setAuditError] = useState('');
       ]);
       if (!overviewResponse.ok || !messagesResponse.ok) {
         const code = !overviewResponse.ok ? overviewResponse.status : messagesResponse.status;
-        throw new Error(code === 403 ? 'OWNER permission is required.' : `Unable to load WhatsApp data (${code}).`);
+        throw new Error(code === 403 ? 'You do not have permission to access WhatsApp Automation.' : `Unable to load WhatsApp data (${code}).`);
       }
       const nextOverview: Overview = await overviewResponse.json();
       const nextMessages: MessageResponse = await messagesResponse.json();
@@ -558,7 +563,7 @@ const [auditError, setAuditError] = useState('');
     if (!response.ok) {
       throw new Error(
         response.status === 403
-          ? 'OWNER permission is required.'
+          ? 'You do not have permission to access WhatsApp Automation.'
           : `Unable to load audit history (${response.status}).`,
       );
     }
@@ -657,7 +662,12 @@ useEffect(() => {
   };
 
   if (authorized === null) return <div className="p-6 text-gray-600">Checking access...</div>;
-  if (!authorized) return <div className="rounded-xl border bg-white p-6 text-red-700">Only the OWNER can access WhatsApp Automation Management.</div>;
+  if (!authorized)
+  return (
+    <div className="rounded-xl border bg-white p-6 text-red-700">
+      You do not have permission to access WhatsApp Automation Management.
+    </div>
+  );
 
   const summary = overview?.summary;
   const stats = [
@@ -674,7 +684,7 @@ useEffect(() => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">WhatsApp Automation Management</h1>
           <p className="mt-1 text-sm text-gray-500">
-  OWNER dashboard · Live records · Automation controls
+  WhatsApp Automation · Live records · Automation controls
 </p>
         </div>
         <button type="button" onClick={() => void loadData()} disabled={loading}
@@ -824,7 +834,7 @@ useEffect(() => {
         Automation Audit History
       </h2>
       <p className="mt-1 text-xs text-gray-500">
-        {auditTotal} recorded changes · OWNER actions · Permanent history
+        {auditTotal} recorded changes · Authorized user actions · Permanent history
       </p>
     </div>
 
@@ -930,7 +940,7 @@ useEffect(() => {
               </td>
 
               <td className="px-4 py-4 text-gray-700">
-                OWNER · User ID {record.changedBy}
+                User ID {record.changedBy}
               </td>
             </tr>
           );

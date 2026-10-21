@@ -101,11 +101,18 @@ const [showHidden, setShowHidden] = useState(false);
       const parsedUser = JSON.parse(storedUser);
       setCurrentUser(parsedUser);
 
-      const parsedRoles = Array.isArray(parsedUser?.roles) ? parsedUser.roles : [];
-      if (!parsedRoles.includes('OWNER')) {
-        window.location.href = '/dashboard';
-        return;
-      }
+      const parsedRoles = Array.isArray(parsedUser?.roles)
+  ? parsedUser.roles
+  : [];
+
+if (
+  !parsedRoles.some((role: string) =>
+    ['OWNER', 'HR_MANAGER'].includes(role)
+  )
+) {
+  window.location.href = '/dashboard';
+  return;
+}
     } catch {
       localStorage.clear();
       window.location.href = '/';
@@ -176,6 +183,21 @@ const [showHidden, setShowHidden] = useState(false);
   };
 
   const toggleEditRole = (userId: number, role: string) => {
+    if (
+  !currentUser?.roles?.includes('OWNER') &&
+  role === 'OWNER'
+) {
+  return;
+}
+
+const targetUser = users.find((u) => u.id === userId);
+
+if (
+  !currentUser?.roles?.includes('OWNER') &&
+  targetUser?.roles?.includes('OWNER')
+) {
+  return;
+}
     setEditingRoles((prev) => {
       const current = prev[userId] || [];
       const userRow = users.find((u) => u.id === userId);
@@ -344,6 +366,10 @@ const handleRestoreUser = async (userId: number) => {
     return <div className="p-6">Loading users...</div>;
   }
 
+  const isCurrentOwner =
+  Array.isArray(currentUser.roles) &&
+  currentUser.roles.includes('OWNER');
+
   return (
     <div className="space-y-6 p-6">
       <div className="rounded-2xl bg-white p-6 shadow">
@@ -448,7 +474,9 @@ const handleRestoreUser = async (userId: number) => {
     className="w-full rounded-xl border px-4 py-3 md:w-1/4"
   >
     <option value="">All Roles</option>
-    {allRoles.map((role) => (
+    {allRoles
+  .filter((role) => isCurrentOwner || role !== 'OWNER')
+  .map((role) => (
       <option key={role} value={role}>
         {role}
       </option>
@@ -471,8 +499,10 @@ const handleRestoreUser = async (userId: number) => {
             <tbody>
               {filteredUsers.map((user) => {
                 const safeRoles = editingRoles[user.id] || [];
-                const originalRoles = Array.isArray(user.roles) ? user.roles : [];
-                const isOwnerUser = originalRoles.includes('OWNER');
+const originalRoles = Array.isArray(user.roles) ? user.roles : [];
+const isOwnerUser = originalRoles.includes('OWNER');
+
+const canManageThisUser = isCurrentOwner || !isOwnerUser;
 
                 return (
                   <tr key={user.id}>
@@ -487,7 +517,11 @@ const handleRestoreUser = async (userId: number) => {
                             type="button"
                             key={`${user.id}-${role}`}
                             onClick={() => toggleEditRole(user.id, role)}
-                            disabled={isOwnerUser && role !== 'OWNER'}
+                            disabled={
+  !canManageThisUser ||
+  (!isCurrentOwner && role === 'OWNER') ||
+  (isOwnerUser && role !== 'OWNER')
+}
                             className={`rounded px-2 py-1 text-xs ${
                               safeRoles.includes(role)
                                 ? 'bg-gray-300 text-gray-900'
@@ -505,7 +539,10 @@ const handleRestoreUser = async (userId: number) => {
                         <button
                           type="button"
                           onClick={() => handleSaveRoles(user.id)}
-                          disabled={savingRolesId === user.id}
+                          disabled={
+  !canManageThisUser ||
+  savingRolesId === user.id
+}
                           className="rounded bg-green-600 px-3 py-2 text-white"
                         >
                           {savingRolesId === user.id ? 'Saving...' : 'Save Roles'}
@@ -515,6 +552,7 @@ const handleRestoreUser = async (userId: number) => {
                           <input
                             type={showResetPasswordMap[user.id] ? 'text' : 'password'}
                             placeholder="New password"
+                            disabled={!canManageThisUser}
                             value={resetPasswordMap[user.id] || ''}
                             onChange={(e) =>
                               setResetPasswordMap((prev) => ({
@@ -541,7 +579,10 @@ const handleRestoreUser = async (userId: number) => {
                         <button
                           type="button"
                           onClick={() => handlePasswordChange(user.id)}
-                          disabled={passwordUpdatingId === user.id}
+                          disabled={
+  !canManageThisUser ||
+  passwordUpdatingId === user.id
+}
                           className="rounded bg-black px-3 py-2 text-white"
                         >
                           {passwordUpdatingId === user.id

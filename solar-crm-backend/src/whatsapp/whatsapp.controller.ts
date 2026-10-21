@@ -32,7 +32,7 @@ export class WhatsappController {
 
     @Get('automation-management/rollout-check')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER')
+  @Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
   checkAutomationRolloutRecipient(
     @Query('to') to?: string,
   ) {
@@ -49,7 +49,7 @@ export class WhatsappController {
 
     @Post('automation-management/production-test')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER')
+  @Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
   @HttpCode(200)
   async sendProductionTemplateTest(
     @Body() body: { to?: string },
@@ -71,7 +71,7 @@ export class WhatsappController {
 
     @Patch('automation-management/setting')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER')
+  @Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
   async updateAutomationManagementSetting(
     @Body() body: {
       automationKey?: string;
@@ -93,7 +93,7 @@ export class WhatsappController {
 
     if (!Number.isSafeInteger(changedBy) || changedBy <= 0) {
       throw new UnauthorizedException(
-        'Unable to identify authenticated OWNER',
+        'Unable to identify authenticated user',
       );
     }
 
@@ -116,7 +116,7 @@ export class WhatsappController {
 
   @Get('automation-management/audit-history')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('OWNER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
 async getAutomationManagementAuditHistory(
   @Query('page') page?: string,
   @Query('limit') limit?: string,
@@ -131,7 +131,7 @@ async getAutomationManagementAuditHistory(
 
     @Get('automation-management/messages')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER')
+  @Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
   async getAutomationManagementMessages(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -152,7 +152,7 @@ async getAutomationManagementAuditHistory(
 
     @Get('automation-management/overview')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER')
+  @Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
   async getAutomationManagementOverview() {
     return this.whatsappService.getAutomationManagementOverview();
   }

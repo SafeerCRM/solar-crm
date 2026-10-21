@@ -21,15 +21,25 @@ import { CurrentUser } from '../auth/current-user.decorator';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @Post('create-role')
-  createRole(@Body() data: Partial<User> & { roles?: UserRole[] }) {
-    return this.usersService.createRole(data);
-  }
+  @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'HR_MANAGER')
+@Post('create-role')
+createRole(
+  @Body() data: Partial<User> & { roles?: UserRole[] },
+  @CurrentUser() user: any,
+) {
+  return this.usersService.createRole(data, user);
+}
 
-  @Post('create')
-  create(@Body() data: Partial<User> & { roles?: UserRole[] }) {
-    return this.usersService.create(data);
-  }
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'HR_MANAGER')
+@Post('create')
+create(
+  @Body() data: Partial<User> & { roles?: UserRole[] },
+  @CurrentUser() user: any,
+) {
+  return this.usersService.create(data, user);
+}
 
   @Post('login')
   login(@Body() data: { email: string; password: string }) {
@@ -97,14 +107,19 @@ findAllUsers(
 }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'HR_MANAGER',)
-  @Patch(':id/password')
-  updateUserPassword(
-    @Param('id', ParseIntPipe) id: number,
-    @Body('password') password: string,
-  ) {
-    return this.usersService.updateUserPassword(id, password);
-  }
+@Roles('OWNER', 'HR_MANAGER')
+@Patch(':id/password')
+updateUserPassword(
+  @Param('id', ParseIntPipe) id: number,
+  @Body('password') password: string,
+  @CurrentUser() user: any,
+) {
+  return this.usersService.updateUserPassword(
+    id,
+    password,
+    user,
+  );
+}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER', 'HR_MANAGER',)

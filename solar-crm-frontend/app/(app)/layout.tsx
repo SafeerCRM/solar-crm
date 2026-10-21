@@ -250,7 +250,7 @@ const navItems = [
 {
   name: 'WhatsApp Automation',
   href: '/whatsapp-automation',
-  roles: ['OWNER'],
+  roles: ['OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER'],
 },
 
 {

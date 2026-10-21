@@ -32,34 +32,61 @@ export class UsersService {
       : [UserRole.TELECALLER];
   }
 
-  async createRole(data: Partial<User> & { roles?: UserRole[] }) {
-    const existing = await this.userRepository.findOne({
-      where: { email: data.email },
-    });
+  async createRole(
+  data: Partial<User> & { roles?: UserRole[] },
+  currentUser: any,
+) {
+  const currentUserRoles: string[] = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
 
-    if (existing) {
-      throw new BadRequestException('User with this email already exists');
-    }
+  const isOwner = currentUserRoles.includes(UserRole.OWNER);
+  const isHRManager = currentUserRoles.includes(UserRole.HR_MANAGER);
 
-    if (!data.password) {
-      throw new BadRequestException('Password is required');
-    }
-
-    const hashedPassword = await bcrypt.hash(data.password, 10);
-
-    const user = this.userRepository.create({
-      name: data.name,
-      email: data.email,
-      password: hashedPassword,
-      roles: this.normalizeRoles(data.roles),
-    });
-
-    return this.userRepository.save(user);
+  if (!isOwner && !isHRManager) {
+    throw new ForbiddenException(
+      'Only OWNER or HR_MANAGER can create users',
+    );
   }
 
-  async create(data: Partial<User> & { roles?: UserRole[] }) {
-    return this.createRole(data);
+  const normalizedRoles = this.normalizeRoles(data.roles);
+
+  if (!isOwner && normalizedRoles.includes(UserRole.OWNER)) {
+    throw new ForbiddenException(
+      'Only OWNER can create an OWNER account',
+    );
   }
+
+  const existing = await this.userRepository.findOne({
+    where: { email: data.email },
+  });
+
+  if (existing) {
+    throw new BadRequestException('User with this email already exists');
+  }
+
+  if (!data.password) {
+    throw new BadRequestException('Password is required');
+  }
+
+  const hashedPassword = await bcrypt.hash(data.password, 10);
+
+  const user = this.userRepository.create({
+    name: data.name,
+    email: data.email,
+    password: hashedPassword,
+    roles: normalizedRoles,
+  });
+
+  return this.userRepository.save(user);
+}
+
+  async create(
+  data: Partial<User> & { roles?: UserRole[] },
+  currentUser: any,
+) {
+  return this.createRole(data, currentUser);
+}
 
   async login(email: string, password: string) {
     const user = await this.userRepository.findOne({
@@ -161,7 +188,7 @@ export class UsersService {
       order: { id: 'ASC' },
     });
   }
-  
+
     async findLeadManagers() {
     return this.userRepository.find({
       where: {
@@ -247,28 +274,54 @@ export class UsersService {
   });
 }
 
-  async updateUserPassword(id: number, password: string) {
-    const user = await this.userRepository.findOne({
-      where: { id },
-    });
+  async updateUserPassword(
+  id: number,
+  password: string,
+  currentUser: any,
+) {
+  const currentUserRoles: string[] = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
 
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+  const isOwner = currentUserRoles.includes(UserRole.OWNER);
+  const isHRManager = currentUserRoles.includes(UserRole.HR_MANAGER);
 
-    if (!password || String(password).trim().length < 4) {
-      throw new BadRequestException(
-        'Password is required and must be at least 4 characters',
-      );
-    }
-
-    user.password = await bcrypt.hash(String(password).trim(), 10);
-    await this.userRepository.save(user);
-
-    return {
-      message: 'Password updated successfully',
-    };
+  if (!isOwner && !isHRManager) {
+    throw new ForbiddenException(
+      'Only OWNER or HR_MANAGER can reset user passwords',
+    );
   }
+
+  const user = await this.userRepository.findOne({
+    where: { id },
+  });
+
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  if (
+    !isOwner &&
+    user.roles?.includes(UserRole.OWNER)
+  ) {
+    throw new ForbiddenException(
+      'HR Manager cannot reset OWNER account passwords',
+    );
+  }
+
+  if (!password || String(password).trim().length < 4) {
+    throw new BadRequestException(
+      'Password is required and must be at least 4 characters',
+    );
+  }
+
+  user.password = await bcrypt.hash(String(password).trim(), 10);
+  await this.userRepository.save(user);
+
+  return {
+    message: 'Password updated successfully',
+  };
+}
 
   async updateUserRoles(
     id: number,
@@ -279,9 +332,14 @@ export class UsersService {
       ? currentUser.roles
       : [];
 
-    if (!currentUserRoles.includes(UserRole.OWNER)) {
-      throw new ForbiddenException('Only owner can update user roles');
-    }
+    const isOwner = currentUserRoles.includes(UserRole.OWNER);
+const isHRManager = currentUserRoles.includes(UserRole.HR_MANAGER);
+
+if (!isOwner && !isHRManager) {
+  throw new ForbiddenException(
+    'Only OWNER or HR_MANAGER can update user roles',
+  );
+}
 
     const user = await this.userRepository.findOne({
       where: { id },
@@ -292,6 +350,20 @@ export class UsersService {
     }
 
     const normalizedRoles = this.normalizeRoles(roles);
+
+    if (!isOwner) {
+  if (user.roles?.includes(UserRole.OWNER)) {
+    throw new ForbiddenException(
+      'HR Manager cannot modify OWNER accounts',
+    );
+  }
+
+  if (normalizedRoles.includes(UserRole.OWNER)) {
+    throw new ForbiddenException(
+      'Only OWNER can assign the OWNER role',
+    );
+  }
+}
 
     if (!normalizedRoles.length) {
       throw new BadRequestException('At least one valid role is required');
@@ -324,9 +396,14 @@ export class UsersService {
     ? currentUser.roles
     : [];
 
-  if (!currentUserRoles.includes(UserRole.OWNER)) {
-    throw new ForbiddenException('Only owner can hide users');
-  }
+  if (
+  !currentUserRoles.includes(UserRole.OWNER) &&
+  !currentUserRoles.includes(UserRole.HR_MANAGER)
+) {
+  throw new ForbiddenException(
+    'Only OWNER or HR_MANAGER can hide users',
+  );
+}
 
   const user = await this.userRepository.findOne({
     where: { id },
@@ -362,9 +439,14 @@ async restoreUser(id: number, currentUser: any, reason?: string) {
     ? currentUser.roles
     : [];
 
-  if (!currentUserRoles.includes(UserRole.OWNER)) {
-    throw new ForbiddenException('Only owner can restore users');
-  }
+  if (
+  !currentUserRoles.includes(UserRole.OWNER) &&
+  !currentUserRoles.includes(UserRole.HR_MANAGER)
+) {
+  throw new ForbiddenException(
+    'Only OWNER or HR_MANAGER can restore users',
+  );
+}
 
   const user = await this.userRepository.findOne({
     where: { id },
@@ -373,6 +455,15 @@ async restoreUser(id: number, currentUser: any, reason?: string) {
   if (!user) {
     throw new NotFoundException('User not found');
   }
+
+  if (
+  !currentUserRoles.includes(UserRole.OWNER) &&
+  user.roles?.includes(UserRole.OWNER)
+) {
+  throw new ForbiddenException(
+    'HR Manager cannot restore OWNER accounts',
+  );
+}
 
   if (!user.isHidden) {
     throw new BadRequestException('User is not hidden');
