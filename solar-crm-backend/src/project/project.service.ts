@@ -47573,10 +47573,27 @@ async saveProjectSubsidyDetail(
 const previousDcrCertificateReady =
   detail?.dcrCertificateReady === true;
 
+  const previousRegistrationCompleted =
+  detail?.registrationCompleted === true;
+
   const previousSubsidyRemarks =
   String(detail?.remarks || '').trim();
 
   Object.assign(detail, {
+    registrationCompleted:
+  previousRegistrationCompleted ||
+  body.registrationCompleted === true ||
+  body.registrationCompleted === 'true',
+
+registrationCompletedAt:
+  previousRegistrationCompleted
+    ? detail.registrationCompletedAt ?? null
+    : (
+        body.registrationCompleted === true ||
+        body.registrationCompleted === 'true'
+      )
+      ? new Date()
+      : null,
     status: body.status || detail.status,
     dcrCertificateReady:
       body.dcrCertificateReady === true ||
@@ -47612,6 +47629,42 @@ const previousDcrCertificateReady =
   await this
     .projectSubsidyDetailRepository
     .save(detail);
+
+    if (
+  !previousRegistrationCompleted &&
+  savedDetail.registrationCompleted === true
+) {
+  await this.recordProjectTimelineEventIfMissing({
+    projectId: Number(projectId),
+
+    module: ProjectTimelineModule.SUBSIDY,
+
+    milestone: 'REGISTRATION_COMPLETED',
+
+    achievedAt:
+      savedDetail.registrationCompletedAt ||
+      new Date(),
+
+    sourceId: Number(savedDetail.id),
+
+    recordedBy:
+      user?.id || user?.userId || null,
+
+    recordedByName:
+      user?.name || user?.email || '',
+  });
+}
+
+if (
+  !previousRegistrationCompleted &&
+  savedDetail.registrationCompleted === true
+) {
+  await this.sendCustomerProjectUpdateWhatsapp(
+    project,
+    'Your solar project registration has been completed successfully.',
+    `subsidy-registration-completed-${projectId}`,
+  );
+}
 
 const currentSubsidyStatus =
   savedDetail.status || null;

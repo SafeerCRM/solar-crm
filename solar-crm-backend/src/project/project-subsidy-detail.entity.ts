@@ -33,6 +33,12 @@ export class ProjectSubsidyDetail {
   status: ProjectSubsidyStatus;
 
   @Column({ default: false })
+registrationCompleted: boolean;
+
+@Column({ type: 'timestamp', nullable: true })
+registrationCompletedAt: Date | null;
+
+  @Column({ default: false })
   dcrCertificateReady: boolean;
 
   @Column({ default: false })

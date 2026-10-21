@@ -1089,6 +1089,7 @@ const [subsidyDetail, setSubsidyDetail] = useState<any>(null);
 
 const [subsidyForm, setSubsidyForm] = useState({
   status: 'DOCUMENT_PENDING',
+  registrationCompleted: false,
   dcrCertificateReady: false,
   panelWarrantyReceived: false,
   inverterWarrantyReceived: false,
@@ -3287,8 +3288,9 @@ const fetchSubsidyDetail = async () => {
       setSubsidyDetail(res.data);
 
       setSubsidyForm({
-        status: res.data.status || 'DOCUMENT_PENDING',
-        dcrCertificateReady: !!res.data.dcrCertificateReady,
+  status: res.data.status || 'DOCUMENT_PENDING',
+  registrationCompleted: !!res.data.registrationCompleted,
+  dcrCertificateReady: !!res.data.dcrCertificateReady,
         panelWarrantyReceived: !!res.data.panelWarrantyReceived,
         inverterWarrantyReceived: !!res.data.inverterWarrantyReceived,
         vendorAgreementReady: !!res.data.vendorAgreementReady,
@@ -10387,16 +10389,17 @@ if (!canViewLagatProfitability) {
         }
         className="rounded-xl border p-3"
       >
+        {loanForm.status === 'REGISTRATION_COMPLETED' && (
+  <option value="REGISTRATION_COMPLETED" disabled>
+    Registration Completed (Historical — Now in Subsidy)
+  </option>
+)}
         <option value="DOCUMENT_PENDING">
           Document Pending
         </option>
 
         <option value="DOCUMENT_COMPLETED">
           Document Completed
-        </option>
-
-        <option value="REGISTRATION_COMPLETED">
-          Registration Completed
         </option>
 
         <option value="IN_PRINCIPAL_GENERATED">
@@ -11111,7 +11114,8 @@ if (!canViewLagatProfitability) {
 
     <div className="mt-5 grid gap-3 md:grid-cols-2">
       {[
-        ['dcrCertificateReady', 'DCR Certificate Ready'],
+  ['registrationCompleted', 'Registration Completed'],
+  ['dcrCertificateReady', 'DCR Certificate Ready'],
         ['panelWarrantyReceived', 'Panel Warranty Received'],
         ['inverterWarrantyReceived', 'Inverter Warranty Received'],
         ['vendorAgreementReady', 'Vendor Agreement Ready'],
