@@ -39,6 +39,20 @@ type Message = {
   recipientType: string | null;
   recipientPhone: string;
   recipientName: string | null;
+    matchedCustomers?: {
+    id: number;
+    customerName: string | null;
+    mobile: string | null;
+    alternateMobile: string | null;
+  }[];
+
+  matchedProjects?: {
+    id: number;
+    customerId: number | null;
+    customerName: string | null;
+    customerPhone: string | null;
+    status: string;
+  }[];
   messageType: string;
   templateName: string | null;
   messageBody: string | null;
@@ -1632,7 +1646,69 @@ useEffect(() => {
               {messages.map((item) => (
                 <tr key={item.id} className="align-top hover:bg-gray-50">
                   <td className="whitespace-nowrap px-4 py-4 text-gray-600">{formatDate(item.createdAt)}</td>
-                  <td className="px-4 py-4"><div className="font-semibold text-gray-900">{item.recipientName || item.recipientPhone}</div><div className="text-xs text-gray-500">{item.recipientPhone} · {item.direction}</div></td>
+                  <td className="min-w-[230px] px-4 py-4">
+  <div className="font-semibold text-gray-900">
+    {item.matchedCustomers?.length
+      ? item.matchedCustomers
+          .map((customer) => customer.customerName || `Customer #${customer.id}`)
+          .join(', ')
+      : item.matchedProjects?.length
+        ? item.matchedProjects
+            .map((project) => project.customerName)
+            .filter(Boolean)
+            .filter((name, index, names) => names.indexOf(name) === index)
+            .join(', ') || item.recipientName || item.recipientPhone
+        : item.recipientName || item.recipientPhone}
+  </div>
+
+  <div className="mt-1 text-xs text-gray-500">
+    {item.recipientPhone} · {item.direction}
+  </div>
+
+  {(item.matchedCustomers?.length ?? 0) > 0 && (
+    <div className="mt-2 flex flex-wrap gap-1">
+      {item.matchedCustomers?.map((customer) => (
+        <span
+          key={customer.id}
+          className="rounded-md bg-green-50 px-2 py-1 text-[11px] font-medium text-green-700"
+        >
+          Customer #{customer.id}
+        </span>
+      ))}
+    </div>
+  )}
+
+  {(item.matchedProjects?.length ?? 0) > 0 && (
+    <div className="mt-2 space-y-1">
+      {item.matchedProjects?.map((project) => (
+        <a
+          key={project.id}
+          href={`/project/${project.id}`}
+          className="flex flex-wrap items-center gap-1.5 rounded-md border border-blue-100 bg-blue-50 px-2 py-1.5 text-xs text-blue-800 hover:bg-blue-100"
+        >
+          <span className="font-semibold">
+            Project #{project.id}
+          </span>
+
+          <span className="text-blue-600">
+            · {project.status.replace(/_/g, ' ')}
+          </span>
+
+          <span className="ml-auto text-blue-600">
+            View →
+          </span>
+        </a>
+      ))}
+    </div>
+  )}
+
+  {!item.matchedCustomers?.length &&
+    !item.matchedProjects?.length && (
+      <div className="mt-2 text-xs text-gray-400">
+        No matching CRM customer
+      </div>
+    )}
+</td>
                   <td className="max-w-xs px-4 py-4"><div className="break-words text-gray-800">{item.messageBody || item.templateName || '—'}</div><div className="mt-1 text-xs text-gray-500">{item.messageType}</div>{item.errorMessage && <div className="mt-2 break-words text-xs text-red-600">{item.errorCode ? `${item.errorCode}: ` : ''}{item.errorMessage}</div>}</td>
                   <td className="px-4 py-4 text-xs text-gray-600"><div className="break-all">{item.automationKey || 'Manual / unclassified'}</div><div className="mt-1">{item.referenceType || '—'} {item.referenceId || ''}</div></td>
                   <td className="px-4 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(item.status)}`}>{item.status}</span></td>

@@ -294,6 +294,130 @@ async getAutomationManagementMessages(query: {
     .take(limit)
     .getManyAndCount();
 
+    // Read-only customer identification for WhatsApp Message History.
+// Resolve only the phone numbers on the current page.
+
+const normalizeIndianPhone = (value: unknown): string | null => {
+  const digits = String(value ?? '').replace(/\D/g, '');
+
+  if (/^[6-9]\d{9}$/.test(digits)) {
+    return digits;
+  }
+
+  if (/^91[6-9]\d{9}$/.test(digits)) {
+    return digits.slice(2);
+  }
+
+  if (/^0[6-9]\d{9}$/.test(digits)) {
+    return digits.slice(1);
+  }
+
+  return null;
+};
+
+const pagePhones = [
+  ...new Set(
+    messages
+      .map((message) => normalizeIndianPhone(message.recipientPhone))
+      .filter((phone): phone is string => phone !== null),
+  ),
+];
+
+type MatchedCustomer = {
+  id: number;
+  customerName: string | null;
+  mobile: string | null;
+  alternateMobile: string | null;
+};
+
+type MatchedProject = {
+  id: number;
+  customerId: number | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  status: string;
+};
+
+const customerMatches = new Map<string, MatchedCustomer[]>();
+const projectMatches = new Map<string, MatchedProject[]>();
+
+if (pagePhones.length > 0) {
+  const customers = await this.dataSource.query(
+    `
+    SELECT
+      id,
+      "customerName",
+      mobile,
+      "alternateMobile"
+    FROM customer
+    WHERE RIGHT(REGEXP_REPLACE(COALESCE(mobile, ''), '[^0-9]', '', 'g'), 10) = ANY($1)
+       OR RIGHT(REGEXP_REPLACE(COALESCE("alternateMobile", ''), '[^0-9]', '', 'g'), 10) = ANY($1)
+    `,
+    [pagePhones],
+  ) as MatchedCustomer[];
+
+  const matchedCustomerIds = new Set<number>();
+
+  for (const customer of customers) {
+    for (const phoneValue of [
+      customer.mobile,
+      customer.alternateMobile,
+    ]) {
+      const phone = normalizeIndianPhone(phoneValue);
+
+      if (!phone || !pagePhones.includes(phone)) continue;
+
+      const existing = customerMatches.get(phone) ?? [];
+
+      if (!existing.some((item) => item.id === customer.id)) {
+        existing.push(customer);
+        customerMatches.set(phone, existing);
+      }
+
+      matchedCustomerIds.add(customer.id);
+    }
+  }
+
+  const projects = await this.dataSource.query(
+    `
+    SELECT
+      id,
+      "customerId",
+      "customerName",
+      "customerPhone",
+      status::text AS status
+    FROM project
+    WHERE RIGHT(
+      REGEXP_REPLACE(COALESCE("customerPhone", ''), '[^0-9]', '', 'g'),
+      10
+    ) = ANY($1)
+    OR "customerId" = ANY($2::integer[])
+    `,
+    [pagePhones, [...matchedCustomerIds]],
+  ) as MatchedProject[];
+
+  for (const project of projects) {
+    const projectPhone = normalizeIndianPhone(project.customerPhone);
+
+    for (const phone of pagePhones) {
+      const customersForPhone = customerMatches.get(phone) ?? [];
+
+      const linkedByCustomer = customersForPhone.some(
+        (customer) => customer.id === project.customerId,
+      );
+
+      if (projectPhone !== phone && !linkedByCustomer) continue;
+
+      const existing = projectMatches.get(phone) ?? [];
+
+      if (!existing.some((item) => item.id === project.id)) {
+        existing.push(project);
+        projectMatches.set(phone, existing);
+      }
+    }
+  }
+}
+
   return {
     data: messages.map((message) => ({
       id: message.id,
@@ -301,6 +425,15 @@ async getAutomationManagementMessages(query: {
       recipientType: message.recipientType,
       recipientPhone: message.recipientPhone,
       recipientName: message.recipientName,
+      matchedCustomers:
+  customerMatches.get(
+    normalizeIndianPhone(message.recipientPhone) ?? '',
+  ) ?? [],
+
+matchedProjects:
+  projectMatches.get(
+    normalizeIndianPhone(message.recipientPhone) ?? '',
+  ) ?? [],
       messageType: message.messageType,
       templateName: message.templateName,
       messageBody: message.messageBody,
