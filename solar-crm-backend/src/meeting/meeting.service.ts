@@ -158,6 +158,9 @@ if (meeting.meetingGroupId != null) {
       'newer.meetingGroupId = :groupId',
       { groupId: meeting.meetingGroupId },
     )
+    .andWhere('newer.id != :currentMeetingId', {
+  currentMeetingId: meeting.id,
+})
     .andWhere(
       `(
         newer.createdAt > :createdAt
