@@ -874,6 +874,42 @@ async executeAutomation(
   let components =
     input.components || [];
 
+    // The Payment Received CTA template already includes ₹
+// before its amount placeholder.
+if (
+  input.automationKey === 'CUSTOMER_PAYMENT_RECEIVED' &&
+  templateName === 'customer_payment_received_cta_v2'
+) {
+  components = components.map((component) => {
+    if (
+      component.type !== 'body' ||
+      !Array.isArray(component.parameters)
+    ) {
+      return component;
+    }
+
+    return {
+      ...component,
+      parameters: component.parameters.map(
+        (parameter: any, index: number) => {
+          if (
+            index !== 1 ||
+            parameter?.type !== 'text' ||
+            typeof parameter.text !== 'string'
+          ) {
+            return parameter;
+          }
+
+          return {
+            ...parameter,
+            text: parameter.text.replace(/^₹\s*/, ''),
+          };
+        },
+      ),
+    };
+  });
+}
+
 
   // Require a Flow button with a matching token.
   if (

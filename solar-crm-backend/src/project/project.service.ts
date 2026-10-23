@@ -24331,7 +24331,7 @@ const upcomingDateIndia = getIndiaDateString(upcomingDate);
                   {
                     type: 'text',
                     text:
-                      `₹${formattedAmount}`,
+                      formattedAmount,
                   },
                   {
                     type: 'text',
