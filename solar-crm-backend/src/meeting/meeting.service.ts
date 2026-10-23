@@ -12,7 +12,11 @@ import {
   SelectQueryBuilder,
 } from 'typeorm';
 import { createClient } from '@supabase/supabase-js';
-import { randomUUID } from 'crypto';
+import {
+  randomUUID,
+  createHmac,
+  timingSafeEqual,
+} from 'crypto';
 import {
   Meeting,
   MeetingCategory,
@@ -32,10 +36,178 @@ import {
 } from '../solar-mitra/solar-mitra-referral.entity';
 
 import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { StaffMember } from '../staff/staff-member.entity';
 import { Cron } from '@nestjs/schedule';
 
 @Injectable()
 export class MeetingService {
+
+  private createMeetingContactToken(meeting: Meeting): string {
+  const secret = process.env.MEETING_CONTACT_LINK_SECRET;
+
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      'MEETING_CONTACT_LINK_SECRET is not configured securely',
+    );
+  }
+
+  const scheduledAt = new Date(meeting.scheduledAt).getTime();
+
+  if (!Number.isFinite(scheduledAt)) {
+    throw new Error('Invalid meeting schedule');
+  }
+
+  // Valid until 24 hours after the scheduled appointment.
+  const expiresAt = scheduledAt + 24 * 60 * 60 * 1000;
+
+  const payload = Buffer.from(
+    JSON.stringify({
+      id: meeting.id,
+      scheduledAt,
+      expiresAt,
+    }),
+  ).toString('base64url');
+
+  const signature = createHmac('sha256', secret)
+    .update(payload)
+    .digest('base64url');
+
+  return `${payload}.${signature}`;
+}
+
+async getPublicMeetingManagerContact(token: string) {
+  const secret = process.env.MEETING_CONTACT_LINK_SECRET;
+
+  if (!secret || secret.length < 32) {
+    throw new NotFoundException('Contact link unavailable');
+  }
+
+  if (
+    !token ||
+    token.length > 1024 ||
+    !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)
+  ) {
+    throw new NotFoundException('Invalid contact link');
+  }
+
+  const [payload, signature] = token.split('.');
+
+  const expectedSignature = createHmac('sha256', secret)
+    .update(payload)
+    .digest();
+
+  const providedSignature = Buffer.from(
+    signature,
+    'base64url',
+  );
+
+  if (
+    providedSignature.length !== expectedSignature.length ||
+    !timingSafeEqual(providedSignature, expectedSignature)
+  ) {
+    throw new NotFoundException('Invalid contact link');
+  }
+
+  let data: {
+    id: number;
+    scheduledAt: number;
+    expiresAt: number;
+  };
+
+  try {
+    data = JSON.parse(
+      Buffer.from(payload, 'base64url').toString('utf8'),
+    );
+  } catch {
+    throw new NotFoundException('Invalid contact link');
+  }
+
+  if (
+    !Number.isSafeInteger(data.id) ||
+    data.id <= 0 ||
+    !Number.isFinite(data.scheduledAt) ||
+    !Number.isFinite(data.expiresAt) ||
+    Date.now() > data.expiresAt
+  ) {
+    throw new NotFoundException('Contact link expired or invalid');
+  }
+
+  const meeting = await this.meetingRepository.findOne({
+    where: { id: data.id },
+  });
+
+  if (
+    !meeting ||
+    ![
+      MeetingStatus.SCHEDULED,
+      MeetingStatus.RESCHEDULED,
+    ].includes(meeting.status) ||
+    new Date(meeting.scheduledAt).getTime() !== data.scheduledAt
+  ) {
+    throw new NotFoundException('Appointment is no longer available');
+  }
+
+  /*
+ * Reject older meeting versions when a newer
+ * record exists in the same meeting group.
+ */
+if (meeting.meetingGroupId != null) {
+  const newerMeeting = await this.meetingRepository
+    .createQueryBuilder('newer')
+    .where(
+      'newer.meetingGroupId = :groupId',
+      { groupId: meeting.meetingGroupId },
+    )
+    .andWhere(
+      `(
+        newer.createdAt > :createdAt
+        OR (
+          newer.createdAt = :createdAt
+          AND newer.id > :meetingId
+        )
+      )`,
+      {
+        createdAt: meeting.createdAt,
+        meetingId: meeting.id,
+      },
+    )
+    .getOne();
+
+  if (newerMeeting) {
+    throw new NotFoundException(
+      'Appointment link is no longer valid',
+    );
+  }
+}
+
+  const managerId = Number(meeting.assignedTo || 0);
+
+  const staffMember =
+    managerId > 0
+      ? await this.staffMemberRepository.findOne({
+          where: {
+            linkedUserId: managerId,
+            isActive: true,
+          },
+          order: { id: 'DESC' },
+        })
+      : null;
+
+  const managerName =
+    String(meeting.assignedToName || '').trim() ||
+    String(staffMember?.fullName || '').trim() ||
+    'Aditya Solars Team';
+
+  const managerPhone =
+    String(staffMember?.mobile || '').replace(/[^\d+]/g, '');
+
+  return {
+    managerName,
+    managerPhone: /^\+?\d{10,15}$/.test(managerPhone)
+      ? managerPhone
+      : null,
+  };
+}
   constructor(
   @InjectRepository(Meeting)
   private readonly meetingRepository: Repository<Meeting>,
@@ -45,6 +217,9 @@ private readonly leadRepository: Repository<Lead>,
 
 @InjectRepository(SolarStore)
 private readonly solarStoreRepository: Repository<SolarStore>,
+
+@InjectRepository(StaffMember)
+private readonly staffMemberRepository: Repository<StaffMember>,
 
   @InjectRepository(MeetingReviewRemark)
   private readonly meetingReviewRemarkRepository:
@@ -2367,6 +2542,10 @@ return updatedMeeting;
     };
   }
 
+  const useMeetingManagerCallButton =
+  automation.templateName ===
+  'customer_appointment_reminder_call_v2';
+
   const offsetMinutes = Math.max(
     Number(automation.triggerOffsetMinutes || 0),
     0,
@@ -2534,6 +2713,55 @@ const endOfDayUtc =
           meeting.customerName || 'Customer',
         ).trim() || 'Customer';
 
+        /*
+ * Retrieve the assigned Meeting Manager's
+ * name and mobile number for the existing
+ * appointment reminder.
+ *
+ * The meeting creator is not automatically
+ * treated as the assigned Meeting Manager.
+ */
+const assignedMeetingManagerId =
+  Number(meeting.assignedTo || 0);
+
+let meetingManagerName =
+  String(meeting.assignedToName || '').trim();
+
+let meetingManagerPhone = '';
+
+if (assignedMeetingManagerId > 0) {
+  const staffMember =
+  await this.staffMemberRepository.findOne({
+    where: {
+      linkedUserId: assignedMeetingManagerId,
+      isActive: true,
+    },
+    order: {
+      id: 'DESC',
+    },
+  });
+
+  if (staffMember) {
+    meetingManagerName =
+      meetingManagerName ||
+      String(staffMember.fullName || '').trim();
+
+    meetingManagerPhone =
+      String(staffMember.mobile || '').trim();
+  }
+}
+
+/*
+ * Keep both template variables non-empty
+ * so missing staff details do not prevent
+ * the appointment reminder from being sent.
+ */
+meetingManagerName =
+  meetingManagerName || 'Aditya Solars Team';
+
+meetingManagerPhone =
+  meetingManagerPhone || 'Contact Aditya Solars Office';
+
       /*
  * Meeting scheduledAt is stored as a timestamp
  * without timezone. Preserve its wall-clock
@@ -2592,6 +2820,11 @@ const appointmentTime =
                 ? 'Video Meeting'
                 : 'Appointment';
 
+                const meetingContactToken =
+  useMeetingManagerCallButton
+    ? this.createMeetingContactToken(meeting)
+    : null;
+
       const result =
         await this.whatsappService.executeAutomation(
           {
@@ -2623,28 +2856,55 @@ const appointmentTime =
               ).toISOString()}`,
 
             components: [
-              {
-                type: 'body',
-                parameters: [
-                  {
-                    type: 'text',
-                    text: customerName,
-                  },
-                  {
-                    type: 'text',
-                    text: appointmentDate,
-                  },
-                  {
-                    type: 'text',
-                    text: appointmentTime,
-                  },
-                  {
-                    type: 'text',
-                    text: appointmentType,
-                  },
-                ],
-              },
-            ],
+  {
+    type: 'body',
+    parameters: [
+      {
+        type: 'text',
+        text: customerName,
+      },
+      {
+        type: 'text',
+        text: appointmentDate,
+      },
+      {
+        type: 'text',
+        text: appointmentTime,
+      },
+      {
+        type: 'text',
+        text: appointmentType,
+      },
+      ...(useMeetingManagerCallButton
+  ? [
+      {
+        type: 'text',
+        text: meetingManagerName,
+      },
+      {
+        type: 'text',
+        text: meetingManagerPhone,
+      },
+    ]
+  : []),
+    ],
+  },
+  ...(meetingContactToken
+  ? [
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          {
+            type: 'text',
+            text: meetingContactToken,
+          },
+        ],
+      },
+    ]
+  : []),
+],
           },
         );
 
