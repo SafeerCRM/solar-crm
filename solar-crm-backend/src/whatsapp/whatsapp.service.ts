@@ -1477,7 +1477,21 @@ templateParameters: {
 
   async sendProductionTemplateTest(
   to: string,
+  templateName: string,
 ) {
+
+  const allowedTemplates = [
+  'customer_payment_reminder_cta_v2',
+  'customer_project_update_cta_v2',
+  'customer_payment_received_cta_v2',
+  'customer_execution_schedule_cta_v2',
+];
+
+if (!allowedTemplates.includes(templateName)) {
+  throw new BadRequestException(
+    'Template is not authorized for production testing',
+  );
+}
   // This method is intentionally independent of
   // WHATSAPP_SEND_MODE and automation switches.
   const recipientPhone = this.normalizePhone(to);
@@ -1512,36 +1526,61 @@ if (
 
 return this.sendProductionTemplateTestRequest(
   recipientPhone,
+  templateName,
 );
 }
 
 private async sendProductionTemplateTestRequest(
   recipientPhone: string,
+  templateName: string,
 ) {
-  const components = [
-    {
-      type: 'body',
-      parameters: [
-        {
-          type: 'text',
-          text: 'Test Customer',
-        },
-        {
-          type: 'text',
-          text: 'This is a controlled CRM WhatsApp production test. No project details have changed.',
-        },
-        {
-          type: 'text',
-          text: new Intl.DateTimeFormat('en-IN', {
-            timeZone: 'Asia/Kolkata',
-            day: '2-digit',
-            month: 'long',
-            year: 'numeric',
-          }).format(new Date()),
-        },
-      ],
-    },
-  ];
+  const testDate = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'Asia/Kolkata',
+  day: '2-digit',
+  month: 'long',
+  year: 'numeric',
+}).format(new Date());
+
+const bodyParametersByTemplate: Record<string, string[]> = {
+  customer_payment_reminder_cta_v2: [
+    'Test Customer',
+    '1,000',
+    testDate,
+  ],
+  customer_project_update_cta_v2: [
+    'Test Customer',
+    'Test project update - no actual project changes',
+    testDate,
+  ],
+  customer_payment_received_cta_v2: [
+    'Test Customer',
+    '1,000',
+    testDate,
+  ],
+  customer_execution_schedule_cta_v2: [
+    'Test Customer',
+    'Test installation schedule',
+    testDate,
+  ],
+};
+
+const parameters = bodyParametersByTemplate[templateName];
+
+if (!parameters) {
+  throw new BadRequestException(
+    'Unsupported production test template',
+  );
+}
+
+const components = [
+  {
+    type: 'body',
+    parameters: parameters.map((text) => ({
+      type: 'text',
+      text,
+    })),
+  },
+];
 
   const log = this.messageRepository.create({
     direction: WhatsappMessageDirection.OUTBOUND,
@@ -1549,7 +1588,7 @@ private async sendProductionTemplateTestRequest(
     recipientPhone,
     recipientName: 'Production Test',
     messageType: WhatsappMessageType.TEMPLATE,
-    templateName: 'customer_project_update',
+    templateName,
     templateLanguage: 'en',
     messageBody: null,
     templateParameters: { components },
@@ -1577,10 +1616,10 @@ private async sendProductionTemplateTestRequest(
       to: recipientPhone,
       type: 'template',
       template: {
-        name: 'customer_project_update',
-        language: { code: 'en' },
-        components,
-      },
+  name: templateName,
+  language: { code: 'en' },
+  components,
+},
     });
 
     if (!result.ok) {
@@ -1608,12 +1647,12 @@ private async sendProductionTemplateTestRequest(
     await this.messageRepository.save(log);
 
     return {
-      success: true,
-      templateName: 'customer_project_update',
-      recipientPhone,
-      metaMessageId: log.metaMessageId,
-      logId: log.id,
-    };
+  success: true,
+  templateName,
+  recipientPhone,
+  metaMessageId: log.metaMessageId,
+  logId: log.id,
+};
   } catch (error) {
     if (log.status !== WhatsappMessageStatus.FAILED) {
       log.status = WhatsappMessageStatus.FAILED;
