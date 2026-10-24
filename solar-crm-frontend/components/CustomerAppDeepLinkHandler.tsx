@@ -6,6 +6,9 @@ import { Browser } from "@capacitor/browser";
 import { Capacitor } from "@capacitor/core";
 import { useRouter } from "next/navigation";
 
+let lastProcessedLaunchUrl = "";
+let lastProcessedLaunchAt = 0;
+
 const smartLinkRoutes: Record<string, string> = {
   "/open/payment": "/customer-portal/payments",
   "/open/project": "/customer-portal/project-tracker",
@@ -149,9 +152,20 @@ const initializeCustomerDeepLinks = async () => {
 
     const launchResult = await App.getLaunchUrl();
 
-    if (!cancelled && launchResult?.url) {
-      await handleDeepLink(launchResult.url);
-    }
+if (!cancelled && launchResult?.url) {
+  const now = Date.now();
+
+  const alreadyProcessed =
+    launchResult.url === lastProcessedLaunchUrl &&
+    now - lastProcessedLaunchAt < 60 * 60 * 1000;
+
+  if (!alreadyProcessed) {
+    lastProcessedLaunchUrl = launchResult.url;
+    lastProcessedLaunchAt = now;
+
+    await handleDeepLink(launchResult.url);
+  }
+}
   } catch (error) {
     console.error(
       "Customer App deep-link initialization failed:",
