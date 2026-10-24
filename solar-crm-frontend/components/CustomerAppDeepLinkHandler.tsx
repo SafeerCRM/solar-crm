@@ -58,7 +58,16 @@ export default function CustomerAppDeepLinkHandler() {
     };
 
     const handleDeepLink = async (url: string) => {
-      let parsedUrl: URL;
+  console.log(
+    "[CUSTOMER_DEEPLINK] handleDeepLink called",
+    {
+      url,
+      currentPath: window.location.pathname,
+      timestamp: new Date().toISOString(),
+    },
+  );
+
+  let parsedUrl: URL;
 
       try {
         parsedUrl = new URL(url);
@@ -137,11 +146,12 @@ const initializeCustomerDeepLinks = async () => {
     }
 
     const handle = await App.addListener(
-      "appUrlOpen",
-      ({ url }) => {
-        void handleDeepLink(url);
-      },
-    );
+  "appUrlOpen",
+  ({ url }) => {
+    console.log("[CUSTOMER_DEEPLINK] appUrlOpen event");
+    void handleDeepLink(url);
+  },
+);
 
     if (cancelled) {
       await handle.remove();
@@ -151,6 +161,11 @@ const initializeCustomerDeepLinks = async () => {
     listenerHandle = handle;
 
     const launchResult = await App.getLaunchUrl();
+
+    console.log("[CUSTOMER_DEEPLINK] getLaunchUrl result", {
+  url: launchResult?.url || null,
+  currentPath: window.location.pathname,
+});
 
 if (!cancelled && launchResult?.url) {
   const now = Date.now();
