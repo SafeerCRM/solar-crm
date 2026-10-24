@@ -162,23 +162,19 @@ const initializeCustomerDeepLinks = async () => {
 
     const launchResult = await App.getLaunchUrl();
 
-    console.log("[CUSTOMER_DEEPLINK] getLaunchUrl result", {
-  url: launchResult?.url || null,
-  currentPath: window.location.pathname,
-});
-
 if (!cancelled && launchResult?.url) {
-  const now = Date.now();
+  const launchUrl = launchResult.url;
 
-  const alreadyProcessed =
-    launchResult.url === lastProcessedLaunchUrl &&
-    now - lastProcessedLaunchAt < 60 * 60 * 1000;
+  const storageKey =
+    "customer_app_handled_initial_launch_url";
 
-  if (!alreadyProcessed) {
-    lastProcessedLaunchUrl = launchResult.url;
-    lastProcessedLaunchAt = now;
+  const previouslyHandledUrl =
+    sessionStorage.getItem(storageKey);
 
-    await handleDeepLink(launchResult.url);
+  if (previouslyHandledUrl !== launchUrl) {
+    sessionStorage.setItem(storageKey, launchUrl);
+
+    await handleDeepLink(launchUrl);
   }
 }
   } catch (error) {
