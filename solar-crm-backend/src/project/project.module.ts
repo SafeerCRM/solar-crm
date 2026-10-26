@@ -15,6 +15,7 @@ import { ProjectLoanDetail } from './project-loan-detail.entity';
 import { ProjectSubsidyDetail } from './project-subsidy-detail.entity';
 import { ProjectElectricityDetail } from './project-electricity-detail.entity';
 import { ProjectElectricityWork } from './project-electricity-work.entity';
+import { ProjectSolarExtension } from './project-solar-extension.entity';
 import { ProjectExecutionActivity } from './project-execution-activity.entity';
 import { ProjectExecutionProof } from './project-execution-proof.entity';
 import { ProjectExecutionReminder } from './project-execution-reminder.entity';
@@ -159,7 +160,7 @@ ProjectInsuranceDocument,
 ProjectInsuranceRequest,
 ProjectInsuranceRequestDocument,
 ProjectInsuranceReminderLog, ProjectDocument, CustomerNotification, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
-ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectElectricityWork, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,
+ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectElectricityWork, ProjectSolarExtension, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,
  ProjectVendor,
 ProjectVendorCompany,
 ProjectVendorBill,

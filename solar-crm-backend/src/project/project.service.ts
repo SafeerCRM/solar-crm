@@ -72,6 +72,7 @@ import {
   ProjectElectricityWorkType,
   ProjectElectricityWorkStatus,
 } from './project-electricity-work.entity';
+import { ProjectSolarExtension } from './project-solar-extension.entity';
 import {
   ProjectExecutionActivity,
   ProjectExecutionActivityStatus,
@@ -2572,6 +2573,9 @@ private readonly projectElectricityDetailRepository: Repository<ProjectElectrici
 
 @InjectRepository(ProjectElectricityWork)
 private readonly projectElectricityWorkRepository: Repository<ProjectElectricityWork>,
+
+@InjectRepository(ProjectSolarExtension)
+private readonly projectSolarExtensionRepository: Repository<ProjectSolarExtension>,
 
 @InjectRepository(ProjectExecutionActivity)
 private readonly projectExecutionActivityRepository: Repository<ProjectExecutionActivity>,
@@ -48528,6 +48532,352 @@ async saveProjectElectricityWork(
   }
 
   return savedWork;
+}
+
+async getProjectSolarExtensions(
+  projectId: number,
+  user: any,
+) {
+  await this.findOne(projectId, user);
+
+  return this.projectSolarExtensionRepository.find({
+    where: { projectId },
+    order: {
+      createdAt: 'DESC',
+      id: 'DESC',
+    },
+  });
+}
+
+async createProjectSolarExtension(
+  projectId: number,
+  body: any,
+  user: any,
+) {
+  const project = await this.findOne(projectId, user);
+
+  const parseCapacity = (
+    value: any,
+    label: string,
+  ): number => {
+    if (
+      value === undefined ||
+      value === null ||
+      String(value).trim() === ''
+    ) {
+      throw new BadRequestException(
+        `${label} is required`,
+      );
+    }
+
+    const numberValue = Number(value);
+
+    if (
+      !Number.isFinite(numberValue) ||
+      numberValue <= 0 ||
+      !Number.isInteger(numberValue * 100) ||
+      numberValue > 99999999
+    ) {
+      throw new BadRequestException(
+        `${label} must be a positive number with up to 2 decimal places`,
+      );
+    }
+
+    return numberValue;
+  };
+
+  const parseDate = (
+    value: any,
+  ): Date | null => {
+    if (!value) return null;
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestException(
+        'Invalid Solar Extension date',
+      );
+    }
+
+    return date;
+  };
+
+  const existingCapacityKw = parseCapacity(
+    body?.existingCapacityKw,
+    'Existing capacity',
+  );
+
+  const additionalCapacityKw = parseCapacity(
+    body?.additionalCapacityKw,
+    'Additional capacity',
+  );
+
+  const totalCapacityKw =
+    Math.round(
+      (existingCapacityKw + additionalCapacityKw) * 100,
+    ) / 100;
+
+  if (totalCapacityKw > 99999999.99) {
+    throw new BadRequestException(
+      'Total capacity exceeds the supported limit',
+    );
+  }
+
+  const status =
+    body?.status ||
+    ProjectElectricityWorkStatus.DOCUMENT_PENDING;
+
+  if (
+    !Object.values(
+      ProjectElectricityWorkStatus,
+    ).includes(status)
+  ) {
+    throw new BadRequestException(
+      'Invalid Solar Extension status',
+    );
+  }
+
+  const extension =
+    this.projectSolarExtensionRepository.create({
+      projectId,
+      existingCapacityKw,
+      additionalCapacityKw,
+      totalCapacityKw,
+      applicationNumber:
+        String(body?.applicationNumber || '').trim() ||
+        null,
+      status,
+      applicationDate: parseDate(
+        body?.applicationDate,
+      ),
+      completionDate: parseDate(
+        body?.completionDate,
+      ),
+      remarks:
+        String(body?.remarks || '').trim() ||
+        null,
+      updatedBy:
+        Number(user?.id || user?.userId || user?.sub) ||
+        null,
+      updatedByName:
+        user?.name || user?.email || null,
+    });
+
+  const savedExtension =
+    await this.projectSolarExtensionRepository.save(
+      extension,
+    );
+
+  const statusMessages: Partial<
+    Record<ProjectElectricityWorkStatus, string>
+  > = {
+    [ProjectElectricityWorkStatus.FILE_SUBMITTED]:
+      'Your solar extension application has been submitted.',
+
+    [ProjectElectricityWorkStatus.IN_PROCESS]:
+      'Your solar extension application is being processed.',
+
+    [ProjectElectricityWorkStatus.APPROVED]:
+      'Your solar extension application has been approved.',
+
+    [ProjectElectricityWorkStatus.COMPLETED]:
+      'Your solar extension process has been completed.',
+  };
+
+  const updateText =
+    statusMessages[savedExtension.status];
+
+  if (updateText) {
+    await this.sendCustomerProjectUpdateWhatsapp(
+      project,
+      updateText,
+      `solar-extension-${savedExtension.id}-NONE-to-${savedExtension.status}`,
+    );
+  }
+
+  return savedExtension;
+}
+
+async updateProjectSolarExtension(
+  projectId: number,
+  extensionId: number,
+  body: any,
+  user: any,
+) {
+  const project = await this.findOne(projectId, user);
+
+  const extension =
+    await this.projectSolarExtensionRepository.findOne({
+      where: {
+        id: extensionId,
+        projectId,
+      },
+    });
+
+  if (!extension) {
+    throw new NotFoundException(
+      'Solar Extension application not found',
+    );
+  }
+
+  const previousStatus = extension.status;
+
+  const parseCapacity = (
+    value: any,
+    label: string,
+  ): number => {
+    if (
+      value === undefined ||
+      value === null ||
+      String(value).trim() === ''
+    ) {
+      throw new BadRequestException(
+        `${label} is required`,
+      );
+    }
+
+    const numberValue = Number(value);
+
+    if (
+      !Number.isFinite(numberValue) ||
+      numberValue <= 0 ||
+      !Number.isInteger(numberValue * 100) ||
+      numberValue > 99999999
+    ) {
+      throw new BadRequestException(
+        `${label} must be a positive number with up to 2 decimal places`,
+      );
+    }
+
+    return numberValue;
+  };
+
+  const parseDate = (
+    value: any,
+  ): Date | null => {
+    if (!value) return null;
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestException(
+        'Invalid Solar Extension date',
+      );
+    }
+
+    return date;
+  };
+
+  if (body?.existingCapacityKw !== undefined) {
+    extension.existingCapacityKw =
+      parseCapacity(
+        body.existingCapacityKw,
+        'Existing capacity',
+      );
+  }
+
+  if (body?.additionalCapacityKw !== undefined) {
+    extension.additionalCapacityKw =
+      parseCapacity(
+        body.additionalCapacityKw,
+        'Additional capacity',
+      );
+  }
+
+  const totalCapacityKw =
+    Math.round(
+      (
+        Number(extension.existingCapacityKw) +
+        Number(extension.additionalCapacityKw)
+      ) * 100,
+    ) / 100;
+
+  if (totalCapacityKw > 99999999.99) {
+    throw new BadRequestException(
+      'Total capacity exceeds the supported limit',
+    );
+  }
+
+  extension.totalCapacityKw = totalCapacityKw;
+
+  if (body?.status !== undefined) {
+    if (
+      !Object.values(
+        ProjectElectricityWorkStatus,
+      ).includes(body.status)
+    ) {
+      throw new BadRequestException(
+        'Invalid Solar Extension status',
+      );
+    }
+
+    extension.status = body.status;
+  }
+
+  if (body?.applicationNumber !== undefined) {
+    extension.applicationNumber =
+      String(body.applicationNumber || '').trim() ||
+      null;
+  }
+
+  if (body?.applicationDate !== undefined) {
+    extension.applicationDate =
+      parseDate(body.applicationDate);
+  }
+
+  if (body?.completionDate !== undefined) {
+    extension.completionDate =
+      parseDate(body.completionDate);
+  }
+
+  if (body?.remarks !== undefined) {
+    extension.remarks =
+      String(body.remarks || '').trim() ||
+      null;
+  }
+
+  extension.updatedBy =
+    Number(user?.id || user?.userId || user?.sub) ||
+    null;
+
+  extension.updatedByName =
+    user?.name || user?.email || null;
+
+  const savedExtension =
+    await this.projectSolarExtensionRepository.save(
+      extension,
+    );
+
+  if (savedExtension.status !== previousStatus) {
+    const statusMessages: Partial<
+      Record<ProjectElectricityWorkStatus, string>
+    > = {
+      [ProjectElectricityWorkStatus.FILE_SUBMITTED]:
+        'Your solar extension application has been submitted.',
+
+      [ProjectElectricityWorkStatus.IN_PROCESS]:
+        'Your solar extension application is being processed.',
+
+      [ProjectElectricityWorkStatus.APPROVED]:
+        'Your solar extension application has been approved.',
+
+      [ProjectElectricityWorkStatus.COMPLETED]:
+        'Your solar extension process has been completed.',
+    };
+
+    const updateText =
+      statusMessages[savedExtension.status];
+
+    if (updateText) {
+      await this.sendCustomerProjectUpdateWhatsapp(
+        project,
+        updateText,
+        `solar-extension-${savedExtension.id}-${previousStatus}-to-${savedExtension.status}`,
+      );
+    }
+  }
+
+  return savedExtension;
 }
 
 async assignContractorToProject(body: any, user: any) {

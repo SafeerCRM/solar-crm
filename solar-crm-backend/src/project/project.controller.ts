@@ -4192,6 +4192,66 @@ saveProjectElectricityWork(
   );
 }
 
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'ELECTRICITY_MANAGER',
+  'SOLAR_FRANCHISE',
+)
+@Get(':id/solar-extensions')
+getProjectSolarExtensions(
+  @Param('id', ParseIntPipe) projectId: number,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getProjectSolarExtensions(
+    projectId,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'ELECTRICITY_MANAGER',
+  'SOLAR_FRANCHISE',
+)
+@Post(':id/solar-extensions')
+createProjectSolarExtension(
+  @Param('id', ParseIntPipe) projectId: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createProjectSolarExtension(
+    projectId,
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'ELECTRICITY_MANAGER',
+  'SOLAR_FRANCHISE',
+)
+@Patch(':id/solar-extensions/:extensionId')
+updateProjectSolarExtension(
+  @Param('id', ParseIntPipe) projectId: number,
+  @Param('extensionId', ParseIntPipe) extensionId: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.updateProjectSolarExtension(
+    projectId,
+    extensionId,
+    body,
+    user,
+  );
+}
+
 @Get('owners/list')
 getProjectOwners() {
   return this.projectService.getProjectOwners();
