@@ -1166,6 +1166,58 @@ const [electricityWorkSaving, setElectricityWorkSaving] =
 const [electricityWorkLoading, setElectricityWorkLoading] =
   useState(false);
 
+  type SolarExtensionForm = {
+  existingCapacityKw: string;
+  additionalCapacityKw: string;
+  applicationNumber: string;
+  status: ElectricityWorkStatus;
+  applicationDate: string;
+  completionDate: string;
+  remarks: string;
+};
+
+type SolarExtensionRecord = {
+  id: number;
+  projectId: number;
+  existingCapacityKw: number;
+  additionalCapacityKw: number;
+  totalCapacityKw: number;
+  applicationNumber: string | null;
+  status: ElectricityWorkStatus;
+  applicationDate: string | null;
+  completionDate: string | null;
+  remarks: string | null;
+  createdAt: string;
+};
+
+const createSolarExtensionForm = (): SolarExtensionForm => ({
+  existingCapacityKw: '',
+  additionalCapacityKw: '',
+  applicationNumber: '',
+  status: 'DOCUMENT_PENDING',
+  applicationDate: '',
+  completionDate: '',
+  remarks: '',
+});
+
+const [solarExtensions, setSolarExtensions] =
+  useState<SolarExtensionRecord[]>([]);
+
+const [solarExtensionForm, setSolarExtensionForm] =
+  useState<SolarExtensionForm>(createSolarExtensionForm());
+
+const [solarExtensionEditingId, setSolarExtensionEditingId] =
+  useState<number | null>(null);
+
+const [solarExtensionLoading, setSolarExtensionLoading] =
+  useState(false);
+
+const [solarExtensionSaving, setSolarExtensionSaving] =
+  useState(false);
+
+const [showSolarExtensionForm, setShowSolarExtensionForm] =
+  useState(false);
+
   const [executionActivities, setExecutionActivities] =
   useState<ExecutionActivity[]>([]);
 
@@ -3544,6 +3596,145 @@ const saveElectricityWork = async (
   }
 };
 
+const fetchSolarExtensions = async () => {
+  if (!projectId) return;
+
+  try {
+    setSolarExtensionLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/${projectId}/solar-extensions`,
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    setSolarExtensions(
+      Array.isArray(res.data) ? res.data : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to load Solar Extensions:',
+      error,
+    );
+  } finally {
+    setSolarExtensionLoading(false);
+  }
+};
+
+const saveSolarExtension = async () => {
+  if (!projectId || solarExtensionSaving) return;
+
+  const existing = Number(
+    solarExtensionForm.existingCapacityKw,
+  );
+
+  const additional = Number(
+    solarExtensionForm.additionalCapacityKw,
+  );
+
+  if (
+    !solarExtensionForm.existingCapacityKw.trim() ||
+    !solarExtensionForm.additionalCapacityKw.trim() ||
+    !Number.isFinite(existing) ||
+    !Number.isFinite(additional) ||
+    existing <= 0 ||
+    additional <= 0
+  ) {
+    alert(
+      'Enter valid existing and additional solar capacities.',
+    );
+    return;
+  }
+
+  try {
+    setSolarExtensionSaving(true);
+
+    const token = localStorage.getItem('token');
+
+    const payload = {
+      ...solarExtensionForm,
+      existingCapacityKw: existing,
+      additionalCapacityKw: additional,
+    };
+
+    if (solarExtensionEditingId !== null) {
+      await axios.patch(
+        `${API_BASE_URL}/project/${projectId}/solar-extensions/${solarExtensionEditingId}`,
+        payload,
+        {
+          headers: token
+            ? { Authorization: `Bearer ${token}` }
+            : {},
+        },
+      );
+    } else {
+      await axios.post(
+        `${API_BASE_URL}/project/${projectId}/solar-extensions`,
+        payload,
+        {
+          headers: token
+            ? { Authorization: `Bearer ${token}` }
+            : {},
+        },
+      );
+    }
+
+    alert(
+      solarExtensionEditingId !== null
+        ? 'Solar Extension updated successfully'
+        : 'Solar Extension application created successfully',
+    );
+
+    setSolarExtensionForm(createSolarExtensionForm());
+    setSolarExtensionEditingId(null);
+    setShowSolarExtensionForm(false);
+
+    await fetchSolarExtensions();
+  } catch (error: any) {
+    console.error(
+      'Failed to save Solar Extension:',
+      error,
+    );
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to save Solar Extension',
+    );
+  } finally {
+    setSolarExtensionSaving(false);
+  }
+};
+
+const editSolarExtension = (
+  record: SolarExtensionRecord,
+) => {
+  setSolarExtensionEditingId(record.id);
+
+  setSolarExtensionForm({
+    existingCapacityKw: String(
+      record.existingCapacityKw,
+    ),
+    additionalCapacityKw: String(
+      record.additionalCapacityKw,
+    ),
+    applicationNumber:
+      record.applicationNumber || '',
+    status: record.status,
+    applicationDate:
+      record.applicationDate?.split('T')[0] || '',
+    completionDate:
+      record.completionDate?.split('T')[0] || '',
+    remarks: record.remarks || '',
+  });
+
+  setShowSolarExtensionForm(true);
+};
+
 const fetchExecutionActivities = async () => {
   try {
     const token = localStorage.getItem('token');
@@ -5299,6 +5490,7 @@ if (
   if (activeTab === 'ELECTRICITY_DEPARTMENT') {
   fetchElectricityDetail();
   fetchElectricityWorks();
+  fetchSolarExtensions();
 }
 
   if (activeTab === 'PROJECT_EXECUTION') {
@@ -11542,6 +11734,318 @@ if (!canViewLagatProfitability) {
         </div>
       );
     })}
+  </div>
+</div>
+
+{/* Solar Extension */}
+<div className="mt-8 border-t pt-6">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h3 className="text-lg font-bold text-gray-800">
+        Solar Extension
+      </h3>
+      <p className="mt-1 text-sm text-gray-500">
+        Track additional solar capacity applications for this project.
+        Multiple extensions can be recorded over time.
+      </p>
+    </div>
+
+    {canManageElectricity && (
+      <button
+        type="button"
+        onClick={() => {
+          setSolarExtensionEditingId(null);
+          setSolarExtensionForm(createSolarExtensionForm());
+          setShowSolarExtensionForm(true);
+        }}
+        className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+      >
+        + Add Solar Extension
+      </button>
+    )}
+  </div>
+
+  {showSolarExtensionForm && canManageElectricity && (
+    <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50/40 p-5">
+      <h4 className="text-base font-bold text-gray-800">
+        {solarExtensionEditingId !== null
+          ? 'Edit Solar Extension'
+          : 'New Solar Extension Application'}
+      </h4>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
+        <div>
+          <label className="mb-1 block text-sm font-semibold">
+            Existing Capacity (kW)
+          </label>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={solarExtensionForm.existingCapacityKw}
+            onChange={(e) =>
+              setSolarExtensionForm((previous) => ({
+                ...previous,
+                existingCapacityKw: e.target.value,
+              }))
+            }
+            placeholder="e.g. 3"
+            className="w-full rounded-xl border bg-white p-3"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-semibold">
+            Additional Capacity (kW)
+          </label>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={solarExtensionForm.additionalCapacityKw}
+            onChange={(e) =>
+              setSolarExtensionForm((previous) => ({
+                ...previous,
+                additionalCapacityKw: e.target.value,
+              }))
+            }
+            placeholder="e.g. 2"
+            className="w-full rounded-xl border bg-white p-3"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-semibold">
+            Proposed Total Capacity (kW)
+          </label>
+          <div className="rounded-xl border bg-gray-100 p-3 font-bold text-gray-800">
+            {solarExtensionForm.existingCapacityKw &&
+            solarExtensionForm.additionalCapacityKw &&
+            Number(solarExtensionForm.existingCapacityKw) > 0 &&
+            Number(solarExtensionForm.additionalCapacityKw) > 0
+              ? (
+                  Math.round(
+                    (Number(solarExtensionForm.existingCapacityKw) +
+                      Number(solarExtensionForm.additionalCapacityKw)) *
+                      100,
+                  ) / 100
+                ).toFixed(2)
+              : '—'}
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-semibold">
+            Application / File Number
+          </label>
+          <input
+            type="text"
+            value={solarExtensionForm.applicationNumber}
+            onChange={(e) =>
+              setSolarExtensionForm((previous) => ({
+                ...previous,
+                applicationNumber: e.target.value,
+              }))
+            }
+            placeholder="Optional"
+            className="w-full rounded-xl border bg-white p-3"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-semibold">
+            Status
+          </label>
+          <select
+            value={solarExtensionForm.status}
+            onChange={(e) =>
+              setSolarExtensionForm((previous) => ({
+                ...previous,
+                status: e.target.value as ElectricityWorkStatus,
+              }))
+            }
+            className="w-full rounded-xl border bg-white p-3"
+          >
+            <option value="DOCUMENT_PENDING">Document Pending</option>
+            <option value="FILE_SUBMITTED">File Submitted</option>
+            <option value="IN_PROCESS">In Process</option>
+            <option value="APPROVED">Approved</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="REJECTED">Rejected</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-semibold">
+            Application Date
+          </label>
+          <input
+            type="date"
+            value={solarExtensionForm.applicationDate}
+            onChange={(e) =>
+              setSolarExtensionForm((previous) => ({
+                ...previous,
+                applicationDate: e.target.value,
+              }))
+            }
+            className="w-full rounded-xl border bg-white p-3"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-semibold">
+            Completion Date
+          </label>
+          <input
+            type="date"
+            value={solarExtensionForm.completionDate}
+            onChange={(e) =>
+              setSolarExtensionForm((previous) => ({
+                ...previous,
+                completionDate: e.target.value,
+              }))
+            }
+            className="w-full rounded-xl border bg-white p-3"
+          />
+        </div>
+
+        <div className="md:col-span-3">
+          <label className="mb-1 block text-sm font-semibold">
+            Remarks
+          </label>
+          <textarea
+            rows={3}
+            value={solarExtensionForm.remarks}
+            onChange={(e) =>
+              setSolarExtensionForm((previous) => ({
+                ...previous,
+                remarks: e.target.value,
+              }))
+            }
+            placeholder="Enter application details or remarks"
+            className="w-full rounded-xl border bg-white p-3"
+          />
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={saveSolarExtension}
+          disabled={solarExtensionSaving}
+          className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {solarExtensionSaving
+            ? 'Saving...'
+            : solarExtensionEditingId !== null
+              ? 'Update Solar Extension'
+              : 'Create Solar Extension'}
+        </button>
+
+        <button
+          type="button"
+          disabled={solarExtensionSaving}
+          onClick={() => {
+            setShowSolarExtensionForm(false);
+            setSolarExtensionEditingId(null);
+            setSolarExtensionForm(createSolarExtensionForm());
+          }}
+          className="rounded-xl border bg-white px-5 py-3 font-semibold text-gray-700 hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )}
+
+  <div className="mt-6">
+    <h4 className="text-base font-bold text-gray-800">
+      Extension Application History
+    </h4>
+
+    {solarExtensionLoading ? (
+      <p className="mt-3 text-sm text-gray-500">
+        Loading Solar Extensions...
+      </p>
+    ) : solarExtensions.length === 0 ? (
+      <p className="mt-3 rounded-xl border border-dashed p-5 text-sm text-gray-500">
+        No Solar Extension applications recorded yet.
+      </p>
+    ) : (
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        {solarExtensions.map((extension) => (
+          <div
+            key={extension.id}
+            className="rounded-2xl border border-gray-200 bg-white p-5"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h5 className="font-bold text-gray-800">
+                  Solar Extension #{extension.id}
+                </h5>
+                <p className="mt-1 text-sm text-gray-500">
+                  {extension.applicationNumber ||
+                    'No application number'}
+                </p>
+              </div>
+
+              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                {extension.status.replace(/_/g, ' ')}
+              </span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+              <div className="rounded-xl bg-gray-50 p-3">
+                <p className="text-xs text-gray-500">Existing</p>
+                <p className="mt-1 font-bold">
+                  {Number(extension.existingCapacityKw)} kW
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-gray-50 p-3">
+                <p className="text-xs text-gray-500">Additional</p>
+                <p className="mt-1 font-bold">
+                  +{Number(extension.additionalCapacityKw)} kW
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-blue-50 p-3">
+                <p className="text-xs text-blue-600">Proposed Total</p>
+                <p className="mt-1 font-bold text-blue-800">
+                  {Number(extension.totalCapacityKw)} kW
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-1 text-sm text-gray-600">
+              <p>
+                Application Date:{' '}
+                {extension.applicationDate?.split('T')[0] || '—'}
+              </p>
+              <p>
+                Completion Date:{' '}
+                {extension.completionDate?.split('T')[0] || '—'}
+              </p>
+              {extension.remarks && (
+                <p className="whitespace-pre-wrap">
+                  Remarks: {extension.remarks}
+                </p>
+              )}
+            </div>
+
+            {canManageElectricity && (
+              <button
+                type="button"
+                onClick={() => editSolarExtension(extension)}
+                className="mt-4 rounded-xl border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+              >
+                Edit Application
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    )}
   </div>
 </div>
   </div>
