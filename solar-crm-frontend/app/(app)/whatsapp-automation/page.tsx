@@ -206,6 +206,7 @@ function statusClass(status: string) {
 
 export default function WhatsappAutomationPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
   const [activeTab, setActiveTab] = useState<
   'overview' | 'confirmations' | 'messages' | 'audit'
 >('overview');
@@ -488,58 +489,115 @@ const [auditError, setAuditError] = useState('');
   const [automationActionError, setAutomationActionError] = useState('');
 
   useEffect(() => {
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      setAuthorized(
-  Array.isArray(user.roles) &&
-    user.roles.some((role: string) =>
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+    const userRoles: string[] = Array.isArray(user.roles)
+      ? user.roles
+      : [];
+
+    const ownerAccess = userRoles.includes('OWNER');
+
+    const hasAccess = userRoles.some((role) =>
       ['OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER'].includes(role)
-    )
-);
-    } catch {
-      setAuthorized(false);
-    }
-  }, []);
+    );
+
+    setIsOwner(ownerAccess);
+    setAuthorized(hasAccess);
+
+    setActiveTab(ownerAccess ? 'overview' : 'confirmations');
+  } catch {
+    setIsOwner(false);
+    setAuthorized(false);
+  }
+}, []);
 
   const loadData = useCallback(async () => {
-    if (!authorized) return;
-    setLoading(true);
-    setError('');
-    try {
-      if (!API_BASE_URL) throw new Error('Backend API URL is not configured.');
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('Please log in again.');
-      const params = new URLSearchParams({ page: String(page), limit: '20' });
-      if (direction) params.set('direction', direction);
-      if (status) params.set('status', status);
-      if (automationKey) params.set('automationKey', automationKey);
-      if (search) params.set('search', search);
-      const headers = { Authorization: `Bearer ${token}` };
-      const [overviewResponse, messagesResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}${ROOT}/overview`, { headers, cache: 'no-store' }),
-        fetch(`${API_BASE_URL}${ROOT}/messages?${params}`, { headers, cache: 'no-store' }),
-      ]);
-      if (!overviewResponse.ok || !messagesResponse.ok) {
-        const code = !overviewResponse.ok ? overviewResponse.status : messagesResponse.status;
-        throw new Error(code === 403 ? 'You do not have permission to access WhatsApp Automation.' : `Unable to load WhatsApp data (${code}).`);
-      }
-      const nextOverview: Overview = await overviewResponse.json();
-      const nextMessages: MessageResponse = await messagesResponse.json();
-      setOverview(nextOverview);
-      setMessages(Array.isArray(nextMessages.data) ? nextMessages.data : []);
-      setTotal(Number(nextMessages.total) || 0);
-      setTotalPages(Number(nextMessages.totalPages) || 0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load WhatsApp data.');
-    } finally {
-      setLoading(false);
+  if (!authorized) return;
+
+  setLoading(true);
+  setError('');
+
+  try {
+    if (!API_BASE_URL) {
+      throw new Error('Backend API URL is not configured.');
     }
-  }, [authorized, page, direction, status, automationKey, search]);
+
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      throw new Error('Please log in again.');
+    }
+
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: '20',
+    });
+
+    if (direction) params.set('direction', direction);
+    if (status) params.set('status', status);
+    if (automationKey) params.set('automationKey', automationKey);
+    if (search) params.set('search', search);
+
+    const headers = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    const messagesResponse = await fetch(
+      `${API_BASE_URL}${ROOT}/messages?${params}`,
+      { headers, cache: 'no-store' },
+    );
+
+    if (!messagesResponse.ok) {
+      throw new Error(
+        `Unable to load WhatsApp messages (${messagesResponse.status}).`,
+      );
+    }
+
+    const nextMessages: MessageResponse = await messagesResponse.json();
+
+    setMessages(Array.isArray(nextMessages.data) ? nextMessages.data : []);
+    setTotal(Number(nextMessages.total) || 0);
+    setTotalPages(Number(nextMessages.totalPages) || 0);
+
+    if (isOwner) {
+      const overviewResponse = await fetch(
+        `${API_BASE_URL}${ROOT}/overview`,
+        { headers, cache: 'no-store' },
+      );
+
+      if (!overviewResponse.ok) {
+        throw new Error(
+          `Unable to load automation overview (${overviewResponse.status}).`,
+        );
+      }
+
+      const nextOverview: Overview = await overviewResponse.json();
+      setOverview(nextOverview);
+    }
+  } catch (err) {
+    setError(
+      err instanceof Error
+        ? err.message
+        : 'Unable to load WhatsApp data.',
+    );
+  } finally {
+    setLoading(false);
+  }
+}, [
+  authorized,
+  isOwner,
+  page,
+  direction,
+  status,
+  automationKey,
+  search,
+]);
 
   useEffect(() => { void loadData(); }, [loadData]);
 
   const loadAuditHistory = useCallback(async () => {
-  if (!authorized) return;
+  if (!authorized || !isOwner) return;
 
   setAuditLoading(true);
   setAuditError('');
@@ -596,7 +654,7 @@ const [auditError, setAuditError] = useState('');
   } finally {
     setAuditLoading(false);
   }
-}, [authorized, auditPage, auditAutomationKey]);
+}, [authorized, isOwner, auditPage, auditAutomationKey]);
 
 useEffect(() => {
   void loadAuditHistory();
@@ -701,7 +759,19 @@ useEffect(() => {
   WhatsApp Automation · Live records · Automation controls
 </p>
         </div>
-        <button type="button" onClick={() => void loadData()} disabled={loading}
+        <button type="button" onClick={() => {
+  if (activeTab === 'confirmations') {
+    void loadCustomerConfirmations(
+      confirmationPage,
+      confirmationStatus,
+      confirmationSearch,
+    );
+  } else if (activeTab === 'audit') {
+    void loadAuditHistory();
+  } else {
+    void loadData();
+  }
+}} disabled={loading}
           className="rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
           {loading ? 'Refreshing...' : 'Refresh'}
         </button>
@@ -709,13 +779,17 @@ useEffect(() => {
 
             <div className="flex flex-wrap gap-2 rounded-2xl border bg-white p-2 shadow-sm">
         {(
-          [
-            { key: 'overview', label: 'Overview & Automations' },
-            { key: 'confirmations', label: 'Customer Confirmations' },
-            { key: 'messages', label: 'Message History' },
-            { key: 'audit', label: 'Automation Audit' },
-          ] as const
-        ).map((tab) => (
+  [
+    { key: 'overview', label: 'Overview & Automations' },
+    { key: 'confirmations', label: 'Customer Confirmations' },
+    { key: 'messages', label: 'Message History' },
+    { key: 'audit', label: 'Automation Audit' },
+  ] as const
+)
+  .filter((tab) =>
+    isOwner || (tab.key !== 'overview' && tab.key !== 'audit')
+  )
+  .map((tab) => (
           <button
             key={tab.key}
             type="button"
@@ -739,7 +813,7 @@ useEffect(() => {
   </div>
 )}
 
-            {activeTab === 'overview' && (
+            {isOwner && activeTab === 'overview' && (
         <>
 
       <div className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -840,7 +914,7 @@ useEffect(() => {
               </>
       )}
 
-      {activeTab === 'audit' && (
+      {isOwner && activeTab === 'audit' && (
       <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
   <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
     <div>

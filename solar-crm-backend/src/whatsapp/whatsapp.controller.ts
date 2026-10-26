@@ -32,7 +32,7 @@ export class WhatsappController {
 
     @Get('automation-management/rollout-check')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+  @Roles('OWNER',)
   checkAutomationRolloutRecipient(
     @Query('to') to?: string,
   ) {
@@ -49,7 +49,7 @@ export class WhatsappController {
 
     @Post('automation-management/production-test')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+  @Roles('OWNER', )
   @HttpCode(200)
   async sendProductionTemplateTest(
   @Body() body: {
@@ -84,7 +84,7 @@ export class WhatsappController {
 
     @Patch('automation-management/setting')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+  @Roles('OWNER',)
   async updateAutomationManagementSetting(
     @Body() body: {
       automationKey?: string;
@@ -129,7 +129,7 @@ export class WhatsappController {
 
   @Get('automation-management/audit-history')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+@Roles('OWNER', )
 async getAutomationManagementAuditHistory(
   @Query('page') page?: string,
   @Query('limit') limit?: string,
@@ -165,7 +165,7 @@ async getAutomationManagementAuditHistory(
 
     @Get('automation-management/overview')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+  @Roles('OWNER', )
   async getAutomationManagementOverview() {
     return this.whatsappService.getAutomationManagementOverview();
   }
