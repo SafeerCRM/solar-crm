@@ -30,6 +30,89 @@ export default function ArchivedLeadsPage() {
     }
   };
 
+  const downloadArchivedCsv = async () => {
+  try {
+    setMessage('');
+
+    const res = await axios.get<Lead[]>(
+      `${backendUrl}/leads/archived`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    const archivedLeads = Array.isArray(res.data)
+      ? res.data
+      : [];
+
+    if (archivedLeads.length === 0) {
+      setMessage('No archived leads available to export');
+      return;
+    }
+
+    const headers = [
+      'Lead ID',
+      'Name',
+      'Phone Number',
+      'City',
+      'Status',
+    ];
+
+    const escapeCsv = (value: unknown) => {
+      const text = String(value ?? '');
+
+      // Prevent spreadsheet formula execution.
+      const safeText = /^[\s]*[=+\-@]/.test(text)
+        ? `'${text}`
+        : text;
+
+      return `"${safeText.replace(/"/g, '""')}"`;
+    };
+
+    const rows = archivedLeads.map((lead) =>
+      [
+        lead.id,
+        lead.name,
+        lead.phone,
+        lead.city || '',
+        lead.status || '',
+      ]
+        .map(escapeCsv)
+        .join(','),
+    );
+
+    const csv = `\uFEFF${[
+      headers.join(','),
+      ...rows,
+    ].join('\r\n')}`;
+
+    const blob = new Blob([csv], {
+      type: 'text/csv;charset=utf-8;',
+    });
+
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `archived-leads-${
+      new Date().toISOString().slice(0, 10)
+    }.csv`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(url);
+
+    setMessage(
+      `${archivedLeads.length} archived leads exported successfully`,
+    );
+  } catch (err) {
+    console.error(err);
+    setMessage('Failed to download archived leads CSV');
+  }
+};
+
   const restoreLead = async (id: number) => {
     try {
       await axios.patch(
@@ -51,7 +134,19 @@ export default function ArchivedLeadsPage() {
 
   return (
     <div className="p-6">
-      <h1 className="mb-4 text-xl font-semibold">Archived Leads</h1>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+  <h1 className="text-xl font-semibold">
+    Archived Leads
+  </h1>
+
+  <button
+    type="button"
+    onClick={downloadArchivedCsv}
+    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+  >
+    Download CSV
+  </button>
+</div>
 
       {message && <p className="mb-4 text-blue-600">{message}</p>}
 
