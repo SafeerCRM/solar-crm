@@ -2350,6 +2350,7 @@ private assertInspectionViewAccess(
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
   'STOCK_MANAGER',
+  'PROJECT_MANAGER',
 ];
 
   if (
@@ -2375,6 +2376,7 @@ private assertInspectionManageAccess(
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
   'STOCK_MANAGER',
+  'PROJECT_MANAGER',
 ];
 
   if (

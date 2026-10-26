@@ -2446,6 +2446,7 @@ getBillingInvoiceNumberPreview(
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
   'STOCK_MANAGER',
+  'PROJECT_MANAGER',
 )
 @Get('inspections/projects')
 listInspectionProjects(
@@ -2492,6 +2493,7 @@ inspectionState?: string,
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
   'STOCK_MANAGER',
+  'PROJECT_MANAGER',
 )
 @Post('inspections')
 createProjectInspection(
@@ -2510,6 +2512,7 @@ createProjectInspection(
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
   'STOCK_MANAGER',
+  'PROJECT_MANAGER',
 )
 @Post('inspections/:inspectionId/findings')
 saveProjectInspectionFindings(
@@ -2534,6 +2537,7 @@ saveProjectInspectionFindings(
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
   'STOCK_MANAGER',
+  'PROJECT_MANAGER',
 )
 @Get(':projectId/inspections')
 getProjectInspectionHistory(
@@ -2555,6 +2559,7 @@ getProjectInspectionHistory(
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
   'STOCK_MANAGER',
+  'PROJECT_MANAGER',
 )
 @Post(
   'inspections/:inspectionId/photos/upload',
@@ -2592,6 +2597,7 @@ uploadProjectInspectionPhotos(
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
   'STOCK_MANAGER',
+  'PROJECT_MANAGER',
 )
 @Post(
   'inspections/:inspectionId/remaining-material',
@@ -2629,6 +2635,7 @@ saveProjectInspectionRemainingMaterial(
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
   'STOCK_MANAGER',
+  'PROJECT_MANAGER',
 )
 @Get(
   'inspections/remaining-material',
@@ -2678,6 +2685,7 @@ listProjectInspectionRemainingMaterials(
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
   'STOCK_MANAGER',
+  'PROJECT_MANAGER',
 )
 @Get('inspections/analytics')
 getInspectionAnalytics(
@@ -2791,6 +2799,7 @@ visitLimit:
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
   'STOCK_MANAGER',
+  'PROJECT_MANAGER',
 )
 @Patch(
   'inspection-defects/:defectId',

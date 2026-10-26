@@ -167,6 +167,7 @@ const navItems = [
     'MAINTENANCE_MANAGER',
     'CUSTOMER_MANAGER',
     'STOCK_MANAGER',
+    'PROJECT_MANAGER',
   ],
 },
 
