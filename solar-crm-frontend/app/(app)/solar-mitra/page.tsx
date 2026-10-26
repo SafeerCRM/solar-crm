@@ -514,6 +514,22 @@ const [mitraDateTo, setMitraDateTo] =
   const [referralMitraId, setReferralMitraId] =
     useState('');
 
+    const [
+  referralDateFilterType,
+  setReferralDateFilterType,
+] = useState<'ALL' | 'MONTH' | 'CUSTOM'>('ALL');
+
+const [
+  referralSelectedMonth,
+  setReferralSelectedMonth,
+] = useState(dayjs().format('YYYY-MM'));
+
+const [referralDateFrom, setReferralDateFrom] =
+  useState('');
+
+const [referralDateTo, setReferralDateTo] =
+  useState('');
+
   const [payoutSearch, setPayoutSearch] =
     useState('');
   const [payoutStatus, setPayoutStatus] =
@@ -1132,6 +1148,46 @@ if (mitraDateFilterType !== 'ALL') {
             return false;
           }
 
+          if (referralDateFilterType !== 'ALL') {
+  if (!item.createdAt) {
+    return false;
+  }
+
+  const createdDate = dayjs(item.createdAt);
+
+  if (!createdDate.isValid()) {
+    return false;
+  }
+
+  if (referralDateFilterType === 'MONTH') {
+    if (
+      createdDate.format('YYYY-MM') !==
+      referralSelectedMonth
+    ) {
+      return false;
+    }
+  }
+
+  if (referralDateFilterType === 'CUSTOM') {
+    const createdDay =
+      createdDate.format('YYYY-MM-DD');
+
+    if (
+      referralDateFrom &&
+      createdDay < referralDateFrom
+    ) {
+      return false;
+    }
+
+    if (
+      referralDateTo &&
+      createdDay > referralDateTo
+    ) {
+      return false;
+    }
+  }
+}
+
           if (!search) return true;
 
           return [
@@ -1150,11 +1206,100 @@ if (mitraDateFilterType !== 'ALL') {
         },
       );
     }, [
-      referrals,
-      referralSearch,
-      referralStatus,
-      referralMitraId,
-    ]);
+  referrals,
+  referralSearch,
+  referralStatus,
+  referralMitraId,
+  referralDateFilterType,
+  referralSelectedMonth,
+  referralDateFrom,
+  referralDateTo,
+]);
+
+const referralPerformance = useMemo(() => {
+  const mitraById = new Map(
+    mitras.map((mitra) => [
+      Number(mitra.id),
+      mitra,
+    ]),
+  );
+
+  const creatorCounts = new Map<
+    string,
+    {
+      creatorName: string;
+      mitraIds: Set<number>;
+      referralCount: number;
+    }
+  >();
+
+  const mitraCounts = new Map<
+    number,
+    {
+      mitraName: string;
+      creatorName: string;
+      referralCount: number;
+    }
+  >();
+
+  for (const referral of filteredReferrals) {
+    const mitraId = Number(referral.solarMitraId);
+    const mitra = mitraById.get(mitraId);
+
+    const creatorName =
+      mitra?.createdByName?.trim() ||
+      'Unknown Creator';
+
+    const creatorKey =
+      mitra?.createdBy != null
+        ? String(mitra.createdBy)
+        : `unknown-${mitraId}`;
+
+    if (!creatorCounts.has(creatorKey)) {
+      creatorCounts.set(creatorKey, {
+        creatorName,
+        mitraIds: new Set<number>(),
+        referralCount: 0,
+      });
+    }
+
+    const creator = creatorCounts.get(creatorKey)!;
+    creator.mitraIds.add(mitraId);
+    creator.referralCount += 1;
+
+    if (!mitraCounts.has(mitraId)) {
+      mitraCounts.set(mitraId, {
+        mitraName:
+          mitra?.name ||
+          referral.solarMitraName ||
+          `Solar Mitra #${mitraId}`,
+        creatorName,
+        referralCount: 0,
+      });
+    }
+
+    mitraCounts.get(mitraId)!.referralCount += 1;
+  }
+
+  return {
+    creators: Array.from(creatorCounts.values())
+      .map((item) => ({
+        creatorName: item.creatorName,
+        mitraCount: item.mitraIds.size,
+        referralCount: item.referralCount,
+      }))
+      .sort(
+        (a, b) =>
+          b.referralCount - a.referralCount,
+      ),
+
+    mitras: Array.from(mitraCounts.values())
+      .sort(
+        (a, b) =>
+          b.referralCount - a.referralCount,
+      ),
+  };
+}, [mitras, filteredReferrals]);
 
   const filteredPayouts =
     useMemo(() => {
@@ -4456,33 +4601,108 @@ const convertMeetingToSolarMitra =
               </option>
             </select>
 
-            <select
-              value={referralMitraId}
-              onChange={(event) =>
-                setReferralMitraId(
-                  event.target.value,
-                )
-              }
-              className="rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
-            >
-              <option value="">
-                All Solar Mitras
-              </option>
+            <div className="relative min-w-0">
+  <input
+    type="text"
+    value={
+      showReferralMitraOptions
+        ? referralMitraSearch
+        : referralMitraId
+          ? (
+              mitras.find(
+                (item) =>
+                  Number(item.id) ===
+                  Number(referralMitraId),
+              )?.name || ''
+            )
+          : ''
+    }
+    onFocus={() => {
+      setReferralMitraSearch('');
+      setShowReferralMitraOptions(true);
+    }}
+    onChange={(event) => {
+      setReferralMitraSearch(event.target.value);
+      setShowReferralMitraOptions(true);
+    }}
+    placeholder="Search Solar Mitra name, shop or phone..."
+    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
+  />
 
-              {mitras.map(
-                (item) => (
-                  <option
-                    key={item.id}
-                    value={item.id}
-                  >
-                    {item.name}
-                    {item.businessName
-                      ? ` — ${item.businessName}`
-                      : ''}
-                  </option>
-                ),
-              )}
-            </select>
+  {referralMitraId && (
+    <button
+      type="button"
+      onClick={() => {
+        setReferralMitraId('');
+        setReferralMitraSearch('');
+        setShowReferralMitraOptions(false);
+      }}
+      className="absolute right-3 top-3 text-sm font-bold text-gray-500 hover:text-red-600"
+      title="Clear selected Solar Mitra"
+    >
+      ✕
+    </button>
+  )}
+
+  {showReferralMitraOptions && (
+    <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl">
+      <button
+        type="button"
+        onClick={() => {
+          setReferralMitraId('');
+          setReferralMitraSearch('');
+          setShowReferralMitraOptions(false);
+        }}
+        className="w-full border-b border-gray-100 px-3 py-2 text-left text-sm font-semibold text-blue-700 hover:bg-blue-50"
+      >
+        All Solar Mitras
+      </button>
+
+      {mitras
+        .filter((item) => {
+          const search = referralMitraSearch
+            .trim()
+            .toLowerCase();
+
+          return [
+            item.name,
+            item.businessName,
+            item.primaryPhone,
+          ].some((value) =>
+            String(value || '')
+              .toLowerCase()
+              .includes(search),
+          );
+        })
+        .map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => {
+              setReferralMitraId(String(item.id));
+              setReferralMitraSearch('');
+              setShowReferralMitraOptions(false);
+            }}
+            className="w-full border-b border-gray-100 px-3 py-2 text-left hover:bg-gray-50"
+          >
+            <p className="text-sm font-semibold text-gray-900">
+              {item.name}
+            </p>
+
+            {item.businessName && (
+              <p className="text-xs text-gray-500">
+                {item.businessName}
+              </p>
+            )}
+
+            <p className="text-xs text-gray-400">
+              {item.primaryPhone}
+            </p>
+          </button>
+        ))}
+    </div>
+  )}
+</div>
 
             <button
               type="button"
@@ -4492,6 +4712,250 @@ const convertMeetingToSolarMitra =
               + Add Referral
             </button>
           </div>
+
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+  <div className="flex flex-col gap-1">
+    <label className="text-xs font-semibold text-gray-600">
+      Referral Date Filter
+    </label>
+    <select
+      value={referralDateFilterType}
+      onChange={(event) =>
+        setReferralDateFilterType(
+          event.target.value as 'ALL' | 'MONTH' | 'CUSTOM',
+        )
+      }
+      className="rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
+    >
+      <option value="ALL">All Dates</option>
+      <option value="MONTH">Monthly</option>
+      <option value="CUSTOM">Custom Date Range</option>
+    </select>
+  </div>
+
+  {referralDateFilterType === 'MONTH' && (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-semibold text-gray-600">
+        Select Month
+      </label>
+      <input
+        type="month"
+        value={referralSelectedMonth}
+        onChange={(event) =>
+          setReferralSelectedMonth(event.target.value)
+        }
+        className="rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+      />
+    </div>
+  )}
+
+  {referralDateFilterType === 'CUSTOM' && (
+    <>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-600">
+          From Date
+        </label>
+        <input
+          type="date"
+          value={referralDateFrom}
+          max={referralDateTo || undefined}
+          onChange={(event) =>
+            setReferralDateFrom(event.target.value)
+          }
+          className="rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-600">
+          To Date
+        </label>
+        <input
+          type="date"
+          value={referralDateTo}
+          min={referralDateFrom || undefined}
+          onChange={(event) =>
+            setReferralDateTo(event.target.value)
+          }
+          className="rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+        />
+      </div>
+    </>
+  )}
+
+  <button
+    type="button"
+    onClick={() => {
+      setReferralSearch('');
+      setReferralStatus('');
+      setReferralMitraId('');
+      setReferralMitraSearch('');
+setShowReferralMitraOptions(false);
+      setReferralDateFilterType('ALL');
+      setReferralSelectedMonth(dayjs().format('YYYY-MM'));
+      setReferralDateFrom('');
+      setReferralDateTo('');
+    }}
+    className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-200"
+  >
+    Clear Filters
+  </button>
+
+  <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5">
+    <p className="text-xs font-semibold text-blue-700">
+      Matching Referrals
+    </p>
+    <p className="text-xl font-black text-blue-900">
+      {filteredReferrals.length}
+      <span className="ml-2 text-xs font-medium text-blue-700">
+        of {referrals.length}
+      </span>
+    </p>
+  </div>
+</div>
+
+<div className="mt-5 grid gap-4 xl:grid-cols-2">
+  {/* Creator-wise referral performance */}
+  <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+    <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+      <h3 className="text-base font-bold text-gray-900">
+        Creator-wise Referrals
+      </h3>
+      <p className="mt-1 text-xs text-gray-500">
+        Referrals generated by Solar Mitras registered by each staff member.
+      </p>
+    </div>
+
+    <div className="max-h-80 overflow-auto">
+      <table className="w-full min-w-[420px] text-left text-sm">
+        <thead className="sticky top-0 bg-gray-100 text-xs text-gray-600">
+          <tr>
+            <th className="px-4 py-3">Creator</th>
+            <th className="px-4 py-3 text-center">
+              Mitras
+            </th>
+            <th className="px-4 py-3 text-right">
+              Referrals
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {referralPerformance.creators.map((item, index) => (
+            <tr
+              key={`${item.creatorName}-${index}`}
+              className="border-t border-gray-100"
+            >
+              <td className="px-4 py-3 font-medium text-gray-900">
+                {item.creatorName}
+              </td>
+              <td className="px-4 py-3 text-center">
+                {item.mitraCount}
+              </td>
+              <td className="px-4 py-3 text-right font-bold text-blue-700">
+                {item.referralCount}
+              </td>
+            </tr>
+          ))}
+
+          {referralPerformance.creators.length === 0 && (
+            <tr>
+              <td
+                colSpan={3}
+                className="px-4 py-8 text-center text-gray-500"
+              >
+                No referrals found for the selected filters.
+              </td>
+            </tr>
+          )}
+        </tbody>
+
+        <tfoot className="sticky bottom-0 bg-blue-50 font-bold text-gray-900">
+          <tr>
+            <td className="px-4 py-3">Total</td>
+            <td className="px-4 py-3 text-center">
+              {referralPerformance.creators.reduce(
+                (sum, item) => sum + item.mitraCount,
+                0,
+              )}
+            </td>
+            <td className="px-4 py-3 text-right">
+              {filteredReferrals.length}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  {/* Solar Mitra-wise referral performance */}
+  <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+    <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+      <h3 className="text-base font-bold text-gray-900">
+        Solar Mitra-wise Referrals
+      </h3>
+      <p className="mt-1 text-xs text-gray-500">
+        Individual Solar Mitra referral counts for the selected period.
+      </p>
+    </div>
+
+    <div className="max-h-80 overflow-auto">
+      <table className="w-full min-w-[500px] text-left text-sm">
+        <thead className="sticky top-0 bg-gray-100 text-xs text-gray-600">
+          <tr>
+            <th className="px-4 py-3">Solar Mitra</th>
+            <th className="px-4 py-3">Created By</th>
+            <th className="px-4 py-3 text-right">
+              Referrals
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {referralPerformance.mitras.map((item, index) => (
+            <tr
+              key={`${item.mitraName}-${index}`}
+              className="border-t border-gray-100"
+            >
+              <td className="px-4 py-3 font-medium text-gray-900">
+                {item.mitraName}
+              </td>
+              <td className="px-4 py-3 text-gray-600">
+                {item.creatorName}
+              </td>
+              <td className="px-4 py-3 text-right font-bold text-blue-700">
+                {item.referralCount}
+              </td>
+            </tr>
+          ))}
+
+          {referralPerformance.mitras.length === 0 && (
+            <tr>
+              <td
+                colSpan={3}
+                className="px-4 py-8 text-center text-gray-500"
+              >
+                No referrals found for the selected filters.
+              </td>
+            </tr>
+          )}
+        </tbody>
+
+        <tfoot className="sticky bottom-0 bg-blue-50 font-bold text-gray-900">
+          <tr>
+            <td className="px-4 py-3">Total</td>
+            <td className="px-4 py-3">
+              {referralPerformance.mitras.length} Mitras
+            </td>
+            <td className="px-4 py-3 text-right">
+              {filteredReferrals.length}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
 
           <div className="mt-5 space-y-4">
             {filteredReferrals.map(
