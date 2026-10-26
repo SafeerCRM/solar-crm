@@ -3634,6 +3634,15 @@ async updatePaymentReceipt(id: number, body: any, user: any) {
 }
 
 async listReferrals(query: any) {
+  // PERFORMANCE TIMING START
+  const referralStartedAt = Date.now();
+
+  const referralTiming = (stage: string) => {
+    console.log(
+      `[REFERRAL PERF] ${stage}: ${Date.now() - referralStartedAt}ms`,
+    );
+  };
+
   const requestedPage = Number(query?.page);
   const requestedLimit = Number(query?.limit);
 
@@ -3696,20 +3705,31 @@ async listReferrals(query: any) {
       .take(limit)
       .getManyAndCount();
 
+    // PERFORMANCE LOG 1
+    referralTiming(
+      `Pagination completed, records=${rawReferrals.length}`,
+    );
+
     const data: any[] = [];
 
-for (
-  let index = 0;
-  index < rawReferrals.length;
-  index += 100
-) {
-  const batch = rawReferrals.slice(index, index + 100);
+    for (
+      let index = 0;
+      index < rawReferrals.length;
+      index += 100
+    ) {
+      const batch = rawReferrals.slice(
+        index,
+        index + 100,
+      );
 
-  const results =
-    await this.buildReferralProgressSnapshotsBulk(batch);
+      const results =
+        await this.buildReferralProgressSnapshotsBulk(batch);
 
-  data.push(...results);
-}
+      data.push(...results);
+    }
+
+    // PERFORMANCE LOG 2
+    referralTiming('Bulk progress completed');
 
     return {
       data,
@@ -3723,29 +3743,39 @@ for (
   // STATUS FILTER:
   // Status is dynamically calculated using CRM progress.
   // Preserve exact filtering and pagination semantics.
-  //
-  // Process in bounded batches to avoid overwhelming
-  // the database connection pool.
   const rawReferrals = await qb.getMany();
+
+  // PERFORMANCE LOG 3
+  referralTiming(
+    `Status candidates loaded, records=${rawReferrals.length}`,
+  );
 
   const filtered: any[] = [];
 
-for (
-  let index = 0;
-  index < rawReferrals.length;
-  index += 100
-) {
-  const batch = rawReferrals.slice(index, index + 100);
+  for (
+    let index = 0;
+    index < rawReferrals.length;
+    index += 100
+  ) {
+    const batch = rawReferrals.slice(
+      index,
+      index + 100,
+    );
 
-  const results =
-    await this.buildReferralProgressSnapshotsBulk(batch);
+    const results =
+      await this.buildReferralProgressSnapshotsBulk(batch);
 
-  for (const item of results) {
-    if (item.status === status) {
-      filtered.push(item);
+    for (const item of results) {
+      if (item.status === status) {
+        filtered.push(item);
+      }
     }
   }
-}
+
+  // PERFORMANCE LOG 4
+  referralTiming(
+    `Status filtering completed, matches=${filtered.length}`,
+  );
 
   const total = filtered.length;
 
