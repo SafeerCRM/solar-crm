@@ -3634,9 +3634,22 @@ async updatePaymentReceipt(id: number, body: any, user: any) {
 }
 
 async listReferrals(query: any) {
-  const page = Number(query?.page || 1);
-  const limit = Math.min(Number(query?.limit || 20), 100);
+  const requestedPage = Number(query?.page);
+  const requestedLimit = Number(query?.limit);
+
+  const page =
+    Number.isInteger(requestedPage) && requestedPage > 0
+      ? requestedPage
+      : 1;
+
+  const limit =
+    Number.isInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 100)
+      : 20;
+
   const skip = (page - 1) * limit;
+
+  const status = String(query?.status || '').trim();
 
   const qb = this.referralRepository
     .createQueryBuilder('referral')
@@ -3653,44 +3666,112 @@ async listReferrals(query: any) {
     const search = `%${String(query.search).toLowerCase()}%`;
 
     qb.andWhere(
-      `
-      LOWER(referral.referrerName) LIKE :search
-      OR LOWER(referral.referrerPhone) LIKE :search
-      OR LOWER(referral.referredName) LIKE :search
-      OR LOWER(referral.referredPhone) LIKE :search
-      OR LOWER(referral.customerCode) LIKE :search
-      `,
+      `(
+        LOWER(referral.referrerName) LIKE :search
+        OR LOWER(referral.referrerPhone) LIKE :search
+        OR LOWER(referral.referredName) LIKE :search
+        OR LOWER(referral.referredPhone) LIKE :search
+        OR LOWER(referral.customerCode) LIKE :search
+      )`,
       { search },
     );
   }
 
   if (query?.city) {
-    qb.andWhere('LOWER(referral.referredCity) LIKE :city', {
-      city: `%${String(query.city).toLowerCase()}%`,
-    });
+    qb.andWhere(
+      'LOWER(referral.referredCity) LIKE :city',
+      {
+        city: `%${String(query.city).toLowerCase()}%`,
+      },
+    );
   }
 
+  // FAST PATH:
+  // No calculated-status filter.
+  // Fetch and count using PostgreSQL pagination first.
+  if (!status) {
+    const [rawReferrals, total] = await qb
+      .clone()
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    const data: any[] = [];
+
+    // Keep snapshot queries bounded instead of
+    // launching every lookup simultaneously.
+    const batchSize = 5;
+
+    for (
+      let index = 0;
+      index < rawReferrals.length;
+      index += batchSize
+    ) {
+      const batch = rawReferrals.slice(
+        index,
+        index + batchSize,
+      );
+
+      const results = await Promise.all(
+        batch.map((item) =>
+          this.buildReferralProgressSnapshot(item),
+        ),
+      );
+
+      data.push(...results);
+    }
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    };
+  }
+
+  // STATUS FILTER:
+  // Status is dynamically calculated using CRM progress.
+  // Preserve exact filtering and pagination semantics.
+  //
+  // Process in bounded batches to avoid overwhelming
+  // the database connection pool.
   const rawReferrals = await qb.getMany();
 
-  const referralsWithProgress = await Promise.all(
-    rawReferrals.map((item: any) =>
-      this.buildReferralProgressSnapshot(item),
-    ),
-  );
+  const filtered: any[] = [];
+  const batchSize = 5;
 
-  const filtered =
-    query?.status
-      ? referralsWithProgress.filter(
-          (item: any) => item.status === query.status,
-        )
-      : referralsWithProgress;
+  for (
+    let index = 0;
+    index < rawReferrals.length;
+    index += batchSize
+  ) {
+    const batch = rawReferrals.slice(
+      index,
+      index + batchSize,
+    );
+
+    const results = await Promise.all(
+      batch.map((item) =>
+        this.buildReferralProgressSnapshot(item),
+      ),
+    );
+
+    for (const item of results) {
+      if (item.status === status) {
+        filtered.push(item);
+      }
+    }
+  }
+
+  const total = filtered.length;
 
   return {
     data: filtered.slice(skip, skip + limit),
-    total: filtered.length,
+    total,
     page,
     limit,
-    totalPages: Math.ceil(filtered.length / limit) || 1,
+    totalPages: Math.ceil(total / limit) || 1,
   };
 }
 
