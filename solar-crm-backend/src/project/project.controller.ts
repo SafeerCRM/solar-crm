@@ -3470,7 +3470,14 @@ listProjectStockItems(@Query() query: any) {
   return this.projectService.listProjectStockItems(query);
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER', 'SUBSIDY_MANAGER',)
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'SUBSIDY_MANAGER',
+)
 @Post('stock/receive')
 receiveProjectStock(
   @Body() body: any,
@@ -3482,7 +3489,14 @@ receiveProjectStock(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER', 'SUBSIDY_MANAGER',)
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'SUBSIDY_MANAGER',
+)
 @Post('stock/issue')
 issueProjectStock(
   @Body() body: any,
@@ -6280,35 +6294,6 @@ getStockDashboard(@CurrentUser() user: any) {
   return this.projectService.getStockDashboard(user);
 }
 
-@Roles(
-  'OWNER',
-  'PROJECT_MANAGER',
-  'ACCOUNT_MANAGER',
-  'STOCK_MANAGER',
-  'SUBSIDY_MANAGER',
-)
-@Post('stock/receive')
-receiveStock(
-  @Body() body: any,
-  @CurrentUser() user: any,
-) {
-  return this.projectService.receiveStock(body, user);
-}
-
-@Roles(
-  'OWNER',
-  'PROJECT_MANAGER',
-  'ACCOUNT_MANAGER',
-  'STOCK_MANAGER',
-  'SUBSIDY_MANAGER',
-)
-@Post('stock/issue')
-issueStock(
-  @Body() body: any,
-  @CurrentUser() user: any,
-) {
-  return this.projectService.issueStock(body, user);
-}
 
 @Roles(
   'OWNER',

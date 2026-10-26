@@ -12757,22 +12757,68 @@ async updateStockItemDealerVisibility(
 }
 
 async receiveProjectStock(body: any, currentUser: any) {
-  const materialId = Number(body?.materialId || 0);
-  const branchId = body?.branchId ? Number(body.branchId) : null;
-  const quantity = Number(body?.quantity || 0);
-  const rate = Number(body?.rate || 0);
+  const materialId = Number(body?.materialId);
+  const branchId =
+    body?.branchId === undefined ||
+    body?.branchId === null ||
+    body?.branchId === ''
+      ? null
+      : Number(body.branchId);
 
-  if (!materialId) {
-    throw new BadRequestException('Material is required');
+  const quantity = Number(body?.quantity);
+  const rate = Number(body?.rate ?? 0);
+  const sourceType = String(
+    body?.sourceType || 'MANUAL',
+  ).trim().toUpperCase();
+
+  if (!Number.isSafeInteger(materialId) || materialId <= 0) {
+    throw new BadRequestException('Valid material is required');
   }
 
-  if (!quantity || quantity <= 0) {
-    throw new BadRequestException('Valid quantity is required');
+  if (
+    branchId !== null &&
+    (!Number.isSafeInteger(branchId) || branchId <= 0)
+  ) {
+    throw new BadRequestException('Invalid branch');
   }
 
-  const material = await this.projectMaterialMasterRepository.findOne({
-    where: { id: materialId },
-  });
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw new BadRequestException(
+      'Quantity must be greater than 0',
+    );
+  }
+
+  if (!Number.isFinite(rate) || rate < 0) {
+    throw new BadRequestException(
+      'Rate must be zero or greater',
+    );
+  }
+
+  const allowedRoles = [
+    'OWNER',
+    'PROJECT_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'ACCOUNT_MANAGER',
+    'STOCK_MANAGER',
+    'SUBSIDY_MANAGER',
+  ];
+
+  const userRoles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : currentUser?.role
+      ? [currentUser.role]
+      : [];
+
+  if (!userRoles.some((role: string) => allowedRoles.includes(role))) {
+    throw new ForbiddenException(
+      'You are not allowed to receive stock',
+    );
+  }
+
+  const material =
+    await this.projectMaterialMasterRepository.findOne({
+      where: { id: materialId },
+    });
 
   if (!material) {
     throw new NotFoundException('Material not found');
@@ -12780,55 +12826,130 @@ async receiveProjectStock(body: any, currentUser: any) {
 
   let branch: ProjectBranch | null = null;
 
-  if (branchId) {
+  if (branchId !== null) {
     branch = await this.projectBranchRepository.findOne({
       where: { id: branchId },
     });
+
+    if (!branch) {
+      throw new BadRequestException('Selected branch not found');
+    }
   }
 
-  let stockItem = await this.projectStockItemRepository.findOne({
-    where: {
-      materialId,
-      branchId: branchId || undefined,
-      isHidden: false,
-    },
-  });
+  let vendorId: number | null = null;
+  let vendorName = '';
 
-  if (!stockItem) {
-    stockItem = this.projectStockItemRepository.create({
-  materialId,
-  materialName: material.name,
-  category: material.category,
-  brand: material.brand,
-  unit: material.unit,
-  branchId: branchId || undefined,
-  branchName:
-    branch?.name ||
-    body?.branchName ||
-    undefined,
+  if (sourceType === 'VENDOR') {
+    vendorId = Number(body?.sourceId);
 
-  currentQuantity: 0,
-  reservedQuantity: 0,
+    if (!Number.isSafeInteger(vendorId) || vendorId <= 0) {
+      throw new BadRequestException(
+        'Please select a valid vendor',
+      );
+    }
 
-  averageRate: 0,
-  stockValue: 0,
-});
+    const vendor =
+      await this.projectVendorRepository.findOne({
+        where: {
+          id: vendorId,
+          isActive: true,
+        },
+      });
+
+    if (!vendor || vendor.isHidden) {
+      throw new BadRequestException(
+        'Selected vendor is unavailable',
+      );
+    }
+
+    vendorName = vendor.vendorName;
   }
 
-  const oldQty = Number(stockItem.currentQuantity || 0);
-  const oldValue = Number(stockItem.stockValue || 0);
-  const receiveValue = quantity * rate;
-  const newQty = oldQty + quantity;
-  const newValue = oldValue + receiveValue;
+  return this.dataSource.transaction(async (manager) => {
+    const stockRepo = manager.getRepository(ProjectStockItem);
+    const movementRepo = manager.getRepository(ProjectStockMovement);
 
-  stockItem.currentQuantity = newQty;
-  stockItem.stockValue = newValue;
-  stockItem.averageRate = newQty > 0 ? newValue / newQty : 0;
+    // Serialize incoming receipts for the same material and branch,
+    // including when no stock row exists yet.
+    await manager.query(
+      `SELECT pg_advisory_xact_lock($1::integer, $2::integer)`,
+      [
+        materialId,
+        branchId ?? 0,
+      ],
+    );
 
-  const savedStock = await this.projectStockItemRepository.save(stockItem);
+    const qb = stockRepo
+      .createQueryBuilder('stock')
+      .setLock('pessimistic_write')
+      .where('stock.materialId = :materialId', { materialId })
+      .andWhere('stock.isHidden = false');
 
-  await this.projectStockMovementRepository.save(
-    this.projectStockMovementRepository.create({
+    if (branchId === null) {
+      qb.andWhere('stock.branchId IS NULL');
+    } else {
+      qb.andWhere('stock.branchId = :branchId', { branchId });
+    }
+
+    const matchingStock = await qb
+      .orderBy('stock.id', 'ASC')
+      .getMany();
+
+    if (matchingStock.length > 1) {
+      throw new BadRequestException(
+        'Multiple active stock records exist for this material and branch. Please contact the administrator.',
+      );
+    }
+
+    let stockItem = matchingStock[0];
+
+    if (!stockItem) {
+      stockItem = stockRepo.create({
+        materialId,
+        materialName: material.name,
+        category: material.category,
+        brand: material.brand,
+        unit: material.unit,
+        branchId: branchId as any,
+        branchName:
+          branch?.name ||
+          String(body?.branchName || '').trim(),
+        currentQuantity: 0,
+        reservedQuantity: 0,
+        averageRate: 0,
+        stockValue: 0,
+        isHidden: false,
+      });
+    }
+
+        // Keep stock-item descriptions synchronized with Material Master.
+    // This does not change stock identity or inventory quantities.
+    stockItem.materialName = material.name;
+    stockItem.category = material.category;
+    stockItem.brand = material.brand;
+    stockItem.unit = material.unit;
+
+    const oldQuantity = Number(
+      stockItem.currentQuantity || 0,
+    );
+    const oldValue = Number(
+      stockItem.stockValue || 0,
+    );
+
+    const receivedValue = quantity * rate;
+    const newQuantity = oldQuantity + quantity;
+    const newValue = oldValue + receivedValue;
+
+    stockItem.currentQuantity = newQuantity;
+    stockItem.stockValue = newValue;
+    stockItem.averageRate =
+      newQuantity > 0 ? newValue / newQuantity : 0;
+
+    const savedStock = await stockRepo.save(stockItem);
+
+    const remarks = String(body?.remarks || '').trim();
+
+    const movement = movementRepo.create({
       stockItemId: savedStock.id,
       materialId,
       materialName: material.name,
@@ -12837,28 +12958,61 @@ async receiveProjectStock(body: any, currentUser: any) {
       movementType: ProjectStockMovementType.RECEIVE,
       quantity,
       rate,
-      totalAmount: receiveValue,
-      sourceType: body?.sourceType || 'MANUAL',
-      sourceId: body?.sourceId ? Number(body.sourceId) : undefined,
-projectId: body?.projectId ? Number(body.projectId) : undefined,
-remarks: body?.remarks || undefined,
-createdBy: currentUser?.id || currentUser?.userId || undefined,
-      createdByName: currentUser?.name || '',
-    }),
-  );
+      totalAmount: receivedValue,
+      sourceType,
+      sourceId:
+        sourceType === 'VENDOR'
+          ? vendorId!
+          : body?.sourceId
+            ? Number(body.sourceId)
+            : undefined,
+      projectId: body?.projectId
+        ? Number(body.projectId)
+        : undefined,
+      remarks:
+        sourceType === 'VENDOR'
+          ? `Vendor: ${vendorName}${remarks ? ` | ${remarks}` : ''}`
+          : remarks,
+      createdBy: Number(
+        currentUser?.id ||
+        currentUser?.userId ||
+        currentUser?.sub ||
+        0,
+      ),
+      createdByName:
+        currentUser?.name || currentUser?.email || '',
+    });
 
-  return savedStock;
+    await movementRepo.save(movement);
+
+    return savedStock;
+  });
 }
 
 async issueProjectStock(
   body: any,
   currentUser: any,
 ) {
-  if (!this.canManageStock(currentUser)) {
-    throw new ForbiddenException(
-      'You are not allowed to manage stock',
-    );
-  }
+  const roles = Array.isArray(currentUser?.roles)
+  ? currentUser.roles
+  : currentUser?.role
+    ? [currentUser.role]
+    : [];
+
+const allowedRoles = [
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'SUBSIDY_MANAGER',
+];
+
+if (!roles.some((role: string) => allowedRoles.includes(role))) {
+  throw new ForbiddenException(
+    'You are not allowed to manage stock',
+  );
+}
 
   const stockItemId = Number(
     body?.stockItemId || 0,
@@ -12930,14 +13084,45 @@ async issueProjectStock(
     );
   }
 
+  if (sourceType === 'DEALER') {
   if (
-    sourceType === 'DEALER' &&
-    !dealerName
-  ) {
+  dealerId === null ||
+  !Number.isSafeInteger(dealerId) ||
+  dealerId <= 0
+) {
     throw new BadRequestException(
-      'Dealer name is required for dealer sale',
+      'Please search and select a valid dealer',
     );
   }
+
+  const dealer = await this.projectVendorRepository.findOne({
+    where: {
+      id: dealerId,
+      isActive: true,
+      isHidden: false,
+    },
+  });
+
+  if (
+    !dealer ||
+    !(
+      ['DEALER', 'BOTH'].includes(
+        String(dealer.partyType || '').toUpperCase(),
+      ) ||
+      dealer.canBuyFromUs === true
+    )
+  ) {
+    throw new BadRequestException(
+      'Selected dealer is unavailable',
+    );
+  }
+
+  if (dealerName !== String(dealer.vendorName || '').trim()) {
+    throw new BadRequestException(
+      'Dealer details do not match the selected dealer. Please select the dealer again.',
+    );
+  }
+}
 
   const stockIssueResult =
   await this.projectStockItemRepository.manager.transaction(
@@ -13479,6 +13664,13 @@ async transferProjectStock(
           ProjectBranch,
         );
 
+              // Serialize branch transfers to prevent opposite-direction
+      // transfers from acquiring stock-row locks in reverse order.
+      await manager.query(
+        `SELECT pg_advisory_xact_lock($1::integer, $2::integer)`,
+        [-1, -1],
+      );
+
       const sourceStock =
   await stockRepository.findOne({
     where: {
@@ -13603,6 +13795,15 @@ async transferProjectStock(
         await stockRepository.save(
           sourceStock,
         );
+
+              // Coordinate destination stock creation with incoming receipts.
+      await manager.query(
+        `SELECT pg_advisory_xact_lock($1::integer, $2::integer)`,
+        [
+          Number(savedSourceStock.materialId),
+          destinationBranchId,
+        ],
+      );
 
       let destinationStock =
   await stockRepository.findOne({

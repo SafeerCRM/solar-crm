@@ -45,7 +45,7 @@ import { SolarStoreModule } from './solar-store/solar-store.module';
     rejectUnauthorized: false,
   },
   autoLoadEntities: true,
-  synchronize: process.env.NODE_ENV !== 'production',
+  synchronize: false,
 }),
     ScheduleModule.forRoot(),
     AuthModule,
