@@ -6628,7 +6628,6 @@ updateProjectLocation(
   'OWNER',
   'MARKETING_HEAD',
   'PROJECT_MANAGER',
-  'SOLAR_FRANCHISE',
   'SOLAR_STORE',
 )
 @Patch(':id')

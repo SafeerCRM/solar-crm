@@ -8095,14 +8095,21 @@ const address = String(
     ? user.roles
     : [];
 
-  const isOwner = roles.includes('OWNER');
-  const isMarketingHead = roles.includes('MARKETING_HEAD');
-  const isProjectManager = roles.includes('PROJECT_MANAGER');
+ const isOwner = roles.includes('OWNER');
+const isMarketingHead = roles.includes('MARKETING_HEAD');
+const isProjectManager = roles.includes('PROJECT_MANAGER');
 
-    const isSolarFranchise = roles.includes('SOLAR_FRANCHISE');
-  const isSolarStore = roles.includes('SOLAR_STORE');
+const isSolarFranchise = roles.includes('SOLAR_FRANCHISE');
+const isSolarStore = roles.includes('SOLAR_STORE');
 
-  const currentUserId = Number(user?.id || user?.sub);
+// Solar Franchise can view projects but cannot edit them.
+if (isSolarFranchise) {
+  throw new ForbiddenException(
+    'Solar Franchise users are not allowed to edit projects',
+  );
+}
+
+const currentUserId = Number(user?.id || user?.sub);
 
   const editableFieldsForOwner = [
     'customerName',
