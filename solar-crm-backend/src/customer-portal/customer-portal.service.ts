@@ -3698,28 +3698,18 @@ async listReferrals(query: any) {
 
     const data: any[] = [];
 
-    // Keep snapshot queries bounded instead of
-    // launching every lookup simultaneously.
-    const batchSize = 5;
+for (
+  let index = 0;
+  index < rawReferrals.length;
+  index += 100
+) {
+  const batch = rawReferrals.slice(index, index + 100);
 
-    for (
-      let index = 0;
-      index < rawReferrals.length;
-      index += batchSize
-    ) {
-      const batch = rawReferrals.slice(
-        index,
-        index + batchSize,
-      );
+  const results =
+    await this.buildReferralProgressSnapshotsBulk(batch);
 
-      const results = await Promise.all(
-        batch.map((item) =>
-          this.buildReferralProgressSnapshot(item),
-        ),
-      );
-
-      data.push(...results);
-    }
+  data.push(...results);
+}
 
     return {
       data,
@@ -3739,30 +3729,23 @@ async listReferrals(query: any) {
   const rawReferrals = await qb.getMany();
 
   const filtered: any[] = [];
-  const batchSize = 5;
 
-  for (
-    let index = 0;
-    index < rawReferrals.length;
-    index += batchSize
-  ) {
-    const batch = rawReferrals.slice(
-      index,
-      index + batchSize,
-    );
+for (
+  let index = 0;
+  index < rawReferrals.length;
+  index += 100
+) {
+  const batch = rawReferrals.slice(index, index + 100);
 
-    const results = await Promise.all(
-      batch.map((item) =>
-        this.buildReferralProgressSnapshot(item),
-      ),
-    );
+  const results =
+    await this.buildReferralProgressSnapshotsBulk(batch);
 
-    for (const item of results) {
-      if (item.status === status) {
-        filtered.push(item);
-      }
+  for (const item of results) {
+    if (item.status === status) {
+      filtered.push(item);
     }
   }
+}
 
   const total = filtered.length;
 
@@ -3819,6 +3802,259 @@ await this.createCustomerNotification({
 });
 
 return savedReferral;
+}
+
+private async buildReferralProgressSnapshotsBulk(
+  referrals: any[],
+): Promise<any[]> {
+  if (!referrals.length) return [];
+
+  const unique = (values: any[]) =>
+    [...new Set(values.filter(
+      (value) =>
+        value !== null &&
+        value !== undefined &&
+        value !== '',
+    ))];
+
+  const ids = unique(referrals.map((r) => Number(r.id)));
+  const phones = unique(
+    referrals.map((r) => String(r.referredPhone || '').trim()),
+  );
+  const leadIds = unique(
+    referrals.map((r) => Number(r.linkedLeadId || 0)),
+  ).filter(Boolean);
+  const meetingIds = unique(
+    referrals.map((r) => Number(r.linkedMeetingId || 0)),
+  ).filter(Boolean);
+  const projectIds = unique(
+    referrals.map((r) => Number(r.linkedProjectId || 0)),
+  ).filter(Boolean);
+
+  // Retrieve matching contacts and linked leads in bulk.
+  const [contacts, linkedLeads, phoneLeads, linkedMeetings, linkedProjects, phoneProjects] =
+    await Promise.all([
+      this.telecallingContactRepository
+        .createQueryBuilder('c')
+        .where(
+          '(c.sourceModule = :source AND c.sourceReferralId IN (:...ids))' +
+          (phones.length ? ' OR c.phone IN (:...phones)' : ''),
+          {
+            source: 'CUSTOMER_REFERRAL',
+            ids,
+            ...(phones.length ? { phones } : {}),
+          },
+        )
+        .orderBy('c.updatedAt', 'DESC')
+        .addOrderBy('c.id', 'DESC')
+        .getMany(),
+
+      leadIds.length
+        ? this.leadRepository
+            .createQueryBuilder('l')
+            .where('l.id IN (:...leadIds)', { leadIds })
+            .getMany()
+        : Promise.resolve([]),
+
+      phones.length
+        ? this.leadRepository
+            .createQueryBuilder('l')
+            .where('l.phone IN (:...phones)', { phones })
+            .orderBy('l.createdAt', 'DESC')
+            .addOrderBy('l.id', 'DESC')
+            .getMany()
+        : Promise.resolve([]),
+
+      meetingIds.length
+        ? this.meetingRepository
+            .createQueryBuilder('m')
+            .where('m.id IN (:...meetingIds)', { meetingIds })
+            .getMany()
+        : Promise.resolve([]),
+
+      projectIds.length
+        ? this.projectRepository
+            .createQueryBuilder('p')
+            .where('p.id IN (:...projectIds)', { projectIds })
+            .andWhere('p.isHidden = false')
+            .getMany()
+        : Promise.resolve([]),
+
+      phones.length
+        ? this.projectRepository
+            .createQueryBuilder('p')
+            .where('p.customerPhone IN (:...phones)', { phones })
+            .andWhere('p.isHidden = false')
+            .orderBy('p.createdAt', 'DESC')
+            .addOrderBy('p.id', 'DESC')
+            .getMany()
+        : Promise.resolve([]),
+    ]);
+
+  const firstBy = (
+    rows: any[],
+    key: (row: any) => any,
+  ) => {
+    const map = new Map<any, any>();
+
+    for (const row of rows) {
+      const value = key(row);
+      if (value !== null && value !== undefined && !map.has(value)) {
+        map.set(value, row);
+      }
+    }
+
+    return map;
+  };
+
+  const contactsByReferral = firstBy(
+    contacts.filter(
+      (c: any) => c.sourceModule === 'CUSTOMER_REFERRAL',
+    ),
+    (c: any) => Number(c.sourceReferralId),
+  );
+
+  const contactsByPhone = firstBy(
+    contacts,
+    (c: any) => String(c.phone || ''),
+  );
+
+  const leadsById = firstBy(
+    linkedLeads,
+    (l: any) => Number(l.id),
+  );
+
+  const leadsByPhone = firstBy(
+    phoneLeads,
+    (l: any) => String(l.phone || ''),
+  );
+
+  const meetingsById = firstBy(
+    linkedMeetings,
+    (m: any) => Number(m.id),
+  );
+
+  const projectsById = firstBy(
+    linkedProjects,
+    (p: any) => Number(p.id),
+  );
+
+  const projectsByPhone = firstBy(
+    phoneProjects,
+    (p: any) => String(p.customerPhone || ''),
+  );
+
+  // Resolve the lead selected for each referral.
+  const selectedLeads = referrals.map((r) => {
+    const phone = String(r.referredPhone || '').trim();
+
+    return (
+      leadsById.get(Number(r.linkedLeadId)) ||
+      (phone ? leadsByPhone.get(phone) : null) ||
+      null
+    );
+  });
+
+  const selectedLeadIds = unique(
+    selectedLeads.map((l: any) => Number(l?.id || 0)),
+  ).filter(Boolean);
+
+  // Meetings are matched by linked ID first,
+  // then by the resolved lead.
+  const leadMeetings = selectedLeadIds.length
+    ? await this.meetingRepository
+        .createQueryBuilder('m')
+        .where('m.leadId IN (:...selectedLeadIds)', {
+          selectedLeadIds,
+        })
+        .orderBy('m.createdAt', 'DESC')
+        .addOrderBy('m.id', 'DESC')
+        .getMany()
+    : [];
+
+  const meetingsByLead = firstBy(
+    leadMeetings,
+    (m: any) => Number(m.leadId),
+  );
+
+  return referrals.map((referral, index) => {
+    const phone = String(referral.referredPhone || '').trim();
+
+    const referralContact = contactsByReferral.get(
+      Number(referral.id),
+    );
+
+    const phoneContact = phone
+      ? contactsByPhone.get(phone)
+      : null;
+
+    // Match the newest contact, as the original
+    // findOne query ordered by updatedAt DESC.
+    const contact =
+      referralContact && phoneContact
+        ? new Date(referralContact.updatedAt).getTime() >=
+          new Date(phoneContact.updatedAt).getTime()
+          ? referralContact
+          : phoneContact
+        : referralContact || phoneContact || null;
+
+    const lead = selectedLeads[index];
+
+    const meeting =
+      meetingsById.get(Number(referral.linkedMeetingId)) ||
+      (lead?.id
+        ? meetingsByLead.get(Number(lead.id))
+        : null) ||
+      null;
+
+    const project =
+      projectsById.get(Number(referral.linkedProjectId)) ||
+      (phone ? projectsByPhone.get(phone) : null) ||
+      null;
+
+    let calculatedStatus = referral.status || 'REFERRED';
+
+    if (contact) calculatedStatus = 'CONTACTED';
+    if (lead) calculatedStatus = 'LEAD_CREATED';
+
+    if (meeting) {
+      calculatedStatus =
+        meeting.status === 'COMPLETED'
+          ? 'MEETING_DONE'
+          : 'MEETING_SCHEDULED';
+    }
+
+    if (project) {
+      calculatedStatus =
+        project.status === 'COMPLETED'
+          ? 'PROJECT_COMPLETED'
+          : 'PROJECT_CREATED';
+    }
+
+    if (
+      referral.rewardPaid ||
+      referral.status === 'REWARD_PAID'
+    ) {
+      calculatedStatus = 'REWARD_PAID';
+    }
+
+    return {
+      ...referral,
+      status: calculatedStatus,
+      calculatedStatus,
+      crmProgress: {
+        contactId: contact?.id || null,
+        leadId: lead?.id || referral.linkedLeadId || null,
+        meetingId: meeting?.id || referral.linkedMeetingId || null,
+        projectId: project?.id || referral.linkedProjectId || null,
+        projectStatus: project?.status || '',
+        assignedToName:
+          referral.assignedToName ||
+          contact?.assignedToName ||
+          '',
+      },
+    };
+  });
 }
 
 private async buildReferralProgressSnapshot(referral: any) {
