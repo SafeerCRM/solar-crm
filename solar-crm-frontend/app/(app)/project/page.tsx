@@ -2391,35 +2391,30 @@ setPage(1);
       <>
         <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-gray-200 p-4">
-            <p className="text-xs font-bold uppercase text-gray-500">
-              Material Laagat
-            </p>
+  <p className="text-xs font-bold uppercase text-gray-500">
+    Material Cost (Reference)
+  </p>
 
-            <p className="mt-2 text-2xl font-black text-gray-900">
-              {money2(
-                profitabilitySummary
-                  ?.materialLagat,
-              )}
-            </p>
+  <p className="mt-2 text-sm font-semibold text-gray-600">
+    Counted only when recorded as an
+    approved project expense.
+  </p>
+</div>
+
+          <div className="rounded-2xl border border-gray-200 p-4">
+            <p className="text-xs font-bold uppercase text-gray-500">
+  Contractor Assignment Cost
+</p>
+
+            <p className="mt-2 text-sm font-semibold text-gray-600">
+  Not included in actual expenditure
+</p>
           </div>
 
           <div className="rounded-2xl border border-gray-200 p-4">
             <p className="text-xs font-bold uppercase text-gray-500">
-              Contractor Laagat
-            </p>
-
-            <p className="mt-2 text-2xl font-black text-gray-900">
-              {money2(
-                profitabilitySummary
-                  ?.contractorLagat,
-              )}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-gray-200 p-4">
-            <p className="text-xs font-bold uppercase text-gray-500">
-              Other Expenditure
-            </p>
+  Approved Project Expenses
+</p>
 
             <p className="mt-2 text-2xl font-black text-gray-900">
               {money2(

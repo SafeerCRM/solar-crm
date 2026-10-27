@@ -9123,11 +9123,12 @@ if (!canViewLagatProfitability) {
           </h2>
 
           <p className="mt-1 text-sm text-gray-500">
-            Actual project costing from
-            issued materials, contractor
-            assignments and approved other
-            expenditure.
-          </p>
+  Project costing from materials and
+  approved project-linked expenses,
+  including contractor payments.
+  Contractor assignments are not
+  counted as actual expenditure.
+</p>
         </div>
 
         <button
@@ -9158,37 +9159,30 @@ if (!canViewLagatProfitability) {
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl bg-white p-5 shadow">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Material Laagat
-              </p>
+  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+    Material Cost (Reference)
+  </p>
 
-              <p className="mt-2 text-2xl font-bold text-gray-900">
-                {money(
-                  projectLagatSummary
-                    .totals
-                    .materialLagat,
-                )}
-              </p>
-            </div>
+  <p className="mt-2 text-sm font-semibold text-gray-600">
+    Materials are counted in Laagat only
+    through approved project expenses.
+  </p>
+</div>
 
             <div className="rounded-2xl bg-white p-5 shadow">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Contractor Laagat
-              </p>
+  Contractor Assignment Cost (Reference Only)
+</p>
 
-              <p className="mt-2 text-2xl font-bold text-gray-900">
-                {money(
-                  projectLagatSummary
-                    .totals
-                    .contractorLagat,
-                )}
-              </p>
+              <p className="mt-2 text-sm font-semibold text-gray-600">
+  Tracked separately in Contractor Assignments
+</p>
             </div>
 
             <div className="rounded-2xl bg-white p-5 shadow">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Other Expenditure
-              </p>
+             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+  Approved Project Expenses
+</p>
 
               <p className="mt-2 text-2xl font-bold text-gray-900">
                 {money(
