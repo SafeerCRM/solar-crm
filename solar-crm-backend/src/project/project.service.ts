@@ -15485,8 +15485,10 @@ const materialCost =
 const materialRows =
   materialCost.rows;
 
-const materialLagat =
-  materialCost.total;
+// Material costing is retained for reference only.
+// Actual Laagat is determined by approved
+// project-linked Account Expenses.
+const materialLagat = 0;
 
   /*
    * CONTRACTOR / LABOUR LAAGAT
@@ -15549,32 +15551,27 @@ const materialLagat =
         }),
       );
 
-  const contractorLagat =
-    contractorRows.reduce(
-      (
-        total: number,
-        item: any,
-      ) =>
-        total +
-        Number(
-          item.amount || 0,
-        ),
-      0,
-    );
+  // Contractor assignments represent agreed work value,
+// not actual approved expenditure.
+//
+// Actual contractor payments are counted through
+// approved project-linked Account Expenses below.
+const contractorLagat = 0;
 
   /*
-   * OTHER EXPENDITURE
-   *
-   * Reuse the existing Account Expense system.
-   *
-   * Only:
-   * - this project
-   * - OTHER expense type
-   * - approved
-   * - non-hidden
-   *
-   * expenses affect official Project Laagat.
-   */
+ * ACTUAL APPROVED PROJECT EXPENDITURE
+ *
+ * All approved, non-hidden Account Expenses
+ * linked to this project contribute to Laagat.
+ *
+ * Includes SITE_PURCHASE, CONTRACTOR_PAYMENT,
+ * PROJECT_FUND and every other expense type.
+ *
+ * UNPAID expenses are included once approved.
+ *
+ * Material estimates and contractor assignments
+ * are reference information, not actual Laagat.
+ */
   const projectExpenses =
     await this
       .projectAccountExpenseRepository
@@ -15594,24 +15591,13 @@ const materialLagat =
         },
       });
 
-      const eligibleExpenseTypes = new Set([
-  'OTHER',
-  'TRANSPORTATION',
-  'TRAVEL',
-  'FUEL',
-  'FOOD',
-  'CUSTOMER_VISIT',
-  'REPAIR_MAINTENANCE',
-  'OFFICE_SUPPLIES',
-  'MOBILE_RECHARGE',
-]);
-
-const eligibleProjectExpenses = projectExpenses.filter(
-  (expense: any) =>
-    eligibleExpenseTypes.has(
-      String(expense.expenseType || ''),
-    ),
-);
+   // Every approved, non-hidden expense tagged to this
+// project contributes to actual Project Laagat.
+//
+// Expense category and UNPAID status do not exclude it.
+// Project/approval/visibility filters are applied
+// in the repository query above.
+const eligibleProjectExpenses = projectExpenses;
 
   const otherExpenseRows =
   eligibleProjectExpenses.map(
@@ -15636,11 +15622,11 @@ const eligibleProjectExpenses = projectExpenses.filter(
           '',
 
         amount:
-          Number(
-            expense.totalAmount ||
-            expense.amount ||
-            0,
-          ),
+  Number(
+    expense.totalAmount ??
+    expense.amount ??
+    0,
+  ),
 
         proofUrl:
           expense.proofUrl ||
@@ -16419,22 +16405,7 @@ if (projectIds.length > 0) {
         'expense.projectId IN (:...projectIds)',
         { projectIds },
       )
-      .andWhere(
-  'expense.expenseType IN (:...eligibleExpenseTypes)',
-  {
-    eligibleExpenseTypes: [
-      'OTHER',
-      'TRANSPORTATION',
-      'TRAVEL',
-      'FUEL',
-      'FOOD',
-      'CUSTOMER_VISIT',
-      'REPAIR_MAINTENANCE',
-      'OFFICE_SUPPLIES',
-      'MOBILE_RECHARGE',
-    ],
-  },
-)
+      
       .andWhere(
         'expense.approvalStatus = :approvalStatus',
         { approvalStatus: 'APPROVED' },
@@ -16575,11 +16546,15 @@ if (projectIds.length > 0) {
         },
       );
 
-    totalMaterialLagat +=
-      Number(materialCost.total || 0);
+    // Material costing is retained for reference.
+// It does not contribute to actual approved Laagat.
+totalMaterialLagat += 0;
 
-    totalContractorLagat +=
-      contractorByProject.get(projectId) || 0;
+    // Contractor assignments are agreed work values,
+// not approved project expenditure.
+// Approved contractor payments are included
+// through expenseByProject below.
+totalContractorLagat += 0;
 
     totalOtherExpenditure +=
       expenseByProject.get(projectId) || 0;
@@ -16587,10 +16562,12 @@ if (projectIds.length > 0) {
 }
 
 
-  const totalLagat =
-    totalMaterialLagat +
-    totalContractorLagat +
-    totalOtherExpenditure;
+  // Actual Laagat is based exclusively on
+// approved, non-hidden project-linked expenses.
+// Estimated material and contractor costs
+// must not be added to this amount.
+const totalLagat =
+  totalOtherExpenditure;
 
   const netProfit =
     totalRevenueReceived -
