@@ -549,16 +549,16 @@ const projectTrackerLabel = sectionLabels?.projectTracker || {};
           <div className="mt-5 grid gap-5 md:grid-cols-3">
 
             {enabledSections.projectTracker && (
-            <a href="/customer-portal/project-tracker">
+            <Link href="/customer-portal/project-tracker">
   <ActionCard
-  icon="📊"
-  title={projectTrackerLabel?.title || 'Project Timeline'}
-  text={
-    projectTrackerLabel?.text ||
-    'Track approval, installation, subsidy, electricity and completion progress.'
-  }
-/>
-</a>
+    icon="📊"
+    title={projectTrackerLabel?.title || 'Project Timeline'}
+    text={
+      projectTrackerLabel?.text ||
+      'Track approval, installation, subsidy, electricity and completion progress.'
+    }
+  />
+</Link>
 )}
 
      {enabledSections.workCalendar && (
