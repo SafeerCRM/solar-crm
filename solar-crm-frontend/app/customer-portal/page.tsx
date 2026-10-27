@@ -296,12 +296,12 @@ const projectTrackerLabel = sectionLabels?.projectTracker || {};
               title="Open Complaints"
               value={String(dashboard?.openComplaints || 0)}
             />
-            <a href="/customer-portal/notifications">
+            <Link href="/customer-portal/notifications">
   <HeroMiniCard
     title="Unread Updates"
     value={String(dashboard?.unreadNotifications || 0)}
   />
-</a>
+</Link>
             <HeroMiniCard
               title="Current Status"
               value={primaryProject?.status || 'No Project'}
@@ -395,12 +395,12 @@ const projectTrackerLabel = sectionLabels?.projectTracker || {};
       subtitle="Latest updates from your project, payments, documents and support"
     />
 
-    <a
+    <Link
       href="/customer-portal/notifications"
       className="rounded-2xl bg-gray-900 px-4 py-2 text-sm font-black text-white hover:bg-black"
     >
       View Updates
-    </a>
+    </Link>
   </div>
 
   <div className="mt-5 space-y-3">
@@ -465,34 +465,34 @@ const projectTrackerLabel = sectionLabels?.projectTracker || {};
             <div className="mt-4 grid gap-4">
 
                 {quickActions.complaints && (
-              <a href="/customer-portal/complaints">
+              <Link href="/customer-portal/complaints">
   <ActionCard
     icon="🛠"
     title="Raise Complaint"
     text="Report generation, inverter, panel, subsidy, payment or service issue."
   />
-</a>
+</Link>
 )}
 
          {quickActions.payments && (
-              <a href="/customer-portal/payments">
+              <Link href="/customer-portal/payments">
   <ActionCard
     icon="💳"
     title="Payments"
     text="View installments, company account details, UPI/QR and upload receipt."
   />
-</a>
+</Link>
 )}
 
 
       {quickActions.referrals && (
-              <a href="/customer-portal/referrals">
+              <Link href="/customer-portal/referrals">
   <ActionCard
     icon="🎁"
     title="Refer Customer"
     text="Refer new customer and track ₹5000 referral rewards."
   />
-</a>
+</Link>
 )}
 
             </div>
@@ -562,73 +562,73 @@ const projectTrackerLabel = sectionLabels?.projectTracker || {};
 )}
 
      {enabledSections.workCalendar && (
-  <a href="/customer-portal/work-calendar">
+  <Link href="/customer-portal/work-calendar">
     <ActionCard
       icon="📅"
       title="Work Calendar"
       text="See upcoming work dates and request date changes."
     />
-  </a>
+  </Link>
 )}
 
       {enabledSections.documents && (
-            <a href="/customer-portal/documents">
+            <Link href="/customer-portal/documents">
   <ActionCard
     icon="📁"
     title="Documents Vault"
     text="View agreements, invoices, subsidy and electricity documents."
   />
-</a>
+</Link>
 )}
 
       {enabledSections.cleaning && (
-            <a href="/customer-portal/cleaning-calendar">
+            <Link href="/customer-portal/cleaning-calendar">
   <ActionCard
     icon="🧽"
     title="Cleaning Calendar"
     text="Manage cleaning schedule and reminders."
   />
-</a>
+</Link>
 )}
 
 {enabledSections.afterSalesServices && (
-  <a href="/customer-portal/after-sales-services">
+  <Link href="/customer-portal/after-sales-services">
     <ActionCard
       icon="🧰"
       title="After-Sales Service"
       text="Request maintenance, warranty service, AMC and paid services."
     />
-  </a>
+  </Link>
 )}
 
 {enabledSections.insurance && (
-  <a href="/customer-portal/insurance">
+  <Link href="/customer-portal/insurance">
     <ActionCard
       icon="🛡️"
       title="Insurance"
       text="View insurance plans, current policy, policy documents and submit renewal requests."
     />
-  </a>
+  </Link>
 )}
 
        {enabledSections.staffDirectory && (
-            <a href="/customer-portal/staff-directory">
+            <Link href="/customer-portal/staff-directory">
   <ActionCard
     icon="👷"
     title="Staff Directory"
     text="View project owner, manager, contractor and department contacts."
   />
-</a>
+</Link>
 )}
 
      {enabledSections.policies && (
-            <a href="/customer-portal/policies">
+            <Link href="/customer-portal/policies">
   <ActionCard
     icon="📜"
     title="Policies"
     text="View customer policy, payment rules and project guidelines."
   />
-</a>
+</Link>
 )}
           </div>
         </div>

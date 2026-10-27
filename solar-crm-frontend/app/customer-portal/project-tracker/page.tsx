@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from "next/link";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -584,12 +585,12 @@ const remainingActivities = projectActivities.filter(
         Recent Support
       </h2>
 
-      <a
+      <Link
         href="/customer-portal/complaints"
         className="rounded-2xl bg-gray-900 px-4 py-2 text-sm font-black text-white"
       >
         View All
-      </a>
+      </Link>
     </div>
 
     <div className="mt-5 space-y-3">
@@ -623,38 +624,38 @@ const remainingActivities = projectActivities.filter(
 
         <div className="mt-6 grid gap-5 md:grid-cols-4">
           {enabledSections.workCalendar && (
-  <a href="/customer-portal/work-calendar">
+  <Link href="/customer-portal/work-calendar">
             <ActionCard
               icon="📅"
               title="Work Calendar"
               text="View upcoming work and request date changes."
             />
-          </a>
+          </Link>
           )}
 
-          <a href="/customer-portal/documents">
+          <Link href="/customer-portal/documents">
             <ActionCard
               icon="📁"
               title="Documents"
               text="View customer-visible project documents."
             />
-          </a>
+          </Link>
 
-          <a href="/customer-portal/payments">
+          <Link href="/customer-portal/payments">
             <ActionCard
               icon="💳"
               title="Payments"
               text="View installments and upload receipts."
             />
-          </a>
+          </Link>
 
-          <a href="/customer-portal/complaints">
+          <Link href="/customer-portal/complaints">
             <ActionCard
               icon="🛠"
               title="Support"
               text="Raise and track complaints."
             />
-          </a>
+          </Link>
         </div>
       </div>
     </main>
