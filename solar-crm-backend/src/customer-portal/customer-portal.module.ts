@@ -51,6 +51,7 @@ import {
 import { PortalDeviceToken } from './portal-device-token.entity';
 import { PushNotificationModule } from '../push-notification/push-notification.module';
 import { PaymentModule } from '../payment/payment.module';
+import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import {
   CustomerAfterSalesCheckoutFinalizerService,
 } from './customer-after-sales-checkout-finalizer.service';
@@ -62,10 +63,11 @@ import { CustomerCleaningCheckout } from './customer-cleaning-checkout.entity';
 
 @Module({
   imports: [
-  LeadsModule,
+    LeadsModule,
   MeetingModule,
   PushNotificationModule,
   PaymentModule,
+  WhatsappModule,
   TypeOrmModule.forFeature([
       CustomerComplaint,
 CustomerComplaintAttachment,

@@ -166,6 +166,59 @@ export class WhatsappService
   description:
     'Send confirmation to customer when a payment receipt becomes approved.',
 },
+
+{
+  automationKey: 'CUSTOMER_AFTER_SALES_REQUEST',
+  name: 'Customer After-Sales Request',
+  triggerType: WhatsappAutomationTriggerType.EVENT,
+  recipientType: WhatsappRecipientType.CUSTOMER,
+  templateName: 'customer_after_sales_request',
+  templateLanguage: 'en',
+  triggerOffsetMinutes: null,
+  repeatAfterMinutes: null,
+  maxRepeatCount: null,
+  description:
+    'Notify the customer when an after-sales service request is submitted.',
+},
+{
+  automationKey: 'CUSTOMER_AFTER_SALES_STATUS',
+  name: 'Customer After-Sales Status Update',
+  triggerType: WhatsappAutomationTriggerType.EVENT,
+  recipientType: WhatsappRecipientType.CUSTOMER,
+  templateName: 'customer_after_sales_status',
+  templateLanguage: 'en',
+  triggerOffsetMinutes: null,
+  repeatAfterMinutes: null,
+  maxRepeatCount: null,
+  description:
+    'Notify the customer when an after-sales service request changes status.',
+},
+{
+  automationKey: 'CUSTOMER_AFTER_SALES_ASSIGNMENT',
+  name: 'Customer After-Sales Technician Assignment',
+  triggerType: WhatsappAutomationTriggerType.EVENT,
+  recipientType: WhatsappRecipientType.CUSTOMER,
+  templateName: 'customer_after_sales_assignment',
+  templateLanguage: 'en',
+  triggerOffsetMinutes: null,
+  repeatAfterMinutes: null,
+  maxRepeatCount: null,
+  description:
+    'Notify the customer when a technician is assigned to an after-sales service request.',
+},
+{
+  automationKey: 'CUSTOMER_AFTER_SALES_VISIT',
+  name: 'Customer After-Sales Visit Scheduled',
+  triggerType: WhatsappAutomationTriggerType.EVENT,
+  recipientType: WhatsappRecipientType.CUSTOMER,
+  templateName: 'customer_after_sales_visit',
+  templateLanguage: 'en',
+  triggerOffsetMinutes: null,
+  repeatAfterMinutes: null,
+  maxRepeatCount: null,
+  description:
+    'Notify the customer when an after-sales service visit is scheduled or rescheduled.',
+},
 ];
 
   private readonly accessToken =

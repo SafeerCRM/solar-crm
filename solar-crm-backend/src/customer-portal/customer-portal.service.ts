@@ -105,6 +105,7 @@ import {
 
 import { PushNotificationService } from '../push-notification/push-notification.service';
 import { IciciPaymentService } from '../payment/icici-payment.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 import {
   IciciMerchantAccount,
   IciciPaymentPurpose,
@@ -236,6 +237,7 @@ private readonly leadService: LeadsService,
 private readonly meetingService: MeetingService,
 private readonly pushNotificationService: PushNotificationService,
 private readonly iciciPaymentService: IciciPaymentService,
+private readonly whatsappService: WhatsappService,
 ) {}
 
 private async getCustomerInstallmentPaymentDetails(
@@ -2207,8 +2209,51 @@ await this.notifyAfterSalesCustomer(
   `Your request for ${savedRequest.serviceName} has been submitted.`,
 );
 
+// WhatsApp automation: After-Sales request submitted.
+// WhatsApp failure must not interrupt request creation.
+try {
+  await this.whatsappService.executeAutomation({
+    automationKey: 'CUSTOMER_AFTER_SALES_REQUEST',
+
+    recipientPhone: savedRequest.customerPhone || '',
+    recipientName: savedRequest.customerName || '',
+
+    referenceType: 'AFTER_SALES_REQUEST',
+    referenceId: savedRequest.id,
+
+    occurrenceKey: 'REQUEST_CREATED',
+
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          {
+            type: 'text',
+            text: savedRequest.customerName || 'Customer',
+          },
+          {
+            type: 'text',
+            text: String(savedRequest.id),
+          },
+          {
+            type: 'text',
+            text: savedRequest.serviceName || 'Service',
+          },
+        ],
+      },
+    ],
+  });
+} catch (error) {
+  console.error(
+    'After-Sales WhatsApp request notification failed:',
+    savedRequest.id,
+    error,
+  );
+}
+
 return savedRequest;
 }
+
 
 async updateAfterSalesRequest(id: number, body: any, user: any) {
   const request = await this.afterSalesRequestRepository.findOne({
@@ -2219,102 +2264,197 @@ async updateAfterSalesRequest(id: number, body: any, user: any) {
     throw new NotFoundException('After-sales request not found');
   }
 
+  const oldStatus = request.status;
+  const oldAssignedTo = request.assignedTo;
+  const oldAssignedToName = request.assignedToName || '';
+  const oldVisitDate = request.scheduledVisitAt
+    ? new Date(request.scheduledVisitAt).toISOString().slice(0, 10)
+    : '';
+  const oldVisitTime = request.scheduledVisitTime || '';
+
   if (body?.status) {
     request.status = body.status;
   }
 
-  await this.addAfterSalesRequestActivity(
-  request.id,
-  'STATUS_CHANGED',
-  `Status changed to ${body.status}`,
-  body.adminRemarks || '',
-  user,
-);
+  if (body?.assignedTo !== undefined && body.assignedTo !== '') {
+    request.assignedTo = Number(body.assignedTo);
+  }
 
-await this.notifyAfterSalesCustomer(
-  request,
-  'Service Request Updated',
-  `Your ${request.serviceName} request is now ${body.status}.`,
-);
+  if (body?.assignedToName !== undefined) {
+    request.assignedToName =
+      String(body.assignedToName || '').trim() ||
+      request.assignedToName;
+  }
 
-  request.assignedToName =
-    String(body?.assignedToName || '').trim() || request.assignedToName;
+  if (body?.assignedToRole) {
+    request.assignedToRole = String(body.assignedToRole).trim();
+  }
 
   request.adminRemarks =
     String(body?.adminRemarks || '').trim() || request.adminRemarks;
 
   request.completionRemarks =
-    String(body?.completionRemarks || '').trim() || request.completionRemarks;
+    String(body?.completionRemarks || '').trim() ||
+    request.completionRemarks;
 
-
-  if (body?.status === CustomerAfterSalesRequestStatus.COMPLETED) {
+  if (
+    request.status === CustomerAfterSalesRequestStatus.COMPLETED &&
+    oldStatus !== CustomerAfterSalesRequestStatus.COMPLETED
+  ) {
     request.completedAt = new Date();
     request.completedBy = user?.id || user?.userId || null;
     request.completedByName = user?.name || user?.email || '';
   }
 
-  if (body?.assignedTo !== undefined && body?.assignedTo !== '') {
-  request.assignedTo = Number(body.assignedTo);
-}
+  if (body?.scheduledVisitDate) {
+    request.scheduledVisitAt = new Date(body.scheduledVisitDate);
+  }
 
-if (body?.assignedToName) {
-  const newAssignedToName = String(body.assignedToName || '').trim();
+  if (body?.scheduledVisitTime !== undefined) {
+    request.scheduledVisitTime =
+      String(body.scheduledVisitTime || '').trim();
+  }
 
-  if (newAssignedToName && newAssignedToName !== request.assignedToName) {
-    request.assignedToName = newAssignedToName;
+  const newVisitDate = request.scheduledVisitAt
+    ? new Date(request.scheduledVisitAt).toISOString().slice(0, 10)
+    : '';
+  const newVisitTime = request.scheduledVisitTime || '';
 
-    if (body?.assignedToRole) {
-  request.assignedToRole = String(body.assignedToRole || '').trim();
-}
+  const statusChanged = oldStatus !== request.status;
 
+  const assignmentChanged =
+    oldAssignedTo !== request.assignedTo ||
+    oldAssignedToName !== (request.assignedToName || '');
+
+  const visitChanged =
+    oldVisitDate !== newVisitDate ||
+    oldVisitTime !== newVisitTime;
+
+  // Persist changes before creating activities or notifications.
+  const savedRequest =
+    await this.afterSalesRequestRepository.save(request);
+
+  const sendAfterSalesWhatsapp = async (
+    automationKey: string,
+    occurrenceKey: string,
+    parameters: string[],
+  ) => {
+    try {
+      await this.whatsappService.executeAutomation({
+        automationKey,
+        recipientPhone: savedRequest.customerPhone || '',
+        recipientName: savedRequest.customerName || '',
+        referenceType: 'AFTER_SALES_REQUEST',
+        referenceId: savedRequest.id,
+        occurrenceKey,
+        components: [
+          {
+            type: 'body',
+            parameters: parameters.map((value) => ({
+              type: 'text',
+              text: value || '-',
+            })),
+          },
+        ],
+      });
+    } catch (error) {
+      console.error(
+        'After-Sales WhatsApp automation failed:',
+        automationKey,
+        savedRequest.id,
+        error,
+      );
+    }
+  };
+
+  if (statusChanged) {
     await this.addAfterSalesRequestActivity(
-      request.id,
+      savedRequest.id,
+      'STATUS_CHANGED',
+      `Status changed to ${savedRequest.status}`,
+      body?.adminRemarks || '',
+      user,
+    );
+
+    await this.notifyAfterSalesCustomer(
+      savedRequest,
+      'Service Request Updated',
+      `Your ${savedRequest.serviceName} request is now ${savedRequest.status}.`,
+    );
+
+    await sendAfterSalesWhatsapp(
+      'CUSTOMER_AFTER_SALES_STATUS',
+      `STATUS:${oldStatus}-TO-${savedRequest.status}`,
+      [
+        savedRequest.customerName || 'Customer',
+        String(savedRequest.id),
+        savedRequest.serviceName || 'Service',
+        String(savedRequest.status),
+      ],
+    );
+  }
+
+  if (assignmentChanged && savedRequest.assignedToName) {
+    await this.addAfterSalesRequestActivity(
+      savedRequest.id,
       'ASSIGNED',
-      `Assigned to ${newAssignedToName}`,
+      `Assigned to ${savedRequest.assignedToName}`,
       '',
       user,
     );
 
     await this.notifyAfterSalesCustomer(
-  request,
-  'Technician Assigned',
-  `${newAssignedToName} has been assigned for your ${request.serviceName} request.`,
-);
-  }
-}
+      savedRequest,
+      'Technician Assigned',
+      `${savedRequest.assignedToName} has been assigned for your ${savedRequest.serviceName} request.`,
+    );
 
-const visitChanged =
-  body?.scheduledVisitDate !== undefined ||
-  body?.scheduledVisitTime !== undefined;
-
-if (visitChanged) {
-  if (body?.scheduledVisitDate) {
-    request.scheduledVisitAt = new Date(body.scheduledVisitDate);
-  }
-
-  if (body?.scheduledVisitTime) {
-    request.scheduledVisitTime = String(
-      body.scheduledVisitTime || '',
-    ).trim();
+    await sendAfterSalesWhatsapp(
+      'CUSTOMER_AFTER_SALES_ASSIGNMENT',
+      `ASSIGNED:${savedRequest.assignedTo || 'NA'}:${savedRequest.assignedToName}`,
+      [
+        savedRequest.customerName || 'Customer',
+        String(savedRequest.id),
+        savedRequest.serviceName || 'Service',
+        savedRequest.assignedToName,
+      ],
+    );
   }
 
-  await this.addAfterSalesRequestActivity(
-    request.id,
-    'VISIT_SCHEDULED',
-    'Visit Scheduled',
-    `${body?.scheduledVisitDate || ''} ${body?.scheduledVisitTime || ''}`.trim(),
-    user,
-  );
+  if (visitChanged && (newVisitDate || newVisitTime)) {
+    const visitDescription =
+      `${newVisitDate} ${newVisitTime}`.trim();
 
-  await this.notifyAfterSalesCustomer(
-    request,
-    'Visit Scheduled',
-    `Visit scheduled for ${request.serviceName}: ${body?.scheduledVisitDate || ''} ${body?.scheduledVisitTime || ''}`.trim(),
-  );
+    await this.addAfterSalesRequestActivity(
+      savedRequest.id,
+      'VISIT_SCHEDULED',
+      'Visit Scheduled',
+      visitDescription,
+      user,
+    );
+
+    await this.notifyAfterSalesCustomer(
+      savedRequest,
+      'Visit Scheduled',
+      `Visit scheduled for ${savedRequest.serviceName}: ${visitDescription}`,
+    );
+
+    await sendAfterSalesWhatsapp(
+      'CUSTOMER_AFTER_SALES_VISIT',
+      `VISIT:${newVisitDate}:${newVisitTime}`,
+      [
+        savedRequest.customerName || 'Customer',
+        String(savedRequest.id),
+        savedRequest.serviceName || 'Service',
+        newVisitDate || 'Date pending',
+        newVisitTime || 'Time pending',
+      ],
+    );
+  }
+
+  return savedRequest;
 }
 
-  return this.afterSalesRequestRepository.save(request);
-}
 
 async getAfterSalesRequestActivities(requestId: number) {
   return this.afterSalesRequestActivityRepository.find({
