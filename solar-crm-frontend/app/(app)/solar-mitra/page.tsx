@@ -500,6 +500,11 @@ const [
 ] = useState('');
 
 const [
+  mitraPosterVerificationStatus,
+  setMitraPosterVerificationStatus,
+] = useState('');
+
+const [
   mitraDateFilterType,
   setMitraDateFilterType,
 ] = useState<'ALL' | 'MONTH' | 'CUSTOM'>('ALL');
@@ -1046,7 +1051,178 @@ const updateMitraVerificationStatus = async (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  
+  const posterSummaryMitras = useMemo(() => {
+  const search = mitraSearch.trim().toLowerCase();
+
+  return mitras.filter((item) => {
+    if (mitraStatus && item.status !== mitraStatus) {
+      return false;
+    }
+
+    if (
+      mitraInterestStatus &&
+      (item.interestStatus || 'PENDING') !== mitraInterestStatus
+    ) {
+      return false;
+    }
+
+    if (
+      mitraPrintingStatus &&
+      (item.printingStatus || 'UNPRINTED') !== mitraPrintingStatus
+    ) {
+      return false;
+    }
+
+    if (
+      mitraCreatedBy &&
+      Number(item.createdBy) !== Number(mitraCreatedBy)
+    ) {
+      return false;
+    }
+
+    if (mitraDateFilterType !== 'ALL') {
+      if (!item.createdAt) return false;
+
+      const createdDate = dayjs(item.createdAt);
+      if (!createdDate.isValid()) return false;
+
+      if (
+        mitraDateFilterType === 'MONTH' &&
+        createdDate.format('YYYY-MM') !== mitraSelectedMonth
+      ) {
+        return false;
+      }
+
+      if (mitraDateFilterType === 'CUSTOM') {
+        const createdDay = createdDate.format('YYYY-MM-DD');
+
+        if (mitraDateFrom && createdDay < mitraDateFrom) {
+          return false;
+        }
+
+        if (mitraDateTo && createdDay > mitraDateTo) {
+          return false;
+        }
+      }
+    }
+
+    if (!search) return true;
+
+    return [
+      item.name,
+      item.businessName,
+      item.primaryPhone,
+      item.secondaryPhone,
+      item.city,
+      item.area,
+      item.franchiseManagerName,
+      item.createdByName,
+      item.createdByRole,
+    ].some((value) =>
+      String(value || '').toLowerCase().includes(search),
+    );
+  });
+}, [
+  mitras,
+  mitraSearch,
+  mitraStatus,
+  mitraInterestStatus,
+  mitraPrintingStatus,
+  mitraCreatedBy,
+  mitraDateFilterType,
+  mitraSelectedMonth,
+  mitraDateFrom,
+  mitraDateTo,
+]);
+
+const posterCreatorPerformance = useMemo(() => {
+  const creatorMap = new Map<
+    number,
+    {
+      id: number;
+      name: string;
+      role: string;
+      total: number;
+      notAttached: number;
+      pending: number;
+      attached: number;
+      rejected: number;
+    }
+  >();
+
+  for (const item of posterSummaryMitras) {
+    const creatorId = Number(item.createdBy || 0);
+
+    if (!creatorMap.has(creatorId)) {
+      creatorMap.set(creatorId, {
+        id: creatorId,
+        name: item.createdByName || 'Unknown Creator',
+        role: item.createdByRole || '',
+        total: 0,
+        notAttached: 0,
+        pending: 0,
+        attached: 0,
+        rejected: 0,
+      });
+    }
+
+    const creator = creatorMap.get(creatorId)!;
+
+    creator.total++;
+
+    switch (item.posterVerificationStatus || 'NOT_ATTACHED') {
+      case 'ATTACHED':
+        creator.attached++;
+        break;
+
+      case 'PENDING_VERIFICATION':
+        creator.pending++;
+        break;
+
+      case 'REJECTED':
+        creator.rejected++;
+        break;
+
+      default:
+        creator.notAttached++;
+    }
+  }
+
+  return Array.from(creatorMap.values()).sort(
+    (a, b) =>
+      b.attached - a.attached ||
+      b.total - a.total ||
+      a.name.localeCompare(b.name),
+  );
+}, [posterSummaryMitras]);
+
+const posterVerificationCounts = useMemo(() => {
+  const counts = {
+    total: posterSummaryMitras.length,
+    notAttached: 0,
+    pending: 0,
+    attached: 0,
+    rejected: 0,
+  };
+
+  for (const item of posterSummaryMitras) {
+    switch (item.posterVerificationStatus || 'NOT_ATTACHED') {
+      case 'ATTACHED':
+        counts.attached++;
+        break;
+      case 'PENDING_VERIFICATION':
+        counts.pending++;
+        break;
+      case 'REJECTED':
+        counts.rejected++;
+        break;
+      default:
+        counts.notAttached++;
+    }
+  }
+
+  return counts;
+}, [posterSummaryMitras]);
 
   const filteredMitras =
     useMemo(() => {
@@ -1073,6 +1249,14 @@ if (
   mitraPrintingStatus &&
   (item.printingStatus || 'UNPRINTED') !==
     mitraPrintingStatus
+) {
+  return false;
+}
+
+if (
+  mitraPosterVerificationStatus &&
+  (item.posterVerificationStatus || 'NOT_ATTACHED') !==
+    mitraPosterVerificationStatus
 ) {
   return false;
 }
@@ -1149,6 +1333,7 @@ if (mitraDateFilterType !== 'ALL') {
   mitraStatus,
   mitraInterestStatus,
   mitraPrintingStatus,
+  mitraPosterVerificationStatus,
   mitraCreatedBy,
   mitraDateFilterType,
   mitraSelectedMonth,
@@ -3924,6 +4109,22 @@ const convertMeetingToSolarMitra =
               </option>
             </select>
 
+            <select
+  value={mitraPosterVerificationStatus}
+  onChange={(event) =>
+    setMitraPosterVerificationStatus(event.target.value)
+  }
+  className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
+>
+  <option value="">All Poster Verification</option>
+  <option value="NOT_ATTACHED">Not Attached</option>
+  <option value="PENDING_VERIFICATION">
+    Pending Verification
+  </option>
+  <option value="ATTACHED">Attached & Verified</option>
+  <option value="REJECTED">Rejected</option>
+</select>
+
             {canFilterByCreator && (
   <select
     value={mitraCreatedBy}
@@ -3964,6 +4165,7 @@ const convertMeetingToSolarMitra =
     setMitraCreatedBy('');
     setMitraInterestStatus('');
     setMitraPrintingStatus('');
+    setMitraPosterVerificationStatus('');
     setMitraDateFilterType('ALL');
     setMitraSelectedMonth(dayjs().format('YYYY-MM'));
     setMitraDateFrom('');
@@ -4004,6 +4206,169 @@ const convertMeetingToSolarMitra =
               + Add Mitra
             </button>
           </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
+  {[
+    {
+      label: 'Total Mitras',
+      count: posterVerificationCounts.total,
+      color: 'border-gray-200 bg-gray-50 text-gray-900',
+    },
+    {
+      label: 'Not Attached',
+      count: posterVerificationCounts.notAttached,
+      color: 'border-gray-200 bg-gray-50 text-gray-800',
+    },
+    {
+      label: 'Pending Verification',
+      count: posterVerificationCounts.pending,
+      color: 'border-amber-200 bg-amber-50 text-amber-800',
+    },
+    {
+      label: 'Attached & Verified',
+      count: posterVerificationCounts.attached,
+      color: 'border-green-200 bg-green-50 text-green-800',
+    },
+    {
+      label: 'Rejected',
+      count: posterVerificationCounts.rejected,
+      color: 'border-red-200 bg-red-50 text-red-800',
+    },
+  ].map((summary) => (
+    <div
+      key={summary.label}
+      className={`min-w-0 rounded-xl border p-4 ${summary.color}`}
+    >
+      <p className="text-xs font-semibold">
+        {summary.label}
+      </p>
+
+      <p className="mt-2 text-2xl font-black">
+        {summary.count}
+      </p>
+    </div>
+  ))}
+</div>
+
+{canFilterByCreator && (
+  <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+    <div className="border-b border-gray-200 p-4">
+      <h3 className="text-base font-black text-gray-900">
+        Creator-wise QR Poster Attachment Performance
+      </h3>
+
+      <p className="mt-1 text-xs text-gray-500">
+        Installation verification results grouped by the staff member
+        who registered each Solar Mitra. Counts respect the selected
+        search, date, printing, interest and creator filters.
+      </p>
+    </div>
+
+    <div className="overflow-x-auto">
+      <table className="min-w-[850px] w-full text-left text-sm">
+        <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-600">
+          <tr>
+            <th className="px-4 py-3">Created By</th>
+            <th className="px-4 py-3 text-center">Total</th>
+            <th className="px-4 py-3 text-center">Not Attached</th>
+            <th className="px-4 py-3 text-center">Pending</th>
+            <th className="px-4 py-3 text-center">Verified</th>
+            <th className="px-4 py-3 text-center">Rejected</th>
+            <th className="px-4 py-3 text-center">Verified %</th>
+          </tr>
+        </thead>
+
+        <tbody className="divide-y divide-gray-100">
+          {posterCreatorPerformance.map((creator) => (
+            <tr key={creator.id} className="hover:bg-gray-50">
+              <td className="px-4 py-3">
+                <p className="font-bold text-gray-900">
+                  {creator.name}
+                </p>
+
+                {creator.role && (
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    {cleanLabel(creator.role)}
+                  </p>
+                )}
+              </td>
+
+              <td className="px-4 py-3 text-center font-bold">
+                {creator.total}
+              </td>
+
+              <td className="px-4 py-3 text-center">
+                {creator.notAttached}
+              </td>
+
+              <td className="px-4 py-3 text-center text-amber-700">
+                {creator.pending}
+              </td>
+
+              <td className="px-4 py-3 text-center font-bold text-green-700">
+                {creator.attached}
+              </td>
+
+              <td className="px-4 py-3 text-center text-red-700">
+                {creator.rejected}
+              </td>
+
+              <td className="px-4 py-3 text-center font-bold">
+                {creator.total > 0
+                  ? `${(
+                      (creator.attached / creator.total) *
+                      100
+                    ).toFixed(1)}%`
+                  : '0.0%'}
+              </td>
+            </tr>
+          ))}
+
+          {posterCreatorPerformance.length === 0 && (
+            <tr>
+              <td
+                colSpan={7}
+                className="px-4 py-8 text-center text-gray-500"
+              >
+                No Solar Mitras match the selected filters.
+              </td>
+            </tr>
+          )}
+        </tbody>
+
+        <tfoot className="border-t-2 border-gray-200 bg-gray-50 font-bold text-gray-900">
+          <tr>
+            <td className="px-4 py-3">TOTAL</td>
+            <td className="px-4 py-3 text-center">
+              {posterVerificationCounts.total}
+            </td>
+            <td className="px-4 py-3 text-center">
+              {posterVerificationCounts.notAttached}
+            </td>
+            <td className="px-4 py-3 text-center">
+              {posterVerificationCounts.pending}
+            </td>
+            <td className="px-4 py-3 text-center">
+              {posterVerificationCounts.attached}
+            </td>
+            <td className="px-4 py-3 text-center">
+              {posterVerificationCounts.rejected}
+            </td>
+            <td className="px-4 py-3 text-center">
+              {posterVerificationCounts.total > 0
+                ? `${(
+                    (posterVerificationCounts.attached /
+                      posterVerificationCounts.total) *
+                    100
+                  ).toFixed(1)}%`
+                : '0.0%'}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+)}
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
   <div>
