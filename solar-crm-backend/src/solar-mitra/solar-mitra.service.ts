@@ -2741,6 +2741,42 @@ async listPayouts(query: any) {
   return qb.getMany();
 }
 
+async getPayoutPaymentDetails(
+  payoutId: number,
+) {
+  const payout =
+    await this.getPayout(payoutId);
+
+  const mitra =
+    await this.solarMitraRepository.findOne({
+      where: {
+        id: Number(payout.solarMitraId),
+      },
+    });
+
+  if (!mitra) {
+    throw new NotFoundException(
+      'Solar Mitra not found for this payout',
+    );
+  }
+
+  return {
+    payoutId: payout.id,
+    solarMitraId: mitra.id,
+    solarMitraName: mitra.name,
+    solarMitraBusinessName:
+      mitra.businessName || null,
+    payoutAmount: payout.payoutAmount,
+    payoutStatus: payout.status,
+    bankAccountNumber:
+      mitra.bankAccountNumber || null,
+    bankIfscCode:
+      mitra.bankIfscCode || null,
+    paymentQrCodeUrl:
+      mitra.paymentQrCodeUrl || null,
+  };
+}
+
 async getPayout(id: number) {
   const payout =
     await this.payoutRepository.findOne({
@@ -2915,19 +2951,31 @@ async markPayoutPaid(
   }
 
   const paymentMode =
-    String(
-      body?.paymentMode || '',
-    ).trim();
+  String(
+    body?.paymentMode || '',
+  ).trim();
 
-  const paymentReference =
-    String(
-      body?.paymentReference || '',
-    ).trim();
+const paymentReference =
+  String(
+    body?.paymentReference || '',
+  ).trim();
 
-  const paymentRemarks =
-    String(
-      body?.paymentRemarks || '',
-    ).trim();
+const paymentRemarks =
+  String(
+    body?.paymentRemarks || '',
+  ).trim();
+
+if (!paymentMode) {
+  throw new BadRequestException(
+    'Payment mode is required to mark a payout as paid',
+  );
+}
+
+if (!paymentReference) {
+  throw new BadRequestException(
+    'Transaction or payment reference is required to mark a payout as paid',
+  );
+}
 
   payout.status =
     SolarMitraPayoutStatus.PAID;

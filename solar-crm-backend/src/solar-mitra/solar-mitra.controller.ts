@@ -328,15 +328,17 @@ async listPayouts(
     req.user,
   );
 
-  if (
-    this.hasFullSolarMitraVisibility(
-      req.user,
-    )
-  ) {
-    return this.service.listPayouts(
-      query,
-    );
-  }
+  const roles: string[] =
+  Array.isArray(req.user?.roles)
+    ? req.user.roles
+    : [];
+
+if (
+  this.hasFullSolarMitraVisibility(req.user) ||
+  roles.includes(UserRole.ACCOUNT_MANAGER)
+) {
+  return this.service.listPayouts(query);
+}
 
   const mitras =
     await this.service.listSolarMitras(
@@ -371,6 +373,30 @@ async listPayouts(
   );
 }
 
+@Get('payouts/:id/payment-details')
+getPayoutPaymentDetails(
+  @Req() req: any,
+
+  @Param('id', ParseIntPipe)
+  id: number,
+) {
+  const roles: string[] =
+    Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+
+  if (
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.ACCOUNT_MANAGER)
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Account Manager can view payout payment details',
+    );
+  }
+
+  return this.service.getPayoutPaymentDetails(id);
+}
+
 @Get('payouts/:id')
 async payoutDetail(
   @Req() req: any,
@@ -389,11 +415,15 @@ async payoutDetail(
       id,
     );
 
-  if (
-    !this.hasFullSolarMitraVisibility(
-      req.user,
-    )
-  ) {
+  const roles: string[] =
+  Array.isArray(req.user?.roles)
+    ? req.user.roles
+    : [];
+
+if (
+  !this.hasFullSolarMitraVisibility(req.user) &&
+  !roles.includes(UserRole.ACCOUNT_MANAGER)
+) {
     const mitra =
       await this.service.getSolarMitra(
         Number(
@@ -432,9 +462,19 @@ markPayoutPaid(
   @Body()
   body: any,
 ) {
-  this.assertOwner(
-    req.user,
-  );
+  const roles: string[] =
+    Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+
+  if (
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.ACCOUNT_MANAGER)
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Account Manager can mark Solar Mitra payouts as paid',
+    );
+  }
 
   return this.service.markPayoutPaid(
     id,
