@@ -1392,7 +1392,34 @@ async updateSolarMitraPosterVerification(
 
   const mitra = await this.getSolarMitra(mitraId);
 
-  const hasPhoto = Boolean(
+if (
+  mitra.posterVerificationStatus ===
+  SolarMitraPosterVerificationStatus.REJECTED
+) {
+  throw new BadRequestException(
+    'This poster proof was rejected. Upload a new installation photo before verification.',
+  );
+}
+
+if (
+  mitra.posterVerificationStatus ===
+  SolarMitraPosterVerificationStatus.ATTACHED
+) {
+  throw new BadRequestException(
+    'This QR poster installation is already verified.',
+  );
+}
+
+if (
+  mitra.posterVerificationStatus !==
+  SolarMitraPosterVerificationStatus.PENDING_VERIFICATION
+) {
+  throw new BadRequestException(
+    'Only pending poster installation proofs can be verified.',
+  );
+}
+
+const hasPhoto = Boolean(
     mitra.qrPosterInstallationPhotoUrl?.trim() ||
     mitra.qrPosterInstallationPhotoUrl2?.trim(),
   );
