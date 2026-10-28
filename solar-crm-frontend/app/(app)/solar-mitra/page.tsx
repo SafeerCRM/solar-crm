@@ -99,9 +99,20 @@ franchiseManagerName?: string | null;
     | 'UNPRINTED'
     | 'PRINTED';
 
-  printingUpdatedAt?: string | null;
+    printingUpdatedAt?: string | null;
   printingUpdatedBy?: number | null;
   printingUpdatedByName?: string | null;
+
+  posterVerificationStatus?:
+    | 'NOT_ATTACHED'
+    | 'PENDING_VERIFICATION'
+    | 'ATTACHED'
+    | 'REJECTED';
+
+  posterVerifiedAt?: string | null;
+  posterVerifiedBy?: number | null;
+  posterVerifiedByName?: string | null;
+  posterVerificationRemarks?: string | null;
 
   createdAt?: string;
   updatedAt?: string;
@@ -544,6 +555,14 @@ const [referralDateTo, setReferralDateTo] =
 
 const [viewingPosterMitra, setViewingPosterMitra] =
   useState<SolarMitra | null>(null);
+  const [updatingPosterVerification, setUpdatingPosterVerification] =
+  useState(false);
+
+const [posterRejectionRemarks, setPosterRejectionRemarks] =
+  useState('');
+
+const [showPosterRejectionForm, setShowPosterRejectionForm] =
+  useState(false);
   const [mitraForm, setMitraForm] =
     useState<any>(emptyMitraForm);
 
@@ -764,6 +783,107 @@ const canAssignFranchiseManager =
 
   const [updatingMitraStatusId, setUpdatingMitraStatusId] =
   useState<number | null>(null);
+
+  const submitPosterVerification = async (
+  status: 'ATTACHED' | 'REJECTED',
+) => {
+  if (!viewingPosterMitra || updatingPosterVerification) {
+    return;
+  }
+
+  const mitra = viewingPosterMitra;
+
+  if (
+    !mitra.qrPosterInstallationPhotoUrl &&
+    !mitra.qrPosterInstallationPhotoUrl2
+  ) {
+    alert('Upload at least one poster installation photo first.');
+    return;
+  }
+
+  const remarks = posterRejectionRemarks.trim();
+
+  if (status === 'REJECTED' && !remarks) {
+    alert('Please enter rejection remarks.');
+    return;
+  }
+
+  const confirmed = window.confirm(
+    status === 'ATTACHED'
+      ? `Confirm that the QR poster is attached at ${mitra.name}'s shop?`
+      : `Reject the QR poster installation proof for ${mitra.name}?`,
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setUpdatingPosterVerification(true);
+
+    const response = await axios.patch(
+      `${API_BASE_URL}/solar-mitra/${mitra.id}/poster-verification`,
+      {
+        posterVerificationStatus: status,
+        remarks: status === 'REJECTED' ? remarks : '',
+      },
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    const updated = response.data;
+
+    setViewingPosterMitra((previous) =>
+      previous?.id === mitra.id
+        ? {
+            ...previous,
+            posterVerificationStatus:
+              updated.posterVerificationStatus,
+            posterVerifiedAt: updated.posterVerifiedAt,
+            posterVerifiedBy: updated.posterVerifiedBy,
+            posterVerifiedByName: updated.posterVerifiedByName,
+            posterVerificationRemarks:
+              updated.posterVerificationRemarks,
+          }
+        : previous,
+    );
+
+    setMitras((previous) =>
+      previous.map((item) =>
+        item.id === mitra.id
+          ? {
+              ...item,
+              posterVerificationStatus:
+                updated.posterVerificationStatus,
+              posterVerifiedAt: updated.posterVerifiedAt,
+              posterVerifiedBy: updated.posterVerifiedBy,
+              posterVerifiedByName:
+                updated.posterVerifiedByName,
+              posterVerificationRemarks:
+                updated.posterVerificationRemarks,
+            }
+          : item,
+      ),
+    );
+
+    setShowPosterRejectionForm(false);
+    setPosterRejectionRemarks('');
+
+    alert(
+      status === 'ATTACHED'
+        ? 'QR poster installation verified successfully.'
+        : 'QR poster installation proof rejected.',
+    );
+  } catch (error) {
+    alert(
+      getErrorMessage(
+        error,
+        'Failed to update QR poster verification',
+      ),
+    );
+  } finally {
+    setUpdatingPosterVerification(false);
+  }
+};
 
 const updateMitraVerificationStatus = async (
   item: SolarMitra,
@@ -5531,6 +5651,56 @@ setShowReferralMitraOptions(false);
         </button>
       </div>
 
+            <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+          QR Poster Attachment Verification
+        </p>
+
+        <div className="mt-2">
+          <span
+            className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
+              viewingPosterMitra.posterVerificationStatus === 'ATTACHED'
+                ? 'bg-green-100 text-green-800'
+                : viewingPosterMitra.posterVerificationStatus === 'REJECTED'
+                  ? 'bg-red-100 text-red-800'
+                  : viewingPosterMitra.posterVerificationStatus ===
+                      'PENDING_VERIFICATION'
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-gray-200 text-gray-700'
+            }`}
+          >
+            {viewingPosterMitra.posterVerificationStatus === 'ATTACHED'
+              ? '✓ Attached & Verified'
+              : viewingPosterMitra.posterVerificationStatus === 'REJECTED'
+                ? '✕ Proof Rejected'
+                : viewingPosterMitra.posterVerificationStatus ===
+                    'PENDING_VERIFICATION'
+                  ? '⏳ Pending Verification'
+                  : 'Not Attached'}
+          </span>
+        </div>
+
+        {viewingPosterMitra.posterVerifiedAt && (
+          <p className="mt-3 text-xs text-gray-600">
+            Reviewed by:{' '}
+            <span className="font-semibold">
+              {viewingPosterMitra.posterVerifiedByName || 'Unknown'}
+            </span>
+            {' · '}
+            {new Date(
+              viewingPosterMitra.posterVerifiedAt,
+            ).toLocaleString('en-IN')}
+          </p>
+        )}
+
+        {viewingPosterMitra.posterVerificationRemarks && (
+          <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">
+            <span className="font-semibold">Review remarks:</span>{' '}
+            {viewingPosterMitra.posterVerificationRemarks}
+          </p>
+        )}
+      </div>
+
       {viewingPosterMitra.qrPosterInstallationPhotoUrl ||
 viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
   <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -5579,6 +5749,90 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
     No poster installation photos uploaded yet.
   </div>
 )}
+
+{(isOwner || isFranchiseHead) &&
+  (viewingPosterMitra.qrPosterInstallationPhotoUrl ||
+    viewingPosterMitra.qrPosterInstallationPhotoUrl2) &&
+  viewingPosterMitra.posterVerificationStatus !== 'ATTACHED' && (
+    <div className="mt-5 border-t border-gray-200 pt-5">
+      <h3 className="text-sm font-black text-gray-900">
+        Review QR Poster Installation
+      </h3>
+
+      <p className="mt-1 text-xs text-gray-500">
+        Verify that the uploaded photos clearly show the QR
+        poster attached at the Solar Mitra shop.
+      </p>
+
+      {viewingPosterMitra.posterVerificationStatus ===
+        'REJECTED' && (
+        <p className="mt-3 rounded-lg bg-red-50 p-3 text-xs text-red-700">
+          This proof was previously rejected. Review the
+          current photos before approving.
+        </p>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-3">
+        <button
+          type="button"
+          disabled={updatingPosterVerification}
+          onClick={() => submitPosterVerification('ATTACHED')}
+          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+        >
+          {updatingPosterVerification
+            ? 'Processing...'
+            : '✓ Approve — Attached'}
+        </button>
+
+        <button
+          type="button"
+          disabled={updatingPosterVerification}
+          onClick={() =>
+            setShowPosterRejectionForm((previous) => !previous)
+          }
+          className="rounded-lg bg-red-50 px-4 py-2 text-sm font-bold text-red-700 disabled:opacity-50"
+        >
+          ✕ Reject Proof
+        </button>
+      </div>
+
+      {showPosterRejectionForm && (
+        <div className="mt-4 space-y-3 rounded-xl border border-red-200 bg-red-50 p-4">
+          <label
+            htmlFor="poster-rejection-remarks"
+            className="block text-sm font-semibold text-gray-800"
+          >
+            Rejection remarks (required)
+          </label>
+
+          <textarea
+            id="poster-rejection-remarks"
+            value={posterRejectionRemarks}
+            onChange={(event) =>
+              setPosterRejectionRemarks(event.target.value)
+            }
+            rows={3}
+            placeholder="Explain why the installation proof is rejected..."
+            className="w-full rounded-lg border border-gray-300 bg-white p-3 text-sm text-gray-900 outline-none focus:border-red-500"
+          />
+
+          <button
+            type="button"
+            disabled={
+              updatingPosterVerification ||
+              !posterRejectionRemarks.trim()
+            }
+            onClick={() => submitPosterVerification('REJECTED')}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+          >
+            {updatingPosterVerification
+              ? 'Submitting...'
+              : 'Confirm Rejection'}
+          </button>
+        </div>
+      )}
+    </div>
+  )}
     </div>
   </div>
 )}
