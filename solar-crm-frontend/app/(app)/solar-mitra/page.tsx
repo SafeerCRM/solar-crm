@@ -4209,36 +4209,52 @@ const convertMeetingToSolarMitra =
 
           <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
   {[
-    {
-      label: 'Total Mitras',
-      count: posterVerificationCounts.total,
-      color: 'border-gray-200 bg-gray-50 text-gray-900',
-    },
-    {
-      label: 'Not Attached',
-      count: posterVerificationCounts.notAttached,
-      color: 'border-gray-200 bg-gray-50 text-gray-800',
-    },
-    {
-      label: 'Pending Verification',
-      count: posterVerificationCounts.pending,
-      color: 'border-amber-200 bg-amber-50 text-amber-800',
-    },
-    {
-      label: 'Attached & Verified',
-      count: posterVerificationCounts.attached,
-      color: 'border-green-200 bg-green-50 text-green-800',
-    },
-    {
-      label: 'Rejected',
-      count: posterVerificationCounts.rejected,
-      color: 'border-red-200 bg-red-50 text-red-800',
-    },
-  ].map((summary) => (
-    <div
-      key={summary.label}
-      className={`min-w-0 rounded-xl border p-4 ${summary.color}`}
-    >
+  {
+    label: 'Total Mitras',
+    count: posterVerificationCounts.total,
+    status: '',
+    color: 'border-gray-200 bg-gray-50 text-gray-900',
+  },
+  {
+    label: 'Not Attached',
+    count: posterVerificationCounts.notAttached,
+    status: 'NOT_ATTACHED',
+    color: 'border-gray-200 bg-gray-50 text-gray-800',
+  },
+  {
+    label: 'Pending Verification',
+    count: posterVerificationCounts.pending,
+    status: 'PENDING_VERIFICATION',
+    color: 'border-amber-200 bg-amber-50 text-amber-800',
+  },
+  {
+    label: 'Attached & Verified',
+    count: posterVerificationCounts.attached,
+    status: 'ATTACHED',
+    color: 'border-green-200 bg-green-50 text-green-800',
+  },
+  {
+    label: 'Rejected',
+    count: posterVerificationCounts.rejected,
+    status: 'REJECTED',
+    color: 'border-red-200 bg-red-50 text-red-800',
+  },
+].map((summary) => (
+    <button
+  key={summary.label}
+  type="button"
+  onClick={() =>
+    setMitraPosterVerificationStatus(summary.status)
+  }
+  aria-pressed={
+    mitraPosterVerificationStatus === summary.status
+  }
+  className={`min-w-0 rounded-xl border p-4 text-left transition hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+    mitraPosterVerificationStatus === summary.status
+      ? 'ring-2 ring-blue-500 ring-offset-2'
+      : ''
+  } ${summary.color}`}
+>
       <p className="text-xs font-semibold">
         {summary.label}
       </p>
@@ -4246,7 +4262,7 @@ const convertMeetingToSolarMitra =
       <p className="mt-2 text-2xl font-black">
         {summary.count}
       </p>
-    </div>
+        </button>
   ))}
 </div>
 
