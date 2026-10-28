@@ -558,6 +558,22 @@ const [referralDateTo, setReferralDateTo] =
     const [viewingBankMitra, setViewingBankMitra] =
   useState<SolarMitra | null>(null);
 
+  const [viewingPayoutPaymentDetails, setViewingPayoutPaymentDetails] =
+  useState<{
+    payoutId: number;
+    solarMitraId: number;
+    solarMitraName: string;
+    solarMitraBusinessName: string | null;
+    payoutAmount: number;
+    payoutStatus: string;
+    bankAccountNumber: string | null;
+    bankIfscCode: string | null;
+    paymentQrCodeUrl: string | null;
+  } | null>(null);
+
+const [loadingPayoutPaymentDetails, setLoadingPayoutPaymentDetails] =
+  useState(false);
+
 const [viewingPosterMitra, setViewingPosterMitra] =
   useState<SolarMitra | null>(null);
   const [updatingPosterVerification, setUpdatingPosterVerification] =
@@ -743,12 +759,18 @@ const [
 });
 
   const userRoles = currentUser?.roles || [];
-  const isOwner = userRoles.includes('OWNER');
 
-  const isFranchiseHead =
-  userRoles.includes(
-    'FRANCHISE_HEAD',
-  );
+const isOwner =
+  userRoles.includes('OWNER');
+
+const isAccountManager =
+  userRoles.includes('ACCOUNT_MANAGER');
+
+const canManagePayoutPayments =
+  isOwner || isAccountManager;
+
+const isFranchiseHead =
+  userRoles.includes('FRANCHISE_HEAD');
 
 const canAssignFranchiseManager =
   isOwner || isFranchiseHead;
@@ -3007,6 +3029,40 @@ const openNewMeetingModal =
       setSaving(false);
     }
   };
+
+  const openPayoutPaymentDetails = async (
+  payout: SolarMitraPayout,
+) => {
+  try {
+    setLoadingPayoutPaymentDetails(true);
+    setViewingPayoutPaymentDetails(null);
+
+    const response = await axios.get(
+      `${API_BASE_URL}/solar-mitra/payouts/${payout.id}/payment-details`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setViewingPayoutPaymentDetails(
+      response.data,
+    );
+  } catch (error) {
+    console.error(
+      'Failed to load payout payment details:',
+      error,
+    );
+
+    alert(
+      getErrorMessage(
+        error,
+        'Unable to load Solar Mitra payment details',
+      ),
+    );
+  } finally {
+    setLoadingPayoutPaymentDetails(false);
+  }
+};
 
   const openMarkPaid = (
     payout: SolarMitraPayout,
@@ -5709,21 +5765,32 @@ setShowReferralMitraOptions(false);
                       )}
                     </p>
 
-                    {isOwner &&
-                      item.status ===
-                        'ELIGIBLE' && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openMarkPaid(
-                              item,
-                            )
-                          }
-                          className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700"
-                        >
-                          Mark Paid
-                        </button>
-                      )}
+                    {canManagePayoutPayments && (
+  <div className="flex flex-wrap items-center gap-2">
+    <button
+      type="button"
+      onClick={() =>
+        openPayoutPaymentDetails(item)
+      }
+      disabled={loadingPayoutPaymentDetails}
+      className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+    >
+      View Bank Details & QR
+    </button>
+
+    {item.status === 'ELIGIBLE' && (
+      <button
+        type="button"
+        onClick={() =>
+          openMarkPaid(item)
+        }
+        className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700"
+      >
+        Mark Paid
+      </button>
+    )}
+  </div>
+)}
                   </div>
                 </div>
               ),
@@ -5846,6 +5913,131 @@ setShowReferralMitraOptions(false);
           </form>
         </div>
       )}
+
+      {viewingPayoutPaymentDetails && (
+  <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4">
+    <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-black text-gray-900">
+            Payout Bank & Payment Details
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            {viewingPayoutPaymentDetails.solarMitraName}
+          </p>
+
+          {viewingPayoutPaymentDetails.solarMitraBusinessName && (
+            <p className="text-xs text-gray-500">
+              {viewingPayoutPaymentDetails.solarMitraBusinessName}
+            </p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setViewingPayoutPaymentDetails(null)}
+          className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-bold text-gray-700"
+        >
+          ✕ Close
+        </button>
+      </div>
+
+      <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+        <p className="text-xs font-semibold text-emerald-700">
+          Payout Amount
+        </p>
+
+        <p className="mt-1 text-2xl font-black text-emerald-900">
+          {money(viewingPayoutPaymentDetails.payoutAmount)}
+        </p>
+
+        <p className="mt-1 text-xs font-semibold text-emerald-700">
+          Status: {viewingPayoutPaymentDetails.payoutStatus}
+        </p>
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <div className="rounded-xl bg-gray-50 p-4">
+          <p className="text-xs font-semibold text-gray-500">
+            Bank Account Number
+          </p>
+
+          <p className="mt-2 break-all text-sm font-bold text-gray-900">
+            {viewingPayoutPaymentDetails.bankAccountNumber ||
+              'Not provided'}
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-gray-50 p-4">
+          <p className="text-xs font-semibold text-gray-500">
+            IFSC Code
+          </p>
+
+          <p className="mt-2 text-sm font-bold text-gray-900">
+            {viewingPayoutPaymentDetails.bankIfscCode ||
+              'Not provided'}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 border-t border-gray-200 pt-4">
+        <h3 className="text-sm font-bold text-gray-900">
+          UPI Payment QR
+        </h3>
+
+        {viewingPayoutPaymentDetails.paymentQrCodeUrl ? (
+          <a
+            href={viewingPayoutPaymentDetails.paymentQrCodeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-block"
+          >
+            <img
+              src={viewingPayoutPaymentDetails.paymentQrCodeUrl}
+              alt="Solar Mitra UPI payment QR"
+              className="h-56 w-56 rounded-xl border border-gray-200 bg-white object-contain p-2"
+            />
+          </a>
+        ) : (
+          <p className="mt-3 text-sm text-gray-500">
+            No UPI payment QR uploaded yet.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-5 rounded-xl bg-amber-50 p-4 text-xs text-amber-800">
+        Verify the recipient's bank or UPI details before making
+        payment. After completing the transfer, use Mark Paid
+        to record the transaction in CRM.
+      </div>
+
+      {canManagePayoutPayments &&
+        viewingPayoutPaymentDetails.payoutStatus === 'ELIGIBLE' && (
+          <button
+            type="button"
+            onClick={() => {
+              const payout = payouts.find(
+                (item) =>
+                  item.id === viewingPayoutPaymentDetails.payoutId,
+              );
+
+              if (!payout) {
+                alert('Payout record not found. Please refresh.');
+                return;
+              }
+
+              setViewingPayoutPaymentDetails(null);
+              openMarkPaid(payout);
+            }}
+            className="mt-4 w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700"
+          >
+            Mark Payout Paid
+          </button>
+        )}
+    </div>
+  </div>
+)}
 
       {viewingBankMitra && (
   <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4">
