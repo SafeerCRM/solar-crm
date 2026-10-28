@@ -128,6 +128,17 @@ if (
   useEffect(() => {
   let temp = [...users];
 
+  // Solar Mitra-only accounts are managed in the Solar Mitra module,
+  // not in the regular staff Users page.
+  temp = temp.filter((user) => {
+    const userRoles = Array.isArray(user.roles) ? user.roles : [];
+
+    return !(
+      userRoles.length === 1 &&
+      userRoles[0] === 'SOLAR_MITRA'
+    );
+  });
+
   if (showHidden) {
     temp = temp.filter((user) => user.isHidden === true);
   } else {
