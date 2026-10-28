@@ -4250,122 +4250,34 @@ const convertMeetingToSolarMitra =
   ))}
 </div>
 
-{canFilterByCreator && (
-  <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-white">
-    <div className="border-b border-gray-200 p-4">
-      <h3 className="text-base font-black text-gray-900">
-        Creator-wise QR Poster Attachment Performance
-      </h3>
+{canFilterByCreator && mitraCreatedBy !== '' && (
+  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+    <div>
+      <p className="text-sm font-bold text-gray-900">
+        QR Poster Performance —{' '}
+        {posterCreatorPerformance[0]?.name || 'Selected Creator'}
+      </p>
 
       <p className="mt-1 text-xs text-gray-500">
-        Installation verification results grouped by the staff member
-        who registered each Solar Mitra. Counts respect the selected
-        search, date, printing, interest and creator filters.
+        {posterVerificationCounts.attached} verified installations
+        out of {posterVerificationCounts.total} registered Solar Mitras
       </p>
     </div>
 
-    <div className="overflow-x-auto">
-      <table className="min-w-[850px] w-full text-left text-sm">
-        <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-600">
-          <tr>
-            <th className="px-4 py-3">Created By</th>
-            <th className="px-4 py-3 text-center">Total</th>
-            <th className="px-4 py-3 text-center">Not Attached</th>
-            <th className="px-4 py-3 text-center">Pending</th>
-            <th className="px-4 py-3 text-center">Verified</th>
-            <th className="px-4 py-3 text-center">Rejected</th>
-            <th className="px-4 py-3 text-center">Verified %</th>
-          </tr>
-        </thead>
+    <div className="text-right">
+      <p className="text-2xl font-black text-green-700">
+        {posterVerificationCounts.total > 0
+          ? `${(
+              (posterVerificationCounts.attached /
+                posterVerificationCounts.total) *
+              100
+            ).toFixed(1)}%`
+          : '0.0%'}
+      </p>
 
-        <tbody className="divide-y divide-gray-100">
-          {posterCreatorPerformance.map((creator) => (
-            <tr key={creator.id} className="hover:bg-gray-50">
-              <td className="px-4 py-3">
-                <p className="font-bold text-gray-900">
-                  {creator.name}
-                </p>
-
-                {creator.role && (
-                  <p className="mt-0.5 text-xs text-gray-500">
-                    {cleanLabel(creator.role)}
-                  </p>
-                )}
-              </td>
-
-              <td className="px-4 py-3 text-center font-bold">
-                {creator.total}
-              </td>
-
-              <td className="px-4 py-3 text-center">
-                {creator.notAttached}
-              </td>
-
-              <td className="px-4 py-3 text-center text-amber-700">
-                {creator.pending}
-              </td>
-
-              <td className="px-4 py-3 text-center font-bold text-green-700">
-                {creator.attached}
-              </td>
-
-              <td className="px-4 py-3 text-center text-red-700">
-                {creator.rejected}
-              </td>
-
-              <td className="px-4 py-3 text-center font-bold">
-                {creator.total > 0
-                  ? `${(
-                      (creator.attached / creator.total) *
-                      100
-                    ).toFixed(1)}%`
-                  : '0.0%'}
-              </td>
-            </tr>
-          ))}
-
-          {posterCreatorPerformance.length === 0 && (
-            <tr>
-              <td
-                colSpan={7}
-                className="px-4 py-8 text-center text-gray-500"
-              >
-                No Solar Mitras match the selected filters.
-              </td>
-            </tr>
-          )}
-        </tbody>
-
-        <tfoot className="border-t-2 border-gray-200 bg-gray-50 font-bold text-gray-900">
-          <tr>
-            <td className="px-4 py-3">TOTAL</td>
-            <td className="px-4 py-3 text-center">
-              {posterVerificationCounts.total}
-            </td>
-            <td className="px-4 py-3 text-center">
-              {posterVerificationCounts.notAttached}
-            </td>
-            <td className="px-4 py-3 text-center">
-              {posterVerificationCounts.pending}
-            </td>
-            <td className="px-4 py-3 text-center">
-              {posterVerificationCounts.attached}
-            </td>
-            <td className="px-4 py-3 text-center">
-              {posterVerificationCounts.rejected}
-            </td>
-            <td className="px-4 py-3 text-center">
-              {posterVerificationCounts.total > 0
-                ? `${(
-                    (posterVerificationCounts.attached /
-                      posterVerificationCounts.total) *
-                    100
-                  ).toFixed(1)}%`
-                : '0.0%'}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
+      <p className="text-xs font-medium text-gray-500">
+        Verified Installation Rate
+      </p>
     </div>
   </div>
 )}
