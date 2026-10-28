@@ -800,6 +800,33 @@ async uploadMeetingDocument(
     );
 }
 
+@Patch(':id/poster-verification')
+async updatePosterVerification(
+  @Req() req: any,
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  const roles: string[] =
+    Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+
+  if (
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.FRANCHISE_HEAD)
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Franchise Head can verify QR poster installation',
+    );
+  }
+
+  return this.service.updateSolarMitraPosterVerification(
+    id,
+    body,
+    req.user,
+  );
+}
+
 @Patch(':id/printing-status')
 async updatePrintingStatus(
   @Req() req: any,

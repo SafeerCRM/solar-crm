@@ -24,6 +24,13 @@ export enum SolarMitraPrintingStatus {
   PRINTED = 'PRINTED',
 }
 
+export enum SolarMitraPosterVerificationStatus {
+  NOT_ATTACHED = 'NOT_ATTACHED',
+  PENDING_VERIFICATION = 'PENDING_VERIFICATION',
+  ATTACHED = 'ATTACHED',
+  REJECTED = 'REJECTED',
+}
+
 @Entity('solar_mitra')
 export class SolarMitra {
   @PrimaryGeneratedColumn()
@@ -122,6 +129,24 @@ printingUpdatedBy: number;
 
 @Column({ type: 'text', nullable: true })
 printingUpdatedByName: string;
+
+@Column({
+  type: 'text',
+  default: SolarMitraPosterVerificationStatus.NOT_ATTACHED,
+})
+posterVerificationStatus: SolarMitraPosterVerificationStatus;
+
+@Column({ type: 'timestamp', nullable: true })
+posterVerifiedAt: Date | null;
+
+@Column({ type: 'integer', nullable: true })
+posterVerifiedBy: number | null;
+
+@Column({ type: 'text', nullable: true })
+posterVerifiedByName: string | null;
+
+@Column({ type: 'text', nullable: true })
+posterVerificationRemarks: string | null;
 
 /*
  * CRM User account linked to this Solar Mitra profile.

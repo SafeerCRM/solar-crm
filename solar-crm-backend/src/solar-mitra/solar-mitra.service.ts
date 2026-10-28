@@ -29,6 +29,7 @@ import {
   SolarMitraStatus,
   SolarMitraInterestStatus,
   SolarMitraPrintingStatus,
+  SolarMitraPosterVerificationStatus,
 } from './solar-mitra.entity';
 
 import {
@@ -232,16 +233,26 @@ async uploadPosterInstallationPhoto(
     );
 
   if (photoSlot === 1) {
-    mitra.qrPosterInstallationPhotoUrl =
-      fileUrl;
-  } else {
-    mitra.qrPosterInstallationPhotoUrl2 =
-      fileUrl;
-  }
+  mitra.qrPosterInstallationPhotoUrl =
+    fileUrl;
+} else {
+  mitra.qrPosterInstallationPhotoUrl2 =
+    fileUrl;
+}
 
-  await this.solarMitraRepository.save(
-    mitra,
-  );
+// Any new or replacement photo requires fresh verification.
+mitra.posterVerificationStatus =
+  SolarMitraPosterVerificationStatus.PENDING_VERIFICATION;
+
+// Clear previous verification details.
+mitra.posterVerifiedAt = null;
+mitra.posterVerifiedBy = null;
+mitra.posterVerifiedByName = null;
+mitra.posterVerificationRemarks = null;
+
+await this.solarMitraRepository.save(
+  mitra,
+);
 
   return {
     message: `Poster installation photo ${photoSlot} uploaded successfully`,
@@ -1352,6 +1363,87 @@ if (printingStatus) {
     interestUpdatedAt: mitra.interestUpdatedAt,
     interestUpdatedBy: mitra.interestUpdatedBy,
     interestUpdatedByName: mitra.interestUpdatedByName,
+  };
+}
+
+async updateSolarMitraPosterVerification(
+  mitraId: number,
+  body: any,
+  user: any,
+) {
+  const status = String(
+    body?.posterVerificationStatus || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  if (
+    ![
+      SolarMitraPosterVerificationStatus.ATTACHED,
+      SolarMitraPosterVerificationStatus.REJECTED,
+    ].includes(
+      status as SolarMitraPosterVerificationStatus,
+    )
+  ) {
+    throw new BadRequestException(
+      'Verification status must be ATTACHED or REJECTED',
+    );
+  }
+
+  const mitra = await this.getSolarMitra(mitraId);
+
+  const hasPhoto = Boolean(
+    mitra.qrPosterInstallationPhotoUrl?.trim() ||
+    mitra.qrPosterInstallationPhotoUrl2?.trim(),
+  );
+
+  if (!hasPhoto) {
+    throw new BadRequestException(
+      'Upload at least one QR poster installation photo before verification',
+    );
+  }
+
+  const remarks = String(
+    body?.remarks || '',
+  ).trim();
+
+  if (
+    status === SolarMitraPosterVerificationStatus.REJECTED &&
+    !remarks
+  ) {
+    throw new BadRequestException(
+      'Remarks are required when rejecting poster verification',
+    );
+  }
+
+  mitra.posterVerificationStatus =
+    status as SolarMitraPosterVerificationStatus;
+
+  mitra.posterVerifiedAt = new Date();
+  mitra.posterVerifiedBy = Number(user.id);
+  mitra.posterVerifiedByName = String(
+    user?.name || '',
+  ).trim();
+
+  mitra.posterVerificationRemarks =
+    remarks || null;
+
+  await this.solarMitraRepository.save(mitra);
+
+  return {
+    message:
+      status === SolarMitraPosterVerificationStatus.ATTACHED
+        ? 'QR poster installation verified successfully'
+        : 'QR poster installation proof rejected',
+    id: mitra.id,
+    posterVerificationStatus:
+      mitra.posterVerificationStatus,
+    posterVerifiedAt: mitra.posterVerifiedAt,
+    posterVerifiedBy: mitra.posterVerifiedBy,
+    posterVerifiedByName:
+      mitra.posterVerifiedByName,
+    posterVerificationRemarks:
+      mitra.posterVerificationRemarks,
   };
 }
 
