@@ -3608,21 +3608,23 @@ const convertMeetingToSolarMitra =
         return `"${safeText.replace(/"/g, '""')}"`;
       };
 
-      const headers = [
-        'Solar Mitra Name',
-        'Shop Name',
-        'City',
-        'Area',
-        'Contact Number',
-      ];
+const headers = [
+  'Solar Mitra Name',
+  'Shop Name',
+  'City',
+  'Area',
+  'Contact Number',
+  'Creator Name',
+];
 
-      const rows = filteredMitras.map((item) => [
-        item.name,
-        item.businessName,
-        item.city,
-        item.area,
-        item.primaryPhone,
-      ]);
+const rows = filteredMitras.map((item) => [
+  item.name,
+  item.businessName,
+  item.city,
+  item.area,
+  item.primaryPhone,
+  item.createdByName || 'Unknown Creator',
+]);
 
       const csvContent =
         '\uFEFF' +
@@ -3737,6 +3739,276 @@ const convertMeetingToSolarMitra =
       );
     }
   };
+
+  const exportSolarMeetingsCsv = async (
+  action: 'download' | 'share',
+) => {
+  if (filteredMeetings.length === 0) {
+    alert('No meetings found for the selected filters.');
+    return;
+  }
+
+  try {
+    const escapeCsv = (value: unknown) => {
+      const text = String(value ?? '');
+      const safeText = /^[\s]*[=+\-@\t\r]/.test(text)
+        ? `'${text}`
+        : text;
+
+      return `"${safeText.replace(/"/g, '""')}"`;
+    };
+
+    const headers = [
+      'Solar Mitra Name',
+      'Contact Number',
+      'City',
+      'Franchise Manager Name',
+      'Meeting Status',
+    ];
+
+    const rows = filteredMeetings.map((item) => [
+      item.solarMitraName || '',
+      item.primaryPhone,
+      item.city || '',
+      item.franchiseManagerName || '',
+      cleanLabel(item.status),
+    ]);
+
+    const csvContent =
+      '\uFEFF' +
+      [headers, ...rows]
+        .map((row) => row.map(escapeCsv).join(','))
+        .join('\r\n');
+
+    const date = new Date().toLocaleDateString('en-CA');
+    const fileName = `solar-mitra-meetings-${date}.csv`;
+
+    const { Capacitor } = await import('@capacitor/core');
+
+    if (Capacitor.isNativePlatform()) {
+      const {
+        Filesystem,
+        Directory,
+        Encoding,
+      } = await import('@capacitor/filesystem');
+
+      const { Share } = await import('@capacitor/share');
+
+      const saved = await Filesystem.writeFile({
+        path: fileName,
+        data: csvContent,
+        directory: Directory.Cache,
+        encoding: Encoding.UTF8,
+        recursive: true,
+      });
+
+      await Share.share({
+        title: 'Solar Mitra Meetings Report',
+        text: `${filteredMeetings.length} meeting records`,
+        files: [saved.uri],
+        dialogTitle:
+          action === 'download'
+            ? 'Save Meetings CSV'
+            : 'Share Meetings CSV',
+      });
+
+      return;
+    }
+
+    const blob = new Blob([csvContent], {
+      type: 'text/csv;charset=utf-8',
+    });
+
+    if (action === 'share') {
+      const file = new File([blob], fileName, {
+        type: 'text/csv',
+      });
+
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: 'Solar Mitra Meetings Report',
+            files: [file],
+          });
+          return;
+        } catch (error: any) {
+          if (error?.name === 'AbortError') return;
+          console.error('Meeting CSV sharing failed:', error);
+        }
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+
+    anchor.href = url;
+    anchor.download = fileName;
+
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    console.error('Meeting CSV export failed:', error);
+    alert('Unable to prepare Meetings CSV. Please try again.');
+  }
+};
+
+const exportSolarReferralsCsv = async (
+  action: 'download' | 'share',
+) => {
+  if (filteredReferrals.length === 0) {
+    alert('No referrals found for the selected filters.');
+    return;
+  }
+
+  try {
+    const escapeCsv = (value: unknown) => {
+      const text = String(value ?? '');
+      const safeText = /^[\s]*[=+\-@\t\r]/.test(text)
+        ? `'${text}`
+        : text;
+
+      return `"${safeText.replace(/"/g, '""')}"`;
+    };
+
+    const headers = [
+      'Referral ID',
+      'Solar Mitra ID',
+      'Solar Mitra Name',
+      'Solar Mitra Shop',
+      'Solar Mitra Phone',
+      'Solar Mitra Address',
+      'Solar Mitra Area',
+      'Solar Mitra City',
+      'Customer Name',
+      'Customer Phone',
+      'Alternate Phone',
+      'Customer Address',
+      'Customer Area',
+      'Customer City',
+      'Remarks',
+      'Source Type',
+      'Referral Status',
+      'Linked Lead ID',
+      'Linked Meeting ID',
+      'Linked Project ID',
+      'Payout Amount Snapshot',
+      'Required Payment Percentage',
+      'Payout Terms Snapshotted At',
+      'Created At',
+      'Updated At',
+    ];
+
+    const rows = filteredReferrals.map((item) => [
+      item.id,
+      item.solarMitraId,
+      item.solarMitraName,
+      item.solarMitraBusinessName,
+      item.solarMitraPhone,
+      item.solarMitraAddress,
+      item.solarMitraArea,
+      item.solarMitraCity,
+      item.customerName,
+      item.customerPhone,
+      item.alternatePhone,
+      item.customerAddress,
+      item.customerArea,
+      item.customerCity,
+      item.remarks,
+      item.sourceType,
+      cleanLabel(item.status),
+      item.linkedLeadId,
+      item.linkedMeetingId,
+      item.linkedProjectId,
+      item.payoutAmountSnapshot,
+      item.requiredPaymentPercentageSnapshot,
+      item.payoutTermsSnapshottedAt,
+      item.createdAt,
+      item.updatedAt,
+    ]);
+
+    const csvContent =
+      '\uFEFF' +
+      [headers, ...rows]
+        .map((row) => row.map(escapeCsv).join(','))
+        .join('\r\n');
+
+    const date = new Date().toLocaleDateString('en-CA');
+    const fileName = `solar-mitra-referrals-${date}.csv`;
+
+    const { Capacitor } = await import('@capacitor/core');
+
+    if (Capacitor.isNativePlatform()) {
+      const {
+        Filesystem,
+        Directory,
+        Encoding,
+      } = await import('@capacitor/filesystem');
+
+      const { Share } = await import('@capacitor/share');
+
+      const saved = await Filesystem.writeFile({
+        path: fileName,
+        data: csvContent,
+        directory: Directory.Cache,
+        encoding: Encoding.UTF8,
+        recursive: true,
+      });
+
+      await Share.share({
+        title: 'Solar Mitra Referrals Report',
+        text: `${filteredReferrals.length} referral records`,
+        files: [saved.uri],
+        dialogTitle:
+          action === 'download'
+            ? 'Save Referrals CSV'
+            : 'Share Referrals CSV',
+      });
+
+      return;
+    }
+
+    const blob = new Blob([csvContent], {
+      type: 'text/csv;charset=utf-8',
+    });
+
+    if (action === 'share') {
+      const file = new File([blob], fileName, {
+        type: 'text/csv',
+      });
+
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: 'Solar Mitra Referrals Report',
+            files: [file],
+          });
+          return;
+        } catch (error: any) {
+          if (error?.name === 'AbortError') return;
+          console.error('Referral CSV sharing failed:', error);
+        }
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+
+    anchor.href = url;
+    anchor.download = fileName;
+
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    console.error('Referral CSV export failed:', error);
+    alert('Unable to prepare Referrals CSV. Please try again.');
+  }
+};
 
   const tabs: {
     key: Tab;
@@ -4744,13 +5016,37 @@ const convertMeetingToSolarMitra =
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={openNewMeetingModal}
-          className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-700"
-        >
-          + New Meeting / Visit
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+  <button
+    type="button"
+    onClick={() => {
+      void exportSolarMeetingsCsv('download');
+    }}
+    disabled={filteredMeetings.length === 0}
+    className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    ↓ Download CSV
+  </button>
+
+  <button
+    type="button"
+    onClick={() => {
+      void exportSolarMeetingsCsv('share');
+    }}
+    disabled={filteredMeetings.length === 0}
+    className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    ↗ Share CSV
+  </button>
+
+  <button
+    type="button"
+    onClick={openNewMeetingModal}
+    className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-700"
+  >
+    + New Meeting / Visit
+  </button>
+</div>
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px]">
@@ -5019,8 +5315,43 @@ const convertMeetingToSolarMitra =
 )}
 
       {activeTab === 'REFERRALS' && (
-        <div className="rounded-2xl bg-white p-4 shadow-sm md:p-5">
-          <div className="grid gap-3 lg:grid-cols-[1fr_220px_240px_auto]">
+  <div className="rounded-2xl bg-white p-4 shadow-sm md:p-5">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 className="text-lg font-black text-gray-900">
+          Solar Mitra Referrals
+        </h2>
+        <p className="text-xs text-gray-500">
+          {filteredReferrals.length} referral records matching the selected filters
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            void exportSolarReferralsCsv('download');
+          }}
+          disabled={filteredReferrals.length === 0}
+          className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          ↓ Download CSV
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            void exportSolarReferralsCsv('share');
+          }}
+          disabled={filteredReferrals.length === 0}
+          className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          ↗ Share CSV
+        </button>
+      </div>
+    </div>
+
+    <div className="grid gap-3 lg:grid-cols-[1fr_220px_240px_auto]">
             <input
               value={referralSearch}
               onChange={(event) =>
