@@ -44,6 +44,7 @@ const navItems = [
        'PROJECT_CONTRACTOR',
     'SOLAR_FRANCHISE',
     'SOLAR_STORE',
+    'SOLAR_MITRA_ASSISTANT',
   ],
   },
 
@@ -77,6 +78,7 @@ const navItems = [
     'TRADING_HEAD',
     'PROJECT_CONTRACTOR',
     'SOLAR_FRANCHISE',
+    'SOLAR_MITRA_ASSISTANT',
     
   ],
 },
@@ -203,6 +205,7 @@ const navItems = [
 'FRANCHISE_HEAD',
 'HR_MANAGER',
 'SOLAR_STORE',
+'SOLAR_MITRA_ASSISTANT',
   ],
 },
 
@@ -317,6 +320,7 @@ const navItems = [
   'FRANCHISE_MANAGER',
   'FRANCHISE_HEAD',
   'SOLAR_STORE',
+  'SOLAR_MITRA_ASSISTANT',
 ],
 },
 
@@ -372,6 +376,7 @@ const navItems = [
     'DEALER',
     'FRANCHISE_MANAGER',
 'FRANCHISE_HEAD',
+'SOLAR_MITRA_ASSISTANT',
   ],
 },
 
@@ -409,6 +414,7 @@ const navItems = [
   'FRANCHISE_MANAGER',
   'FRANCHISE_HEAD',
   'SOLAR_STORE',
+  'SOLAR_MITRA_ASSISTANT',
 ],
 },
 
@@ -450,6 +456,7 @@ const navItems = [
   'FRANCHISE_MANAGER',
   'FRANCHISE_HEAD',
   'SOLAR_STORE',
+  'SOLAR_MITRA_ASSISTANT',
 ],
 },
 
@@ -494,6 +501,7 @@ const navItems = [
  'FRANCHISE_MANAGER',
  'FRANCHISE_HEAD',
  'SOLAR_STORE',
+ 'SOLAR_MITRA_ASSISTANT',
 ],
 },
 

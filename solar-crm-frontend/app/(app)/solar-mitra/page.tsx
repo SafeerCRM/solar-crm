@@ -38,6 +38,7 @@ type Tab =
   | 'MEETINGS'
   | 'REFERRALS'
   | 'PAYOUTS'
+  | 'CREATOR_PAYOUTS'
   | 'SETTINGS';
 
 type CurrentUser = {
@@ -179,9 +180,47 @@ type SolarMitraPayout = {
   createdAt?: string;
 };
 
+type SolarMitraCreatorPayout = {
+  id: number;
+
+  solarMitraId: number;
+  solarMitraName: string;
+
+  creatorId: number;
+  creatorName?: string | null;
+  creatorRole?: string | null;
+
+  payoutAmount: number;
+
+  status:
+    | 'ELIGIBLE'
+    | 'PAID'
+    | 'CANCELLED';
+
+  eligibleAt: string;
+
+  paidAt?: string | null;
+  paidBy?: number | null;
+  paidByName?: string | null;
+
+  paymentMode?: string | null;
+  paymentReference?: string | null;
+  paymentRemarks?: string | null;
+
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
+
+  mitraCreatedAt?: string | null;
+  posterApprovedAt?: string | null;
+
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 type SolarMitraSetting = {
   id: number;
   defaultPayoutAmount: number;
+  creatorPayoutAmount: number;
   payoutQualificationType: string;
   requiredProjectPaymentPercentage: number;
   isActive: boolean;
@@ -463,6 +502,115 @@ export default function SolarMitraPage() {
   const [referrals, setReferrals] =
     useState<SolarMitraReferral[]>([]);
 
+    const [
+  creatorReconciliationCreationMonth,
+  setCreatorReconciliationCreationMonth,
+] = useState('');
+
+const [
+  creatorReconciliationApprovalMonth,
+  setCreatorReconciliationApprovalMonth,
+] = useState('');
+
+const [
+  creatorReconciliationCreatorId,
+  setCreatorReconciliationCreatorId,
+] = useState('');
+
+const [
+  creatorReconciliationPreview,
+  setCreatorReconciliationPreview,
+] = useState<{
+  creationMonth: string | null;
+  posterApprovalMonth: string | null;
+  creatorId: string | number | null;
+  configuredPayoutAmount: number;
+  totalCandidates: number;
+  eligibleCount: number;
+  excludedCount: number;
+  estimatedTotalAmount: number;
+  canGenerate: boolean;
+  records: {
+    solarMitraId: number;
+    solarMitraName: string;
+    creatorId: number;
+    creatorName: string | null;
+    posterVerifiedAt: string | null;
+  }[];
+} | null>(null);
+
+const [
+  creatorReconciliationLoading,
+  setCreatorReconciliationLoading,
+] = useState(false);
+
+const [
+  creatorReconciliationGenerating,
+  setCreatorReconciliationGenerating,
+] = useState(false);
+
+    const [
+  selectedCreatorPayout,
+  setSelectedCreatorPayout,
+] = useState<SolarMitraCreatorPayout | null>(null);
+
+const [
+  showCreatorPayoutPaidModal,
+  setShowCreatorPayoutPaidModal,
+] = useState(false);
+
+const [
+  creatorPayoutPaidForm,
+  setCreatorPayoutPaidForm,
+] = useState({
+  paymentMode: '',
+  paymentReference: '',
+  paymentRemarks: '',
+});
+
+const [
+  savingCreatorPayoutPayment,
+  setSavingCreatorPayoutPayment,
+] = useState(false);
+
+const [creatorPayouts, setCreatorPayouts] =
+  useState<SolarMitraCreatorPayout[]>([]);
+
+const [
+  creatorPayoutsLoading,
+  setCreatorPayoutsLoading,
+] = useState(false);
+
+const [
+  creatorPayoutCreationMonth,
+  setCreatorPayoutCreationMonth,
+] = useState('');
+
+const [
+  creatorPayoutApprovalMonth,
+  setCreatorPayoutApprovalMonth,
+] = useState('');
+
+const [
+  creatorPayoutStatus,
+  setCreatorPayoutStatus,
+] = useState('');
+
+const [
+  creatorPayoutSearch,
+  setCreatorPayoutSearch,
+] = useState('');
+
+const [
+  creatorPayoutCreatorId,
+  setCreatorPayoutCreatorId,
+] = useState('');
+
+const [
+  creatorPayoutMitraId,
+  setCreatorPayoutMitraId,
+] = useState('');
+
   const [payouts, setPayouts] =
     useState<SolarMitraPayout[]>([]);
 
@@ -612,8 +760,9 @@ const [showPosterRejectionForm, setShowPosterRejectionForm] =
     paymentRemarks: '',
   });
 
-  const [settingsForm, setSettingsForm] = useState({
+    const [settingsForm, setSettingsForm] = useState({
     defaultPayoutAmount: '',
+    creatorPayoutAmount: '',
     requiredProjectPaymentPercentage: '',
   });
 
@@ -968,6 +1117,222 @@ const updateMitraVerificationStatus = async (
     );
   };
 
+  const generateCreatorReconciliation = async () => {
+  if (!userRoles.includes('OWNER')) {
+    alert('Only Owner can generate historical Creator Payouts');
+    return;
+  }
+
+  const preview = creatorReconciliationPreview;
+
+  if (
+    !preview ||
+    !preview.canGenerate ||
+    creatorReconciliationGenerating ||
+    creatorReconciliationLoading
+  ) {
+    return;
+  }
+
+  const filtersMatch =
+    (preview.creationMonth || '') ===
+      creatorReconciliationCreationMonth &&
+    (preview.posterApprovalMonth || '') ===
+      creatorReconciliationApprovalMonth &&
+    String(preview.creatorId || '') ===
+      creatorReconciliationCreatorId.trim();
+
+  if (!filtersMatch) {
+    setCreatorReconciliationPreview(null);
+
+    alert(
+      'Reconciliation filters have changed. Please preview again.',
+    );
+    return;
+  }
+
+  const confirmation = window.confirm(
+    `Generate ${preview.eligibleCount} historical Creator Payout(s)?\n\n` +
+      `Amount per payout: ${money(preview.configuredPayoutAmount)}\n` +
+      `Estimated total: ${money(preview.estimatedTotalAmount)}\n\n` +
+      `This will create ELIGIBLE payout records. It will not transfer money or mark them paid.\n\n` +
+      `Proceed?`,
+  );
+
+  if (!confirmation) {
+    return;
+  }
+
+  setCreatorReconciliationGenerating(true);
+
+  try {
+    const response = await axios.post(
+  `${API_BASE_URL}/solar-mitra/creator-payouts/reconciliation/generate`,
+  {
+    creationMonth:
+      creatorReconciliationCreationMonth || undefined,
+
+    posterApprovalMonth:
+      creatorReconciliationApprovalMonth || undefined,
+
+    creatorId:
+      creatorReconciliationCreatorId.trim() || undefined,
+
+    expectedPayoutAmount:
+      preview.configuredPayoutAmount,
+
+    expectedEligibleCount:
+      preview.eligibleCount,
+  },
+  {
+    headers: getAuthHeaders(),
+  },
+);
+
+    setCreatorReconciliationPreview(null);
+
+    await loadCreatorPayouts();
+
+    alert(
+      `Historical reconciliation completed.\n\n` +
+        `Created: ${response.data.createdCount}\n` +
+        `Excluded: ${response.data.excludedCount}\n` +
+        `Skipped: ${response.data.skippedCount}\n` +
+        `Total created amount: ${money(
+          response.data.createdTotalAmount,
+        )}`,
+    );
+  } catch (error) {
+    console.error(
+      'Historical Creator Payout generation failed',
+      error,
+    );
+
+    setCreatorReconciliationPreview(null);
+
+    alert(
+      getErrorMessage(
+        error,
+        'Failed to generate historical Creator Payouts. Refresh the preview before retrying.',
+      ),
+    );
+  } finally {
+    setCreatorReconciliationGenerating(false);
+  }
+};
+
+  const loadCreatorReconciliationPreview = async () => {
+  if (!userRoles.includes('OWNER')) {
+    alert(
+      'Only Owner can preview historical Creator Payouts',
+    );
+    return;
+  }
+
+  setCreatorReconciliationLoading(true);
+  setCreatorReconciliationPreview(null);
+
+  try {
+    const params: Record<string, string> = {};
+
+    if (creatorReconciliationCreationMonth) {
+      params.creationMonth =
+        creatorReconciliationCreationMonth;
+    }
+
+    if (creatorReconciliationApprovalMonth) {
+      params.posterApprovalMonth =
+        creatorReconciliationApprovalMonth;
+    }
+
+    if (creatorReconciliationCreatorId.trim()) {
+      params.creatorId =
+        creatorReconciliationCreatorId.trim();
+    }
+
+    const response = await axios.get(
+      `${API_BASE_URL}/solar-mitra/creator-payouts/reconciliation/preview`,
+      {
+        headers: getAuthHeaders(),
+        params,
+      },
+    );
+
+    setCreatorReconciliationPreview(response.data);
+  } catch (error) {
+    console.error(
+      'Creator Payout reconciliation preview failed',
+      error,
+    );
+
+    alert(
+      getErrorMessage(
+        error,
+        'Failed to preview historical Creator Payouts',
+      ),
+    );
+  } finally {
+    setCreatorReconciliationLoading(false);
+  }
+};
+
+  const loadCreatorPayouts = async () => {
+  setCreatorPayoutsLoading(true);
+
+  try {
+    const params: Record<string, string> = {};
+
+    if (creatorPayoutCreationMonth) {
+      params.creationMonth = creatorPayoutCreationMonth;
+    }
+
+    if (creatorPayoutApprovalMonth) {
+      params.posterApprovalMonth = creatorPayoutApprovalMonth;
+    }
+
+    if (creatorPayoutStatus) {
+      params.status = creatorPayoutStatus;
+    }
+
+    if (creatorPayoutSearch.trim()) {
+      params.search = creatorPayoutSearch.trim();
+    }
+
+    if (creatorPayoutCreatorId.trim()) {
+      params.creatorId = creatorPayoutCreatorId.trim();
+    }
+
+    if (creatorPayoutMitraId.trim()) {
+      params.solarMitraId = creatorPayoutMitraId.trim();
+    }
+
+    const response = await axios.get<
+      SolarMitraCreatorPayout[]
+    >(
+      `${API_BASE_URL}/solar-mitra/creator-payouts/list`,
+      {
+        headers: getAuthHeaders(),
+        params,
+      },
+    );
+
+    setCreatorPayouts(
+      Array.isArray(response.data)
+        ? response.data
+        : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to load Creator Payouts',
+      error,
+    );
+
+    setCreatorPayouts([]);
+  } finally {
+    setCreatorPayoutsLoading(false);
+  }
+};
+
   const loadPayouts = async () => {
     const res = await axios.get(
       `${API_BASE_URL}/solar-mitra/payouts/list`,
@@ -1008,11 +1373,16 @@ const updateMitraVerificationStatus = async (
 
     setSettings(res.data);
 
-    setSettingsForm({
+        setSettingsForm({
       defaultPayoutAmount:
         String(
           res.data?.defaultPayoutAmount ??
             '',
+        ),
+      creatorPayoutAmount:
+        String(
+          res.data?.creatorPayoutAmount ??
+            0,
         ),
       requiredProjectPaymentPercentage:
         String(
@@ -1072,6 +1442,24 @@ const updateMitraVerificationStatus = async (
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+    useEffect(() => {
+    if (activeTab !== 'CREATOR_PAYOUTS') {
+      return;
+    }
+
+    loadCreatorPayouts();
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeTab,
+    creatorPayoutCreationMonth,
+    creatorPayoutApprovalMonth,
+    creatorPayoutStatus,
+    creatorPayoutSearch,
+    creatorPayoutCreatorId,
+    creatorPayoutMitraId,
+  ]);
 
   const posterSummaryMitras = useMemo(() => {
   const search = mitraSearch.trim().toLowerCase();
@@ -2847,6 +3235,16 @@ const openNewMeetingModal =
             ),
     };
 
+        if (
+      userRoles.includes('SOLAR_MITRA_ASSISTANT') &&
+      !isOwner &&
+      !isFranchiseHead
+    ) {
+      delete (payload as Partial<typeof payload>).payoutAmountOverride;
+      delete (payload as Partial<typeof payload>).requiredPaymentPercentageOverride;
+      delete (payload as Partial<typeof payload>).franchiseManagerId;
+    }
+
     try {
       setSaving(true);
 
@@ -3122,6 +3520,91 @@ const openNewMeetingModal =
     }
   };
 
+  const markCreatorPayoutPaid = async (
+  event: FormEvent,
+) => {
+  event.preventDefault();
+
+  if (!selectedCreatorPayout) {
+    return;
+  }
+
+  if (
+    !userRoles.includes('OWNER') &&
+    !userRoles.includes('ACCOUNT_MANAGER')
+  ) {
+    alert(
+      'Only Owner or Account Manager can mark Creator Payouts as paid',
+    );
+    return;
+  }
+
+  const paymentMode =
+    creatorPayoutPaidForm.paymentMode.trim();
+
+  const paymentReference =
+    creatorPayoutPaidForm.paymentReference.trim();
+
+  const paymentRemarks =
+    creatorPayoutPaidForm.paymentRemarks.trim();
+
+  if (!paymentMode || !paymentReference) {
+    alert(
+      'Payment mode and transaction reference are required',
+    );
+    return;
+  }
+
+  if (savingCreatorPayoutPayment) {
+    return;
+  }
+
+  setSavingCreatorPayoutPayment(true);
+
+  try {
+    await axios.patch(
+      `${API_BASE_URL}/solar-mitra/creator-payouts/${selectedCreatorPayout.id}/paid`,
+      {
+        paymentMode,
+        paymentReference,
+        paymentRemarks,
+      },
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setShowCreatorPayoutPaidModal(false);
+    setSelectedCreatorPayout(null);
+
+    setCreatorPayoutPaidForm({
+      paymentMode: '',
+      paymentReference: '',
+      paymentRemarks: '',
+    });
+
+    await loadCreatorPayouts();
+
+    alert(
+      'Creator Payout marked as paid successfully',
+    );
+  } catch (error) {
+    console.error(
+      'Failed to mark Creator Payout as paid',
+      error,
+    );
+
+    alert(
+      getErrorMessage(
+        error,
+        'Failed to mark Creator Payout as paid',
+      ),
+    );
+  } finally {
+    setSavingCreatorPayoutPayment(false);
+  }
+};
+
   const saveSettings = async (
     event: FormEvent,
   ) => {
@@ -3144,6 +3627,11 @@ const openNewMeetingModal =
             Number(
               settingsForm
                 .defaultPayoutAmount,
+            ),
+          creatorPayoutAmount:
+            Number(
+              settingsForm
+                .creatorPayoutAmount,
             ),
           requiredProjectPaymentPercentage:
             Number(
@@ -4035,9 +4523,19 @@ const exportSolarReferralsCsv = async (
       label: 'Payouts',
     },
     {
-      key: 'SETTINGS',
-      label: 'Settings',
+      key: 'CREATOR_PAYOUTS',
+      label: 'Creator Payouts',
     },
+        ...(!userRoles.includes('SOLAR_MITRA_ASSISTANT') ||
+    isOwner ||
+    isFranchiseHead
+      ? [
+          {
+            key: 'SETTINGS' as Tab,
+            label: 'Settings',
+          },
+        ]
+      : []),
   ];
 
   if (loading) {
@@ -4544,13 +5042,13 @@ const exportSolarReferralsCsv = async (
     color: 'border-gray-200 bg-gray-50 text-gray-900',
   },
   {
-    label: 'Not Attached',
+    label: 'Poster Not Attached',
     count: posterVerificationCounts.notAttached,
     status: 'NOT_ATTACHED',
     color: 'border-gray-200 bg-gray-50 text-gray-800',
   },
   {
-    label: 'Pending Verification',
+    label: 'Pending Poster Verification',
     count: posterVerificationCounts.pending,
     status: 'PENDING_VERIFICATION',
     color: 'border-amber-200 bg-amber-50 text-amber-800',
@@ -4562,7 +5060,7 @@ const exportSolarReferralsCsv = async (
     color: 'border-green-200 bg-green-50 text-green-800',
   },
   {
-    label: 'Rejected',
+    label: 'Poster Rejected',
     count: posterVerificationCounts.rejected,
     status: 'REJECTED',
     color: 'border-red-200 bg-red-50 text-red-800',
@@ -6136,6 +6634,561 @@ setShowReferralMitraOptions(false);
         </div>
       )}
 
+            {activeTab === 'CREATOR_PAYOUTS' && (
+        <div className="space-y-5">
+          <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <h2 className="text-xl font-bold text-gray-900">
+              Solar Mitra Creator Payouts
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              One-time rewards for eligible Solar Mitra
+              creators after QR poster verification approval.
+              These are separate from referral payouts and
+              Assistant payroll incentives.
+            </p>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              {[
+                {
+                  label: 'Eligible',
+                  count: creatorPayouts.filter(
+                    (item) => item.status === 'ELIGIBLE',
+                  ).length,
+                },
+                {
+                  label: 'Paid',
+                  count: creatorPayouts.filter(
+                    (item) => item.status === 'PAID',
+                  ).length,
+                },
+                {
+                  label: 'Cancelled',
+                  count: creatorPayouts.filter(
+                    (item) => item.status === 'CANCELLED',
+                  ).length,
+                },
+              ].map((summary) => (
+                <div
+                  key={summary.label}
+                  className="rounded-xl border border-gray-200 p-4"
+                >
+                  <p className="text-sm text-gray-500">
+                    {summary.label}
+                  </p>
+                  <p className="mt-1 text-2xl font-bold">
+                    {summary.count}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <h3 className="mb-4 font-bold text-gray-900">
+              Creator Payout Filters
+            </h3>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <label className="text-sm">
+                <span className="mb-1 block font-medium">
+                  Solar Mitra Creation Month
+                </span>
+                <input
+                  type="month"
+                  value={creatorPayoutCreationMonth}
+                  onChange={(event) =>
+                    setCreatorPayoutCreationMonth(
+                      event.target.value,
+                    )
+                  }
+                  className="w-full rounded-xl border p-3"
+                />
+              </label>
+
+              <label className="text-sm">
+                <span className="mb-1 block font-medium">
+                  Poster Approval Month
+                </span>
+                <input
+                  type="month"
+                  value={creatorPayoutApprovalMonth}
+                  onChange={(event) =>
+                    setCreatorPayoutApprovalMonth(
+                      event.target.value,
+                    )
+                  }
+                  className="w-full rounded-xl border p-3"
+                />
+              </label>
+
+              <label className="text-sm">
+                <span className="mb-1 block font-medium">
+                  Payment Status
+                </span>
+                <select
+                  value={creatorPayoutStatus}
+                  onChange={(event) =>
+                    setCreatorPayoutStatus(
+                      event.target.value,
+                    )
+                  }
+                  className="w-full rounded-xl border p-3"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="ELIGIBLE">Eligible</option>
+                  <option value="PAID">Paid</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+              </label>
+
+              <label className="text-sm">
+                <span className="mb-1 block font-medium">
+                  Search
+                </span>
+                <input
+                  type="text"
+                  placeholder="Mitra or creator name"
+                  value={creatorPayoutSearch}
+                  onChange={(event) =>
+                    setCreatorPayoutSearch(
+                      event.target.value,
+                    )
+                  }
+                  className="w-full rounded-xl border p-3"
+                />
+              </label>
+
+              <label className="text-sm">
+                <span className="mb-1 block font-medium">
+                  Creator ID
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Creator user ID"
+                  value={creatorPayoutCreatorId}
+                  onChange={(event) =>
+                    setCreatorPayoutCreatorId(
+                      event.target.value,
+                    )
+                  }
+                  className="w-full rounded-xl border p-3"
+                />
+              </label>
+
+              <label className="text-sm">
+                <span className="mb-1 block font-medium">
+                  Solar Mitra ID
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Solar Mitra ID"
+                  value={creatorPayoutMitraId}
+                  onChange={(event) =>
+                    setCreatorPayoutMitraId(
+                      event.target.value,
+                    )
+                  }
+                  className="w-full rounded-xl border p-3"
+                />
+              </label>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCreatorPayoutCreationMonth('');
+                setCreatorPayoutApprovalMonth('');
+                setCreatorPayoutStatus('');
+                setCreatorPayoutSearch('');
+                setCreatorPayoutCreatorId('');
+                setCreatorPayoutMitraId('');
+              }}
+              className="mt-4 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold"
+            >
+              Clear Filters
+            </button>
+          </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <h3 className="mb-4 font-bold">
+              Creator Payout Records
+            </h3>
+
+            {creatorPayoutsLoading ? (
+              <p className="text-sm text-gray-500">
+                Loading Creator Payouts...
+              </p>
+            ) : creatorPayouts.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                No Creator Payout records found.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      {[
+                        'Payout ID',
+                        'Solar Mitra',
+                        'Creator',
+                        'Creation Date',
+                        'Poster Approval',
+                        'Amount',
+                        'Status',
+                        'Paid Date',
+                        'Payment Reference',
+                        'Actions',
+                      ].map((heading) => (
+                        <th
+                          key={heading}
+                          className="whitespace-nowrap px-3 py-3 font-semibold"
+                        >
+                          {heading}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y">
+                    {creatorPayouts.map((item) => (
+                      <tr key={item.id}>
+                        <td className="px-3 py-3">
+                          {item.id}
+                        </td>
+                        <td className="px-3 py-3">
+                          {item.solarMitraName}
+                          <div className="text-xs text-gray-500">
+                            ID: {item.solarMitraId}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          {item.creatorName || '-'}
+                          <div className="text-xs text-gray-500">
+                            ID: {item.creatorId}
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3">
+                          {item.mitraCreatedAt
+                            ? new Date(
+                                item.mitraCreatedAt,
+                              ).toLocaleDateString('en-IN')
+                            : '-'}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3">
+                          {item.posterApprovedAt
+                            ? new Date(
+                                item.posterApprovedAt,
+                              ).toLocaleDateString('en-IN')
+                            : '-'}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 font-semibold">
+                          ₹{Number(
+                            item.payoutAmount,
+                          ).toLocaleString('en-IN')}
+                        </td>
+                        <td className="px-3 py-3">
+                          {item.status}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3">
+                          {item.paidAt
+                            ? new Date(
+                                item.paidAt,
+                              ).toLocaleDateString('en-IN')
+                            : '-'}
+                        </td>
+                        <td className="px-3 py-3">
+                          {item.paymentReference || '-'}
+                        </td>
+
+                        <td className="whitespace-nowrap px-3 py-3">
+  {item.status === 'ELIGIBLE' &&
+  (userRoles.includes('OWNER') ||
+    userRoles.includes('ACCOUNT_MANAGER')) ? (
+    <button
+      type="button"
+      onClick={() => {
+        setSelectedCreatorPayout(item);
+
+        setCreatorPayoutPaidForm({
+          paymentMode: '',
+          paymentReference: '',
+          paymentRemarks: '',
+        });
+
+        setShowCreatorPayoutPaidModal(true);
+      }}
+      className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+    >
+      Mark Paid
+    </button>
+  ) : (
+    <span className="text-xs text-gray-400">
+      {item.status === 'PAID'
+        ? 'Payment completed'
+        : item.status === 'CANCELLED'
+          ? 'Cancelled'
+          : 'View only'}
+    </span>
+  )}
+</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+                {userRoles.includes('OWNER') && (
+            <div className="rounded-2xl border border-orange-200 bg-white p-5 shadow-sm">
+              <h3 className="text-lg font-bold text-gray-900">
+                Historical Creator Payout Reconciliation
+              </h3>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Preview previously approved Solar Mitras
+                that do not yet have Creator Payout records.
+                This preview does not create or pay anything.
+              </p>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <label className="text-sm">
+                  <span className="mb-1 block font-medium">
+                    Solar Mitra Creation Month
+                  </span>
+                  <input
+                    type="month"
+                    value={creatorReconciliationCreationMonth}
+                    onChange={(event) => {
+                      setCreatorReconciliationCreationMonth(
+                        event.target.value,
+                      );
+                      setCreatorReconciliationPreview(null);
+                    }}
+                    className="w-full rounded-xl border p-3"
+                  />
+                </label>
+
+                <label className="text-sm">
+                  <span className="mb-1 block font-medium">
+                    Poster Approval Month
+                  </span>
+                  <input
+                    type="month"
+                    value={creatorReconciliationApprovalMonth}
+                    onChange={(event) => {
+                      setCreatorReconciliationApprovalMonth(
+                        event.target.value,
+                      );
+                      setCreatorReconciliationPreview(null);
+                    }}
+                    className="w-full rounded-xl border p-3"
+                  />
+                </label>
+
+                <label className="text-sm">
+                  <span className="mb-1 block font-medium">
+                    Creator ID (Optional)
+                  </span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={creatorReconciliationCreatorId}
+                    onChange={(event) => {
+                      setCreatorReconciliationCreatorId(
+                        event.target.value,
+                      );
+                      setCreatorReconciliationPreview(null);
+                    }}
+                    placeholder="Original creator ID"
+                    className="w-full rounded-xl border p-3"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  disabled={creatorReconciliationLoading}
+                  onClick={loadCreatorReconciliationPreview}
+                  className="rounded-xl bg-orange-600 px-5 py-3 text-sm font-bold text-white hover:bg-orange-700 disabled:opacity-50"
+                >
+                  {creatorReconciliationLoading
+                    ? 'Checking Eligibility...'
+                    : 'Preview Eligible Payouts'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreatorReconciliationCreationMonth('');
+                    setCreatorReconciliationApprovalMonth('');
+                    setCreatorReconciliationCreatorId('');
+                    setCreatorReconciliationPreview(null);
+                  }}
+                  className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-semibold"
+                >
+                  Clear
+                </button>
+              </div>
+
+              {creatorReconciliationPreview && (
+                <div className="mt-5 space-y-4 border-t pt-5">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {[
+                      {
+                        label: 'Eligible',
+                        value:
+                          creatorReconciliationPreview.eligibleCount,
+                      },
+                      {
+                        label: 'Excluded',
+                        value:
+                          creatorReconciliationPreview.excludedCount,
+                      },
+                      {
+                        label: 'Configured Amount',
+                        value: money(
+                          creatorReconciliationPreview
+                            .configuredPayoutAmount,
+                        ),
+                      },
+                      {
+                        label: 'Estimated Total',
+                        value: money(
+                          creatorReconciliationPreview
+                            .estimatedTotalAmount,
+                        ),
+                      },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className="rounded-xl border border-gray-200 p-4"
+                      >
+                        <p className="text-xs text-gray-500">
+                          {item.label}
+                        </p>
+                        <p className="mt-1 text-xl font-bold text-gray-900">
+                          {item.value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {!creatorReconciliationPreview.canGenerate && (
+                    <p className="text-sm text-amber-700">
+                      Generation is unavailable when there are
+                      no eligible records or the configured
+                      Creator Payout amount is zero.
+                    </p>
+                  )}
+
+                  {creatorReconciliationPreview.canGenerate && (
+  <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+    <p className="text-sm font-semibold text-gray-900">
+      Ready for historical reconciliation
+    </p>
+
+    <p className="mt-2 text-sm text-gray-700">
+      This will create{' '}
+      <strong>
+        {creatorReconciliationPreview.eligibleCount}
+      </strong>{' '}
+      eligible Creator Payout records, with an estimated
+      total of{' '}
+      <strong>
+        {money(
+          creatorReconciliationPreview.estimatedTotalAmount,
+        )}
+      </strong>.
+    </p>
+
+    <p className="mt-2 text-xs text-gray-600">
+      No money will be transferred automatically.
+      The records will be created with ELIGIBLE status.
+    </p>
+
+    <button
+      type="button"
+      disabled={
+        creatorReconciliationGenerating ||
+        creatorReconciliationLoading
+      }
+      onClick={generateCreatorReconciliation}
+      className="mt-4 rounded-xl bg-orange-600 px-5 py-3 text-sm font-bold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {creatorReconciliationGenerating
+        ? 'Generating Payouts...'
+        : 'Generate Historical Payouts'}
+    </button>
+  </div>
+)}
+
+                  <div className="max-h-80 overflow-auto rounded-xl border border-gray-200">
+                    <table className="min-w-full text-left text-sm">
+                      <thead className="sticky top-0 bg-gray-50">
+                        <tr>
+                          {[
+                            'Solar Mitra ID',
+                            'Solar Mitra',
+                            'Creator',
+                            'Poster Approved',
+                          ].map((heading) => (
+                            <th
+                              key={heading}
+                              className="whitespace-nowrap px-3 py-3"
+                            >
+                              {heading}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {creatorReconciliationPreview.records.map(
+                          (item) => (
+                            <tr key={item.solarMitraId}>
+                              <td className="px-3 py-3">
+                                {item.solarMitraId}
+                              </td>
+                              <td className="px-3 py-3">
+                                {item.solarMitraName}
+                              </td>
+                              <td className="px-3 py-3">
+                                {item.creatorName || '-'}
+                                <div className="text-xs text-gray-500">
+                                  ID: {item.creatorId}
+                                </div>
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-3">
+                                {item.posterVerifiedAt
+                                  ? new Date(
+                                      item.posterVerifiedAt,
+                                    ).toLocaleDateString('en-IN')
+                                  : '-'}
+                              </td>
+                            </tr>
+                          ),
+                        )}
+                      </tbody>
+                    </table>
+
+                    {!creatorReconciliationPreview.records.length && (
+                      <p className="p-4 text-sm text-gray-500">
+                        No eligible historical Creator Payouts
+                        found for these filters.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
       {activeTab === 'SETTINGS' && (
         <div className="mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-sm">
           <div>
@@ -6177,6 +7230,36 @@ setShowReferralMitraOptions(false);
                 }
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 disabled:bg-gray-100"
               />
+            </div>
+
+                        <div>
+              <label className="mb-1 block text-sm font-bold text-gray-700">
+                Creator Payout Amount (₹)
+              </label>
+
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={settingsForm.creatorPayoutAmount}
+                disabled={!isOwner}
+                onChange={(event) =>
+                  setSettingsForm((prev) => ({
+                    ...prev,
+                    creatorPayoutAmount: event.target.value,
+                  }))
+                }
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 disabled:bg-gray-100"
+              />
+
+              <p className="mt-2 text-xs text-gray-500">
+                One-time payout to the staff member who originally
+                registered the Solar Mitra, eligible only after QR
+                poster verification is approved. Solar Mitra
+                Assistants are excluded because their incentives
+                are handled through payroll. Creator payouts are
+                separate from referral and project payouts.
+              </p>
             </div>
 
             <div>
@@ -6523,11 +7606,11 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
     {(
       [
         {
-          label: 'Poster Photo 1',
+          label: 'Poster Photo',
           url: viewingPosterMitra.qrPosterInstallationPhotoUrl,
         },
         {
-          label: 'Poster Photo 2',
+          label: 'QR Photo',
           url: viewingPosterMitra.qrPosterInstallationPhotoUrl2,
         },
       ] as const
@@ -7089,7 +8172,7 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
     </p>
 
 <h4 className="mb-2 text-sm font-bold text-gray-800">
-  Poster Photo 1
+  Poster Photo
 </h4>
     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
       <label className="flex cursor-pointer items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white">
@@ -7164,7 +8247,7 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
 
     <div className="mt-6 border-t border-gray-200 pt-5">
   <h4 className="text-sm font-bold text-gray-800">
-    Poster Photo 2
+    QR Photo
   </h4>
 
   <p className="mt-1 text-xs text-gray-500">
@@ -7381,51 +8464,45 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
                 </div>
               </div>
 
-              <div>
-                <h3 className="mb-1 font-black text-gray-900">
-                  Payout Override
-                </h3>
+                         {(!userRoles.includes('SOLAR_MITRA_ASSISTANT') ||
+  isOwner ||
+  isFranchiseHead) && (
+  <div>
+    <h3 className="mb-1 font-black text-gray-900">
+      Payout Override
+    </h3>
 
-                <p className="mb-3 text-xs text-gray-500">
-                  Leave blank to use global Solar Mitra settings.
-                </p>
+    <p className="mb-3 text-xs text-gray-500">
+      Leave blank to use global Solar Mitra settings.
+    </p>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <FormField
-                    label="Payout Amount Override (₹)"
-                    type="number"
-                    value={
-                      mitraForm.payoutAmountOverride
-                    }
-                    onChange={(value) =>
-                      setMitraForm(
-                        (prev: any) => ({
-                          ...prev,
-                          payoutAmountOverride:
-                            value,
-                        }),
-                      )
-                    }
-                  />
+    <div className="grid gap-4 md:grid-cols-2">
+      <FormField
+        label="Payout Amount Override (₹)"
+        type="number"
+        value={mitraForm.payoutAmountOverride}
+        onChange={(value) =>
+          setMitraForm((prev: any) => ({
+            ...prev,
+            payoutAmountOverride: value,
+          }))
+        }
+      />
 
-                  <FormField
-                    label="Required Project Payment Override (%)"
-                    type="number"
-                    value={
-                      mitraForm.requiredPaymentPercentageOverride
-                    }
-                    onChange={(value) =>
-                      setMitraForm(
-                        (prev: any) => ({
-                          ...prev,
-                          requiredPaymentPercentageOverride:
-                            value,
-                        }),
-                      )
-                    }
-                  />
-                </div>
-              </div>
+      <FormField
+        label="Required Project Payment Override (%)"
+        type="number"
+        value={mitraForm.requiredPaymentPercentageOverride}
+        onChange={(value) =>
+          setMitraForm((prev: any) => ({
+            ...prev,
+            requiredPaymentPercentageOverride: value,
+          }))
+        }
+      />
+    </div>
+  </div>
+)}
 
               <div className="flex justify-end gap-3 border-t pt-5">
                 <button
@@ -8584,6 +9661,117 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
                     {saving
                       ? 'Saving...'
                       : 'Confirm Paid'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+              {showCreatorPayoutPaidModal &&
+        selectedCreatorPayout && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-3">
+            <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+              <div className="border-b border-gray-200 p-5">
+                <h2 className="text-xl font-black text-gray-900">
+                  Mark Creator Payout as Paid
+                </h2>
+
+                <p className="mt-2 text-sm text-gray-600">
+                  Solar Mitra:{' '}
+                  <span className="font-semibold">
+                    {selectedCreatorPayout.solarMitraName}
+                  </span>
+                </p>
+
+                <p className="mt-1 text-sm text-gray-600">
+                  Creator:{' '}
+                  <span className="font-semibold">
+                    {selectedCreatorPayout.creatorName || '-'}
+                  </span>
+                </p>
+
+                <p className="mt-2 text-lg font-bold text-emerald-700">
+                  {money(selectedCreatorPayout.payoutAmount)}
+                </p>
+              </div>
+
+              <form
+                onSubmit={markCreatorPayoutPaid}
+                className="space-y-4 p-5"
+              >
+                <FormField
+                  label="Payment Mode"
+                  value={creatorPayoutPaidForm.paymentMode}
+                  onChange={(value) =>
+                    setCreatorPayoutPaidForm((prev) => ({
+                      ...prev,
+                      paymentMode: value,
+                    }))
+                  }
+                />
+
+                <FormField
+                  label="Transaction Reference"
+                  value={creatorPayoutPaidForm.paymentReference}
+                  onChange={(value) =>
+                    setCreatorPayoutPaidForm((prev) => ({
+                      ...prev,
+                      paymentReference: value,
+                    }))
+                  }
+                />
+
+                <div>
+                  <label className="mb-1 block text-sm font-bold text-gray-700">
+                    Payment Remarks (Optional)
+                  </label>
+
+                  <textarea
+                    rows={3}
+                    value={creatorPayoutPaidForm.paymentRemarks}
+                    onChange={(event) =>
+                      setCreatorPayoutPaidForm((prev) => ({
+                        ...prev,
+                        paymentRemarks: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-orange-500"
+                    placeholder="Additional payment details"
+                  />
+                </div>
+
+                <p className="text-xs text-gray-500">
+                  Confirm only after the payment has actually
+                  been transferred. This action records the
+                  payment in CRM; it does not transfer money.
+                </p>
+
+                <div className="flex flex-wrap justify-end gap-3">
+                  <button
+                    type="button"
+                    disabled={savingCreatorPayoutPayment}
+                    onClick={() => {
+                      setShowCreatorPayoutPaidModal(false);
+                      setSelectedCreatorPayout(null);
+                    }}
+                    className="rounded-xl border border-gray-300 px-5 py-3 text-sm font-bold text-gray-700 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={
+                      savingCreatorPayoutPayment ||
+                      !creatorPayoutPaidForm.paymentMode.trim() ||
+                      !creatorPayoutPaidForm.paymentReference.trim()
+                    }
+                    className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingCreatorPayoutPayment
+                      ? 'Saving Payment...'
+                      : 'Confirm Payment'}
                   </button>
                 </div>
               </form>
