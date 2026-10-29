@@ -5,7 +5,7 @@ import { SolarMitra } from './solar-mitra.entity';
 import { SolarMitraReferral } from './solar-mitra-referral.entity';
 import { SolarMitraSetting } from './solar-mitra-setting.entity';
 import { SolarMitraPayout } from './solar-mitra-payout.entity';
-
+import { SolarMitraCreatorPayout } from './solar-mitra-creator-payout.entity';
 import { SolarMitraService } from './solar-mitra.service';
 
 import {
@@ -40,6 +40,7 @@ import {
   SolarMitraReferral,
   SolarMitraSetting,
   SolarMitraPayout,
+  SolarMitraCreatorPayout,
   SolarMitraMeeting,
 SolarMitraMeetingDocument,
   User,

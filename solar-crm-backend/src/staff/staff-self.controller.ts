@@ -49,6 +49,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
   'INSPECTION_MANAGER',
   'FRANCHISE_MANAGER',
   'FRANCHISE_HEAD',
+  'SOLAR_MITRA_ASSISTANT',
 )
 @Controller('staff/self')
 export class StaffSelfController {

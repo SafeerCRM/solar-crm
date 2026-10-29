@@ -26,6 +26,23 @@ export class SolarMitraSetting {
   })
   defaultPayoutAmount: number;
 
+    /*
+   * Reward for the staff member who originally
+   * registered a Solar Mitra.
+   *
+   * SOLAR_MITRA_ASSISTANT is excluded because
+   * their incentives are handled through payroll.
+   *
+   * Independent of referral/project payouts.
+   */
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+  })
+  creatorPayoutAmount: number;
+
   /*
    * Kept as an enum so additional qualification methods
    * can be introduced later without redesigning this table.

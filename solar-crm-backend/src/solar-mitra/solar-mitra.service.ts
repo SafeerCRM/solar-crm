@@ -8,6 +8,7 @@ import * as jwt from 'jsonwebtoken';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   DataSource,
+  EntityManager,
   Repository,
 } from 'typeorm';
 import {
@@ -52,6 +53,11 @@ import {
 } from './solar-mitra-payout.entity';
 
 import {
+  SolarMitraCreatorPayout,
+  SolarMitraCreatorPayoutStatus,
+} from './solar-mitra-creator-payout.entity';
+
+import {
   SolarMitraMeeting,
   SolarMitraMeetingStatus,
 } from './solar-mitra-meeting.entity';
@@ -76,6 +82,10 @@ export class SolarMitraService {
   @InjectRepository(SolarMitraPayout)
 private readonly payoutRepository:
   Repository<SolarMitraPayout>,
+
+  @InjectRepository(SolarMitraCreatorPayout)
+  private readonly creatorPayoutRepository:
+    Repository<SolarMitraCreatorPayout>,
 
   @InjectRepository(SolarMitraMeeting)
 private readonly meetingRepository:
@@ -888,6 +898,49 @@ async getSolarMitraPortalReferral(
   body: any,
   user: any,
 ) {
+  const roles: UserRole[] =
+    Array.isArray(user?.roles)
+      ? user.roles
+      : [];
+
+  const isSolarMitraAssistant =
+    roles.includes(
+      UserRole.SOLAR_MITRA_ASSISTANT,
+    ) &&
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.FRANCHISE_HEAD);
+
+  if (isSolarMitraAssistant) {
+    body = { ...body };
+
+    delete body.payoutAmountOverride;
+    delete body.requiredPaymentPercentageOverride;
+    delete body.franchiseManagerId;
+    delete body.franchiseManagerName;
+  }
+
+    const canAssignFranchiseManager =
+    roles.includes(UserRole.OWNER) ||
+    roles.includes(UserRole.FRANCHISE_HEAD);
+
+  const isFranchiseManager =
+    roles.includes(UserRole.FRANCHISE_MANAGER) &&
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.FRANCHISE_HEAD);
+
+  if (!canAssignFranchiseManager) {
+    body = { ...body };
+
+    if (isFranchiseManager) {
+      body.franchiseManagerId = Number(user.id);
+      body.franchiseManagerName =
+        String(user.name || '').trim();
+    } else {
+      delete body.franchiseManagerId;
+      delete body.franchiseManagerName;
+    }
+  }
+
   const name =
     String(body?.name || '').trim();
 
@@ -1155,7 +1208,11 @@ createdByName:
 createdByRole:
   Array.isArray(user?.roles) &&
   user.roles.length > 0
-    ? String(user.roles[0])
+    ? user.roles.includes(
+        UserRole.SOLAR_MITRA_ASSISTANT,
+      )
+      ? UserRole.SOLAR_MITRA_ASSISTANT
+      : String(user.roles[0])
     : null,
 
 updatedBy:
@@ -1366,6 +1423,114 @@ if (printingStatus) {
   };
 }
 
+private async isCreatorPayoutEligible(
+  mitra: SolarMitra,
+  manager: EntityManager = this.dataSource.manager,
+): Promise<boolean> {
+  if (
+    mitra.posterVerificationStatus !==
+    SolarMitraPosterVerificationStatus.ATTACHED
+  ) {
+    return false;
+  }
+
+  if (!mitra.createdBy) {
+    return false;
+  }
+
+  if (
+    mitra.createdByRole ===
+    UserRole.SOLAR_MITRA_ASSISTANT
+  ) {
+    return false;
+  }
+
+  const creator = await manager
+  .getRepository(User)
+  .findOne({
+    where: {
+      id: Number(mitra.createdBy),
+    },
+  });
+
+  if (!creator) {
+    return false;
+  }
+
+  const creatorRoles = Array.isArray(creator.roles)
+    ? creator.roles
+    : [];
+
+  if (
+    creatorRoles.includes(
+      UserRole.SOLAR_MITRA_ASSISTANT,
+    )
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+private async ensureCreatorPayout(
+  mitra: SolarMitra,
+): Promise<SolarMitraCreatorPayout | null> {
+  const existing =
+    await this.creatorPayoutRepository.findOne({
+      where: { solarMitraId: mitra.id },
+    });
+
+  // Never recreate or overwrite an existing payout,
+  // including PAID and CANCELLED records.
+  if (existing) {
+    return existing;
+  }
+
+  const eligible =
+    await this.isCreatorPayoutEligible(mitra);
+
+  if (!eligible) {
+    return null;
+  }
+
+  const settings =
+    await this.getOrCreateSettings();
+
+  const amount =
+    Number(settings.creatorPayoutAmount ?? 0);
+
+  // Zero means Creator Payout is not configured.
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+
+  const payout =
+    this.creatorPayoutRepository.create({
+      solarMitraId: mitra.id,
+      solarMitraName: mitra.name,
+      creatorId: Number(mitra.createdBy),
+      creatorName: mitra.createdByName ?? null,
+      creatorRole: mitra.createdByRole ?? null,
+      payoutAmount: amount,
+      status: SolarMitraCreatorPayoutStatus.ELIGIBLE,
+      eligibleAt:
+        mitra.posterVerifiedAt ?? new Date(),
+    });
+
+  // Unique solarMitraId constraint protects against
+  // concurrent duplicate creation.
+  await this.creatorPayoutRepository
+    .createQueryBuilder()
+    .insert()
+    .values(payout)
+    .orIgnore()
+    .execute();
+
+  return this.creatorPayoutRepository.findOne({
+    where: { solarMitraId: mitra.id },
+  });
+}
+
 async updateSolarMitraPosterVerification(
   mitraId: number,
   body: any,
@@ -1455,7 +1620,23 @@ const hasPhoto = Boolean(
   mitra.posterVerificationRemarks =
     remarks || null;
 
-  await this.solarMitraRepository.save(mitra);
+    await this.solarMitraRepository.save(mitra);
+
+  if (
+    status === SolarMitraPosterVerificationStatus.ATTACHED
+  ) {
+    try {
+      await this.ensureCreatorPayout(mitra);
+    } catch (error) {
+      console.error(
+        'Creator Payout generation failed after poster approval',
+        {
+          solarMitraId: mitra.id,
+          error,
+        },
+      );
+    }
+  }
 
   return {
     message:
@@ -1675,6 +1856,38 @@ async getMySolarMitraProfile(
   body: any,
   user: any,
 ) {
+  const roles: UserRole[] =
+    Array.isArray(user?.roles)
+      ? user.roles
+      : [];
+
+  const isSolarMitraAssistant =
+    roles.includes(
+      UserRole.SOLAR_MITRA_ASSISTANT,
+    ) &&
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.FRANCHISE_HEAD);
+
+  if (isSolarMitraAssistant) {
+    body = { ...body };
+
+    delete body.payoutAmountOverride;
+    delete body.requiredPaymentPercentageOverride;
+    delete body.franchiseManagerId;
+    delete body.franchiseManagerName;
+  }
+
+    const canAssignFranchiseManager =
+    roles.includes(UserRole.OWNER) ||
+    roles.includes(UserRole.FRANCHISE_HEAD);
+
+  if (!canAssignFranchiseManager) {
+    body = { ...body };
+
+    delete body.franchiseManagerId;
+    delete body.franchiseManagerName;
+  }
+
   const mitra =
     await this.getSolarMitra(id);
 
@@ -2661,6 +2874,421 @@ async getReferral(id: number) {
   return referral;
 }
 
+async generateCreatorPayoutReconciliation(query: any) {
+  return this.dataSource.transaction(
+    'SERIALIZABLE',
+    async (manager) => {
+      const settings = await manager
+        .getRepository(SolarMitraSetting)
+        .findOne({
+          where: { isActive: true },
+          order: { id: 'DESC' },
+        });
+
+      if (!settings) {
+        throw new BadRequestException(
+          'Active Solar Mitra settings not found',
+        );
+      }
+
+      const payoutAmount = Number(
+        settings.creatorPayoutAmount ?? 0,
+      );
+
+      const expectedAmount = Number(
+        query?.expectedPayoutAmount,
+      );
+
+      const expectedEligibleCount = Number(
+        query?.expectedEligibleCount,
+      );
+
+      if (
+        !Number.isFinite(payoutAmount) ||
+        payoutAmount <= 0
+      ) {
+        throw new BadRequestException(
+          'Configure a Creator Payout amount greater than zero',
+        );
+      }
+
+      if (
+        !Number.isFinite(expectedAmount) ||
+        expectedAmount <= 0 ||
+        !Number.isSafeInteger(expectedEligibleCount) ||
+        expectedEligibleCount <= 0
+      ) {
+        throw new BadRequestException(
+          'A valid reconciliation preview is required',
+        );
+      }
+
+      if (expectedAmount !== payoutAmount) {
+        throw new BadRequestException(
+          'Creator Payout amount changed. Refresh the preview.',
+        );
+      }
+
+      const candidates = await this
+        .buildCreatorPayoutReconciliationQuery(
+          query,
+          manager,
+        )
+        .getMany();
+
+      const eligibleMitras: SolarMitra[] = [];
+      let excludedCount = 0;
+
+      for (const mitra of candidates) {
+        const eligible =
+          await this.isCreatorPayoutEligible(
+            mitra,
+            manager,
+          );
+
+        if (eligible) {
+          eligibleMitras.push(mitra);
+        } else {
+          excludedCount++;
+        }
+      }
+
+      if (
+        eligibleMitras.length !== expectedEligibleCount
+      ) {
+        throw new BadRequestException(
+          'Eligible payout count changed. Refresh the preview.',
+        );
+      }
+
+      const createdPayoutIds: number[] = [];
+
+      for (const mitra of eligibleMitras) {
+        const result = await manager
+          .createQueryBuilder()
+          .insert()
+          .into(SolarMitraCreatorPayout)
+          .values({
+            solarMitraId: mitra.id,
+            solarMitraName: mitra.name,
+            creatorId: Number(mitra.createdBy),
+            creatorName: mitra.createdByName ?? null,
+            creatorRole: mitra.createdByRole ?? null,
+            payoutAmount,
+            status:
+              SolarMitraCreatorPayoutStatus.ELIGIBLE,
+            eligibleAt:
+              mitra.posterVerifiedAt ?? new Date(),
+          })
+          .orIgnore()
+          .returning(['id'])
+          .execute();
+
+        const insertedId = Number(
+          result.raw?.[0]?.id,
+        );
+
+        if (
+          !Number.isSafeInteger(insertedId) ||
+          insertedId <= 0
+        ) {
+          throw new BadRequestException(
+            `Creator Payout for Solar Mitra ${mitra.id} was not inserted. Refresh the preview.`,
+          );
+        }
+
+        createdPayoutIds.push(insertedId);
+      }
+
+      const createdCount = createdPayoutIds.length;
+
+      return {
+        message:
+          'Historical Creator Payout reconciliation completed',
+        creationMonth: query?.creationMonth || null,
+        posterApprovalMonth:
+          query?.posterApprovalMonth || null,
+        creatorId: query?.creatorId || null,
+        configuredPayoutAmount: payoutAmount,
+        totalCandidates: candidates.length,
+        createdCount,
+        excludedCount,
+        skippedCount: 0,
+        createdTotalAmount:
+          Math.round(createdCount * payoutAmount * 100) /
+          100,
+        createdPayoutIds,
+      };
+    },
+  );
+}
+
+async previewCreatorPayoutReconciliation(query: any) {
+  const settings = await this.getOrCreateSettings();
+
+  const payoutAmount = Number(
+    settings.creatorPayoutAmount ?? 0,
+  );
+
+  const candidates = await this
+    .buildCreatorPayoutReconciliationQuery(query)
+    .getMany();
+
+  let eligibleCount = 0;
+  let excludedCount = 0;
+
+  const eligibleRecords: {
+    solarMitraId: number;
+    solarMitraName: string;
+    creatorId: number;
+    creatorName: string | null;
+    posterVerifiedAt: Date | null;
+  }[] = [];
+
+  for (const mitra of candidates) {
+    const eligible = await this.isCreatorPayoutEligible(
+      mitra,
+    );
+
+    if (!eligible) {
+      excludedCount++;
+      continue;
+    }
+
+    eligibleCount++;
+
+    eligibleRecords.push({
+      solarMitraId: mitra.id,
+      solarMitraName: mitra.name,
+      creatorId: Number(mitra.createdBy),
+      creatorName: mitra.createdByName ?? null,
+      posterVerifiedAt: mitra.posterVerifiedAt ?? null,
+    });
+  }
+
+  return {
+    creationMonth: query?.creationMonth || null,
+    posterApprovalMonth:
+      query?.posterApprovalMonth || null,
+    creatorId: query?.creatorId || null,
+
+    configuredPayoutAmount: payoutAmount,
+
+    totalCandidates: candidates.length,
+    eligibleCount,
+    excludedCount,
+
+    estimatedTotalAmount:
+      Math.round(
+        eligibleCount * payoutAmount * 100,
+      ) / 100,
+
+    canGenerate:
+      payoutAmount > 0 && eligibleCount > 0,
+
+    records: eligibleRecords,
+  };
+}
+
+private buildCreatorPayoutReconciliationQuery(
+  query: any,
+  manager: EntityManager = this.dataSource.manager,
+) {
+  const qb = manager
+    .getRepository(SolarMitra)
+    .createQueryBuilder('mitra')
+    .leftJoin(
+      SolarMitraCreatorPayout,
+      'creatorPayout',
+      'creatorPayout."solarMitraId" = mitra.id',
+    )
+    .where('mitra."isHidden" = false')
+    .andWhere('mitra."posterVerificationStatus" = :status', {
+      status: SolarMitraPosterVerificationStatus.ATTACHED,
+    })
+    .andWhere('mitra."createdBy" IS NOT NULL')
+    .andWhere('creatorPayout.id IS NULL');
+
+  const applyMonth = (
+    value: any,
+    column: string,
+    prefix: string,
+  ) => {
+    if (value === undefined || value === null || value === '') {
+      return;
+    }
+
+    const month = String(value).trim();
+
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+      throw new BadRequestException(
+        `${prefix} must be YYYY-MM`,
+      );
+    }
+
+    const [year, monthNumber] = month.split('-').map(Number);
+
+    const from = `${month}-01`;
+    const to =
+      monthNumber === 12
+        ? `${year + 1}-01-01`
+        : `${year}-${String(monthNumber + 1).padStart(2, '0')}-01`;
+
+    qb.andWhere(`${column} >= :${prefix}From`, {
+      [`${prefix}From`]: from,
+    });
+
+    qb.andWhere(`${column} < :${prefix}To`, {
+      [`${prefix}To`]: to,
+    });
+  };
+
+  applyMonth(
+    query?.creationMonth,
+    'mitra."createdAt"',
+    'creation',
+  );
+
+  applyMonth(
+    query?.posterApprovalMonth,
+    'mitra."posterVerifiedAt"',
+    'poster',
+  );
+
+  if (query?.creatorId) {
+    const creatorId = Number(query.creatorId);
+
+    if (!Number.isSafeInteger(creatorId) || creatorId <= 0) {
+      throw new BadRequestException('Invalid creator ID');
+    }
+
+    qb.andWhere('mitra."createdBy" = :creatorId', {
+      creatorId,
+    });
+  }
+
+  return qb.orderBy('mitra.id', 'ASC');
+}
+
+async listCreatorPayouts(query: any) {
+  const qb = this.creatorPayoutRepository
+    .createQueryBuilder('payout')
+    .innerJoin(
+      SolarMitra,
+      'mitra',
+      'mitra.id = payout."solarMitraId"',
+    )
+    .addSelect('mitra.createdAt', 'mitraCreatedAt')
+    .addSelect('mitra.posterVerifiedAt', 'posterApprovedAt');
+
+  const search = String(query?.search || '').trim();
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(payout."solarMitraName") LIKE LOWER(:search)
+        OR LOWER(COALESCE(payout."creatorName", ''))
+          LIKE LOWER(:search)
+      )`,
+      { search: `%${search}%` },
+    );
+  }
+
+  if (query?.status) {
+    const status = String(query.status).trim().toUpperCase();
+
+    if (
+      !Object.values(SolarMitraCreatorPayoutStatus)
+        .includes(status as SolarMitraCreatorPayoutStatus)
+    ) {
+      throw new BadRequestException('Invalid creator payout status');
+    }
+
+    qb.andWhere('payout.status = :status', { status });
+  }
+
+  if (query?.creatorId) {
+    const creatorId = Number(query.creatorId);
+
+    if (!Number.isSafeInteger(creatorId) || creatorId <= 0) {
+      throw new BadRequestException('Invalid creator ID');
+    }
+
+    qb.andWhere('payout."creatorId" = :creatorId', { creatorId });
+  }
+
+  if (query?.solarMitraId) {
+    const solarMitraId = Number(query.solarMitraId);
+
+    if (!Number.isSafeInteger(solarMitraId) || solarMitraId <= 0) {
+      throw new BadRequestException('Invalid Solar Mitra ID');
+    }
+
+    qb.andWhere(
+      'payout."solarMitraId" = :solarMitraId',
+      { solarMitraId },
+    );
+  }
+
+  const applyMonthFilter = (
+    value: any,
+    column: string,
+    prefix: string,
+  ) => {
+    if (value === undefined || value === null || value === '') {
+      return;
+    }
+
+    const month = String(value).trim();
+
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+      throw new BadRequestException(
+        `${prefix} must be in YYYY-MM format`,
+      );
+    }
+
+    const [year, monthNumber] = month.split('-').map(Number);
+
+    const from = `${month}-01`;
+
+    const nextMonth =
+      monthNumber === 12
+        ? `${year + 1}-01-01`
+        : `${year}-${String(monthNumber + 1).padStart(2, '0')}-01`;
+
+    qb.andWhere(`${column} >= :${prefix}From`, {
+      [`${prefix}From`]: from,
+    });
+
+    qb.andWhere(`${column} < :${prefix}To`, {
+      [`${prefix}To`]: nextMonth,
+    });
+  };
+
+  applyMonthFilter(
+    query?.creationMonth,
+    'mitra."createdAt"',
+    'creation',
+  );
+
+  applyMonthFilter(
+    query?.posterApprovalMonth,
+    'mitra."posterVerifiedAt"',
+    'poster',
+  );
+
+  qb.orderBy('payout."eligibleAt"', 'DESC')
+    .addOrderBy('payout.id', 'DESC');
+
+  const { entities, raw } = await qb.getRawAndEntities();
+
+  return entities.map((payout, index) => ({
+    ...payout,
+    mitraCreatedAt: raw[index]?.mitraCreatedAt ?? null,
+    posterApprovedAt: raw[index]?.posterApprovedAt ?? null,
+  }));
+}
+
 async listPayouts(query: any) {
   const qb =
     this.payoutRepository
@@ -2911,6 +3539,80 @@ async getMyPayout(
   }
 
   return payout;
+}
+
+async markCreatorPayoutPaid(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const roles: UserRole[] =
+    Array.isArray(user?.roles) ? user.roles : [];
+
+  if (
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.ACCOUNT_MANAGER)
+  ) {
+    throw new UnauthorizedException(
+      'Only Owner or Account Manager can pay Creator Payouts',
+    );
+  }
+
+  const paymentMode = String(
+    body?.paymentMode || '',
+  ).trim();
+
+  const paymentReference = String(
+    body?.paymentReference || '',
+  ).trim();
+
+  const paymentRemarks = String(
+    body?.paymentRemarks || '',
+  ).trim();
+
+  if (!paymentMode || !paymentReference) {
+    throw new BadRequestException(
+      'Payment mode and transaction reference are required',
+    );
+  }
+
+  const result = await this.creatorPayoutRepository
+    .createQueryBuilder()
+    .update(SolarMitraCreatorPayout)
+    .set({
+      status: SolarMitraCreatorPayoutStatus.PAID,
+      paidAt: new Date(),
+      paidBy: Number(user.id),
+      paidByName: String(user.name || '').trim(),
+      paymentMode,
+      paymentReference,
+      paymentRemarks: paymentRemarks || null,
+    })
+    .where('id = :id', { id })
+    .andWhere('status = :status', {
+      status: SolarMitraCreatorPayoutStatus.ELIGIBLE,
+    })
+    .execute();
+
+  if (result.affected !== 1) {
+    const payout = await this.creatorPayoutRepository.findOne({
+      where: { id },
+    });
+
+    if (!payout) {
+      throw new NotFoundException(
+        'Creator Payout not found',
+      );
+    }
+
+    throw new BadRequestException(
+      'Creator Payout is already paid or is not eligible',
+    );
+  }
+
+  return this.creatorPayoutRepository.findOne({
+    where: { id },
+  });
 }
 
 
@@ -4090,6 +4792,32 @@ async uploadMeetingDocument(
         body?.requiredProjectPaymentPercentage,
       );
 
+          const creatorPayoutAmount =
+      body?.creatorPayoutAmount === undefined
+        ? Number(setting.creatorPayoutAmount ?? 0)
+        : Number(body.creatorPayoutAmount);
+
+    if (
+      body?.creatorPayoutAmount !== undefined &&
+      (
+        body.creatorPayoutAmount === null ||
+        String(body.creatorPayoutAmount).trim() === ''
+      )
+    ) {
+      throw new BadRequestException(
+        'Valid creator payout amount is required',
+      );
+    }
+
+    if (
+      !Number.isFinite(creatorPayoutAmount) ||
+      creatorPayoutAmount < 0
+    ) {
+      throw new BadRequestException(
+        'Creator payout amount must be zero or greater',
+      );
+    }
+
     if (
       !Number.isFinite(payoutAmount) ||
       payoutAmount < 0
@@ -4111,6 +4839,9 @@ async uploadMeetingDocument(
 
     setting.defaultPayoutAmount =
       payoutAmount;
+
+    setting.creatorPayoutAmount =
+      creatorPayoutAmount;
 
     setting.requiredProjectPaymentPercentage =
       requiredPercentage;

@@ -102,9 +102,17 @@ private isFranchiseHead(
 private hasFullSolarMitraVisibility(
   user: any,
 ): boolean {
+  const roles: string[] =
+    Array.isArray(user?.roles)
+      ? user.roles
+      : [];
+
   return (
     this.isOwner(user) ||
-    this.isFranchiseHead(user)
+    this.isFranchiseHead(user) ||
+    roles.includes(
+      UserRole.SOLAR_MITRA_ASSISTANT,
+    )
   );
 }
 
@@ -319,6 +327,90 @@ async referralDetail(
     );
   }
 
+  @Post('creator-payouts/reconciliation/generate')
+generateCreatorPayoutReconciliation(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  const roles: string[] =
+    Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+
+  if (!roles.includes(UserRole.OWNER)) {
+    throw new ForbiddenException(
+      'Only Owner can generate historical Creator Payouts',
+    );
+  }
+
+  return this.service.generateCreatorPayoutReconciliation(
+    body,
+  );
+}
+
+  @Get('creator-payouts/reconciliation/preview')
+previewCreatorPayoutReconciliation(
+  @Req() req: any,
+  @Query() query: any,
+) {
+  const roles: string[] =
+    Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+
+  if (!roles.includes(UserRole.OWNER)) {
+    throw new ForbiddenException(
+      'Only Owner can preview historical Creator Payout reconciliation',
+    );
+  }
+
+  return this.service.previewCreatorPayoutReconciliation(
+    query,
+  );
+}
+
+  @Get('creator-payouts/list')
+async listCreatorPayouts(
+  @Req() req: any,
+  @Query() query: any,
+) {
+  this.assertManagementAccess(req.user);
+
+  const roles: string[] =
+    Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+
+  if (
+    this.hasFullSolarMitraVisibility(req.user) ||
+    roles.includes(UserRole.ACCOUNT_MANAGER)
+  ) {
+    return this.service.listCreatorPayouts(query);
+  }
+
+  const mitras =
+    await this.service.listSolarMitras(
+      this.isFranchiseManager(req.user)
+        ? {
+            franchiseManagerId: Number(req.user.id),
+          }
+        : {
+            createdBy: Number(req.user.id),
+          },
+    );
+
+  const allowedMitraIds = new Set(
+    mitras.map((item) => Number(item.id)),
+  );
+
+  const payouts =
+    await this.service.listCreatorPayouts(query);
+
+  return payouts.filter((item) =>
+    allowedMitraIds.has(Number(item.solarMitraId)),
+  );
+}
+
   @Get('payouts/list')
 async listPayouts(
   @Req() req: any,
@@ -447,6 +539,37 @@ if (
   }
 
   return payout;
+}
+
+@Patch('creator-payouts/:id/paid')
+markCreatorPayoutPaid(
+  @Req() req: any,
+
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+) {
+  const roles: string[] =
+    Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+
+  if (
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.ACCOUNT_MANAGER)
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Account Manager can mark Creator Payouts as paid',
+    );
+  }
+
+  return this.service.markCreatorPayoutPaid(
+    id,
+    body,
+    req.user,
+  );
 }
 
 @Patch('payouts/:id/paid')
