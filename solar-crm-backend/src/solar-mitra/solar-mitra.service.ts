@@ -3100,7 +3100,7 @@ private buildCreatorPayoutReconciliationQuery(
     .leftJoin(
       SolarMitraCreatorPayout,
       'creatorPayout',
-      'creatorPayout."solarMitraId" = mitra.id',
+      '"creatorPayout"."solarMitraId" = "mitra"."id"',
     )
     .where('mitra."isHidden" = false')
     .andWhere('mitra."posterVerificationStatus" = :status', {
