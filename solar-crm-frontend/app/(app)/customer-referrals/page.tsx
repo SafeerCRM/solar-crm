@@ -42,6 +42,7 @@ const [loadingActivities, setLoadingActivities] =
   useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [changingVisibility, setChangingVisibility] = useState(false);
 
   const [users, setUsers] = useState<CrmUser[]>([]);
 const [assigneeSearch, setAssigneeSearch] = useState('');
@@ -49,12 +50,13 @@ const [showAssigneeOptions, setShowAssigneeOptions] = useState(false);
 const [assigning, setAssigning] = useState(false);
 
   const [filters, setFilters] = useState({
-    search: '',
-    status: '',
-    city: '',
-    page: 1,
-    limit: 20,
-  });
+  search: '',
+  status: '',
+  city: '',
+  showHidden: 'ACTIVE',
+  page: 1,
+  limit: 20,
+});
 
   const [totalPages, setTotalPages] = useState(1);
 
@@ -89,9 +91,20 @@ const [assigning, setAssigning] = useState(false);
       setItems(data);
       setTotalPages(res.data?.totalPages || 1);
 
-      if (!selected && data.length) {
-        selectReferral(data[0]);
-      }
+      const currentSelectedId = selected?.id;
+
+const stillVisible = data.find(
+  (item: any) => item.id === currentSelectedId,
+);
+
+if (stillVisible) {
+  setSelected(stillVisible);
+} else if (data.length) {
+  selectReferral(data[0]);
+} else {
+  setSelected(null);
+  setActivities([]);
+}
     } catch (error: any) {
       console.error(error);
       alert(error?.response?.data?.message || 'Failed to load referrals');
@@ -168,6 +181,54 @@ const [assigning, setAssigning] = useState(false);
     alert(error?.response?.data?.message || 'Failed to assign referral');
   } finally {
     setAssigning(false);
+  }
+};
+
+const changeReferralVisibility = async (
+  item: any,
+  hide: boolean,
+) => {
+  if (!item?.id || changingVisibility) return;
+
+  const action = hide ? 'hide' : 'restore';
+
+  const confirmed = window.confirm(
+    `Are you sure you want to ${action} the referral for ${
+      item.referredName || 'this contact'
+    }?`,
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setChangingVisibility(true);
+
+    await axios.patch(
+      `${API_BASE_URL}/customer-portal/referrals/${item.id}/${action}`,
+      {},
+      { headers: headers() },
+    );
+
+    if (selected?.id === item.id) {
+      setSelected(null);
+      setActivities([]);
+    }
+
+    await loadReferrals();
+
+    alert(
+      hide
+        ? 'Referral hidden successfully'
+        : 'Referral restored successfully',
+    );
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        `Failed to ${action} referral`,
+    );
+  } finally {
+    setChangingVisibility(false);
   }
 };
 
@@ -262,7 +323,7 @@ loadReferrals();
       <section className="rounded-[2rem] bg-white p-5 shadow-xl">
         <h2 className="text-xl font-black text-gray-900">Filters</h2>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <div className="mt-4 grid gap-3 md:grid-cols-5">
           <input
             placeholder="Search name / phone / customer code"
             value={filters.search}
@@ -295,6 +356,22 @@ loadReferrals();
               </option>
             ))}
           </select>
+
+          <select
+  value={filters.showHidden}
+  onChange={(e) =>
+    setFilters({
+      ...filters,
+      showHidden: e.target.value,
+      page: 1,
+    })
+  }
+  className="rounded-2xl border p-3"
+>
+  <option value="ACTIVE">Active Referrals</option>
+  <option value="HIDDEN">Hidden Referrals</option>
+  <option value="ALL">All Referrals</option>
+</select>
 
           <button
             onClick={() => {
@@ -398,7 +475,31 @@ loadReferrals();
                   </p>
                 </div>
 
-                <StatusBadge status={selected.status} />
+                <div className="flex flex-wrap items-center gap-2">
+  <StatusBadge status={selected.status} />
+
+  <button
+    type="button"
+    disabled={changingVisibility}
+    onClick={() =>
+      changeReferralVisibility(
+        selected,
+        !selected.isHidden,
+      )
+    }
+    className={`rounded-xl px-4 py-2 text-xs font-black text-white disabled:opacity-50 ${
+      selected.isHidden
+        ? 'bg-emerald-600 hover:bg-emerald-700'
+        : 'bg-red-600 hover:bg-red-700'
+    }`}
+  >
+    {changingVisibility
+      ? 'Please wait...'
+      : selected.isHidden
+        ? 'Restore Referral'
+        : 'Hide Referral'}
+  </button>
+</div>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
