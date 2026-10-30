@@ -2878,18 +2878,24 @@ const appointmentTime =
         type: 'text',
         text: appointmentType,
       },
-      ...(useMeetingManagerCallButton
-  ? [
-      {
-        type: 'text',
-        text: meetingManagerName,
-      },
-      {
-        type: 'text',
-        text: meetingManagerPhone,
-      },
-    ]
-  : []),
+      ...(
+  (
+    useMeetingManagerCallButton ||
+    automation.templateName ===
+      'customer_appointment_reminder_hi'
+  )
+    ? [
+        {
+          type: 'text',
+          text: meetingManagerName,
+        },
+        {
+          type: 'text',
+          text: meetingManagerPhone,
+        },
+      ]
+    : []
+),
     ],
   },
   ...(meetingContactToken
