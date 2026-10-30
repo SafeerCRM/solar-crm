@@ -2320,6 +2320,43 @@ async updateAfterSalesRequest(id: number, body: any, user: any) {
     : '';
   const newVisitTime = request.scheduledVisitTime || '';
 
+  // Customer-friendly Indian date and time for WhatsApp.
+const whatsappVisitDate = newVisitDate
+  ? `${newVisitDate.slice(8, 10)}/${newVisitDate.slice(5, 7)}/${newVisitDate.slice(0, 4)}`
+  : 'तारीख तय नहीं';
+
+const whatsappVisitTime = (() => {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(newVisitTime.trim());
+
+  if (!match) {
+    return newVisitTime || 'समय तय नहीं';
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (hours > 23 || minutes > 59) {
+    return newVisitTime;
+  }
+
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours % 12 || 12;
+
+  return `${String(displayHours).padStart(2, '0')}:${match[2]} ${period}`;
+})();
+
+  // Customer-friendly Hindi labels for WhatsApp notifications.
+// Database status values remain unchanged.
+const afterSalesStatusHindi: Record<string, string> = {
+  NEW: 'नया अनुरोध',
+  APPROVED: 'अनुरोध स्वीकृत',
+  ASSIGNED: 'तकनीशियन नियुक्त',
+  IN_PROGRESS: 'सर्विस का कार्य जारी है',
+  COMPLETED: 'सर्विस पूरी हो गई',
+  REJECTED: 'अनुरोध अस्वीकृत',
+  CANCELLED: 'अनुरोध रद्द',
+};
+
   const statusChanged = oldStatus !== request.status;
 
   const assignmentChanged =
@@ -2333,6 +2370,12 @@ async updateAfterSalesRequest(id: number, body: any, user: any) {
   // Persist changes before creating activities or notifications.
   const savedRequest =
     await this.afterSalesRequestRepository.save(request);
+
+    // Unique identifier for this successful update.
+// Allows genuine repeated events to generate new WhatsApp messages.
+const updateOccurrenceId = `${Date.now()}-${Math.random()
+  .toString(36)
+  .slice(2, 10)}`;
 
   const sendAfterSalesWhatsapp = async (
     automationKey: string,
@@ -2383,16 +2426,54 @@ async updateAfterSalesRequest(id: number, body: any, user: any) {
     );
 
     await sendAfterSalesWhatsapp(
-      'CUSTOMER_AFTER_SALES_STATUS',
-      `STATUS:${oldStatus}-TO-${savedRequest.status}`,
-      [
-        savedRequest.customerName || 'Customer',
-        String(savedRequest.id),
-        savedRequest.serviceName || 'Service',
-        String(savedRequest.status),
-      ],
-    );
+  'CUSTOMER_AFTER_SALES_STATUS',
+  `STATUS:${updateOccurrenceId}`,
+  [
+    savedRequest.customerName || 'Customer',
+    String(savedRequest.id),
+    savedRequest.serviceName || 'Service',
+    afterSalesStatusHindi[savedRequest.status] ||
+      String(savedRequest.status),
+  ],
+);
   }
+
+
+// Retrieve the assigned technician's contact details
+// from the existing Staff Directory.
+let technicianContactName =
+  savedRequest.assignedToName || '';
+
+let technicianContactPhone = '';
+
+if (assignmentChanged && savedRequest.assignedTo) {
+  const technicianStaff =
+  await this.staffMemberRepository.findOne({
+    where: {
+      linkedUserId: savedRequest.assignedTo,
+      isActive: true,
+      isHidden: false,
+    },
+  });
+
+  if (technicianStaff) {
+    technicianContactName = String(
+      technicianStaff.publicDisplayName ||
+      technicianStaff.fullName ||
+      savedRequest.assignedToName ||
+      '',
+    ).trim();
+
+    // Priority: Public phone → Mobile → Alternate mobile
+    technicianContactPhone = String(
+      technicianStaff.publicPhone ||
+      technicianStaff.mobile ||
+      technicianStaff.alternateMobile ||
+      '',
+    ).trim();
+  }
+}
+
 
   if (assignmentChanged && savedRequest.assignedToName) {
     await this.addAfterSalesRequestActivity(
@@ -2410,15 +2491,16 @@ async updateAfterSalesRequest(id: number, body: any, user: any) {
     );
 
     await sendAfterSalesWhatsapp(
-      'CUSTOMER_AFTER_SALES_ASSIGNMENT',
-      `ASSIGNED:${savedRequest.assignedTo || 'NA'}:${savedRequest.assignedToName}`,
-      [
-        savedRequest.customerName || 'Customer',
-        String(savedRequest.id),
-        savedRequest.serviceName || 'Service',
-        savedRequest.assignedToName,
-      ],
-    );
+  'CUSTOMER_AFTER_SALES_ASSIGNMENT',
+  `ASSIGNED:${updateOccurrenceId}`,
+  [
+    savedRequest.customerName || 'Customer',
+    String(savedRequest.id),
+    savedRequest.serviceName || 'Service',
+    technicianContactName,
+    technicianContactPhone || 'उपलब्ध नहीं',
+  ],
+);
   }
 
   if (visitChanged && (newVisitDate || newVisitTime)) {
@@ -2440,16 +2522,16 @@ async updateAfterSalesRequest(id: number, body: any, user: any) {
     );
 
     await sendAfterSalesWhatsapp(
-      'CUSTOMER_AFTER_SALES_VISIT',
-      `VISIT:${newVisitDate}:${newVisitTime}`,
-      [
-        savedRequest.customerName || 'Customer',
-        String(savedRequest.id),
-        savedRequest.serviceName || 'Service',
-        newVisitDate || 'Date pending',
-        newVisitTime || 'Time pending',
-      ],
-    );
+  'CUSTOMER_AFTER_SALES_VISIT',
+  `VISIT:${updateOccurrenceId}`,
+  [
+    savedRequest.customerName || 'Customer',
+    String(savedRequest.id),
+    savedRequest.serviceName || 'Service',
+    whatsappVisitDate,
+    whatsappVisitTime,
+  ],
+);
   }
 
   return savedRequest;
@@ -3800,10 +3882,21 @@ async listReferrals(query: any) {
 
   const status = String(query?.status || '').trim();
 
-  const qb = this.referralRepository
-    .createQueryBuilder('referral')
-    .where('referral.isHidden = false')
-    .orderBy('referral.createdAt', 'DESC');
+const showHidden = String(query?.showHidden || 'ACTIVE')
+  .trim()
+  .toUpperCase();
+
+const qb = this.referralRepository
+  .createQueryBuilder('referral')
+  .orderBy('referral.createdAt', 'DESC');
+
+if (showHidden === 'HIDDEN') {
+  qb.where('referral.isHidden = true');
+} else if (showHidden === 'ALL') {
+  // Include active and hidden referrals.
+} else {
+  qb.where('referral.isHidden = false');
+}
 
   if (query?.customerId) {
     qb.andWhere('referral.customerId = :customerId', {
@@ -3926,6 +4019,20 @@ async listReferrals(query: any) {
     limit,
     totalPages: Math.ceil(total / limit) || 1,
   };
+}
+
+async setReferralHidden(id: number, isHidden: boolean) {
+  const referral = await this.referralRepository.findOne({
+    where: { id },
+  });
+
+  if (!referral) {
+    throw new NotFoundException('Referral not found');
+  }
+
+  referral.isHidden = isHidden;
+
+  return this.referralRepository.save(referral);
 }
 
 async updateReferral(id: number, body: any, user: any) {

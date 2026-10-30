@@ -374,6 +374,36 @@ updateReferral(
   'OWNER',
   'CUSTOMER_MANAGER',
   'PROJECT_MANAGER',
+  'MARKETING_HEAD',
+  'LEAD_MANAGER',
+  'INSPECTION_MANAGER',
+)
+@Patch('referrals/:id/hide')
+hideReferral(
+  @Param('id', ParseIntPipe) id: number,
+) {
+  return this.service.setReferralHidden(id, true);
+}
+
+@Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
+  'MARKETING_HEAD',
+  'LEAD_MANAGER',
+  'INSPECTION_MANAGER',
+)
+@Patch('referrals/:id/restore')
+restoreReferral(
+  @Param('id', ParseIntPipe) id: number,
+) {
+  return this.service.setReferralHidden(id, false);
+}
+
+@Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
   'MAINTENANCE_MANAGER',
   'INSPECTION_MANAGER',
 )
