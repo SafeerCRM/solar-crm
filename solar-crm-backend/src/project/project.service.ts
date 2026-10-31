@@ -3469,14 +3469,22 @@ private async sendCustomerPaymentReceivedWhatsapp(
         },
       );
 
-    const formattedAmount =
-      `₹${receivedAmount.toLocaleString(
-        'en-IN',
-        {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 2,
-        },
-      )}`;
+    const paymentAutomation =
+  await this.whatsappService.getAutomation(
+    'CUSTOMER_PAYMENT_RECEIVED',
+  );
+
+const amountWithoutSymbol =
+  receivedAmount.toLocaleString('en-IN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+
+const formattedAmount =
+  paymentAutomation?.templateName ===
+  'customer_payment_received_cta_hi'
+    ? amountWithoutSymbol
+    : `₹${amountWithoutSymbol}`;
 
     const result =
       await this.whatsappService.executeAutomation({
