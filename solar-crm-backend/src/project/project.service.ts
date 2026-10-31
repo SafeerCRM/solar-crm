@@ -42764,6 +42764,21 @@ private async calculateProjectTimelineRuleStatus(
   }
 
   /*
+ * DCR Certificate is not applicable
+ * to NON_SUBSIDY projects.
+ */
+if (
+  String(project.subsidyCategory) ===
+    'NON_SUBSIDY' &&
+  String(rule.targetModule) ===
+    'SUBSIDY' &&
+  String(rule.targetMilestone) ===
+    'DCR_CERTIFICATE_READY'
+) {
+  return null;
+}
+
+  /*
  * Resolve the configured timeline trigger.
  *
  * PAYMENT_PERCENT_REACHED
@@ -44786,6 +44801,21 @@ const resolveBulkPaymentPercentage =
       ) {
         continue;
       }
+
+      /*
+ * Do not evaluate DCR Certificate
+ * for NON_SUBSIDY projects.
+ */
+if (
+  String(project.subsidyCategory) ===
+    'NON_SUBSIDY' &&
+  String(rule.targetModule) ===
+    'SUBSIDY' &&
+  String(rule.targetMilestone) ===
+    'DCR_CERTIFICATE_READY'
+) {
+  continue;
+}
 
       const triggerKey =
   `${project.id}:${String(
