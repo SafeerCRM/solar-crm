@@ -18,7 +18,7 @@ const TEMPLATE_PATH =
   '/solar-mitra-assets/qr-standee-template.pdf';
 
 const FONT_PATH =
-  '/solar-mitra-assets/fonts/NotoSansDevanagari.ttf';
+  '/solar-mitra-assets/fonts/NotoSansDevanagari-Bold.ttf';
 
 const INCH = 72;
 
@@ -173,18 +173,18 @@ page.drawImage(qrImage, {
   height: qrSize,
 });
 
-    const label =
+ const label =
   `सोलर मित्र : ${mitra.name}`;
 
-let fontSize = 23;
+let fontSize = 30;
 
 while (
-  fontSize > 11 &&
+  fontSize > 12 &&
   hindiFont.widthOfTextAtSize(
     label,
     fontSize,
   ) >
-    BOX_WIDTH - 30
+    BOX_WIDTH - 36
 ) {
   fontSize--;
 }
