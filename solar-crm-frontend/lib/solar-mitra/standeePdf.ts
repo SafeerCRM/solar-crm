@@ -18,7 +18,7 @@ const TEMPLATE_PATH =
   '/solar-mitra-assets/qr-standee-template.pdf';
 
 const FONT_PATH =
-  '/solar-mitra-assets/fonts/NotoSansDevanagari-Bold.ttf';
+  '/solar-mitra-assets/fonts/NotoSansDevanagari-ExtraBold.ttf';
 
 const INCH = 72;
 
@@ -164,7 +164,7 @@ const qrX =
   BOX_X + (BOX_WIDTH - qrSize) / 2;
 
 const qrY =
-  BOX_Y + 90;
+  BOX_Y + 120;
 
 page.drawImage(qrImage, {
   x: qrX,
@@ -173,37 +173,107 @@ page.drawImage(qrImage, {
   height: qrSize,
 });
 
- const label =
-  `सोलर मित्र : ${mitra.name}`;
+const label =
+  `सोलर मित्र : ${mitra.name.trim()}`;
 
-let fontSize = 30;
+const maxTextWidth = BOX_WIDTH - 30;
 
+const wrapLabel = (size: number): string[] => {
+  const words = label.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    const candidate = currentLine
+      ? `${currentLine} ${word}`
+      : word;
+
+    if (
+      hindiFont.widthOfTextAtSize(
+        candidate,
+        size,
+      ) <= maxTextWidth
+    ) {
+      currentLine = candidate;
+    } else {
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+
+      currentLine = word;
+    }
+  }
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
+};
+
+let fontSize = 40;
+let labelLines = wrapLabel(fontSize);
+
+// Fit the complete label into a maximum of two lines.
 while (
   fontSize > 12 &&
-  hindiFont.widthOfTextAtSize(
-    label,
-    fontSize,
-  ) >
-    BOX_WIDTH - 36
+  (
+    labelLines.length > 2 ||
+    labelLines.some(
+      (line) =>
+        hindiFont.widthOfTextAtSize(
+          line,
+          fontSize,
+        ) > maxTextWidth,
+    )
+  )
 ) {
   fontSize--;
+  labelLines = wrapLabel(fontSize);
 }
 
-    const textWidth =
+if (
+  labelLines.length > 2 ||
+  labelLines.some(
+    (line) =>
       hindiFont.widthOfTextAtSize(
-        label,
+        line,
         fontSize,
-      );
+      ) > maxTextWidth,
+  )
+) {
+  throw new Error(
+    `Solar Mitra #${mitra.id} name is too long for the standee`,
+  );
+}
 
-    page.drawText(label, {
-      x:
-        BOX_X +
-        (BOX_WIDTH - textWidth) / 2,
-      y: BOX_Y + 35,
-      size: fontSize,
-      font: hindiFont,
-      color: rgb(0, 0, 0),
-    });
+const lineHeight = fontSize * 1.15;
+
+// Reserve the area beneath the QR for the name.
+const labelBottomY = BOX_Y + 24;
+
+labelLines.forEach((line, index) => {
+  const textWidth =
+    hindiFont.widthOfTextAtSize(
+      line,
+      fontSize,
+    );
+
+  const y =
+    labelBottomY +
+    (labelLines.length - 1 - index) *
+      lineHeight;
+
+  page.drawText(line, {
+    x:
+      BOX_X +
+      (BOX_WIDTH - textWidth) / 2,
+    y,
+    size: fontSize,
+    font: hindiFont,
+    color: rgb(0, 0, 0),
+  });
+});
   }
 
   return output.save();
