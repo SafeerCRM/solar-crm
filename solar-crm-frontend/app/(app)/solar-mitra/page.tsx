@@ -497,10 +497,15 @@ export default function SolarMitraPage() {
     useState<CurrentUser | null>(null);
 
   const [mitras, setMitras] =
-    useState<SolarMitra[]>([]);
+  useState<SolarMitra[]>([]);
 
-  const [referrals, setReferrals] =
-    useState<SolarMitraReferral[]>([]);
+// Selected Solar Mitras for bulk QR standee PDF export.
+// Store IDs so selection survives filtering.
+const [selectedStandeeMitraIds, setSelectedStandeeMitraIds] =
+  useState<number[]>([]);
+
+const [referrals, setReferrals] =
+  useState<SolarMitraReferral[]>([]);
 
     const [
   creatorReconciliationCreationMonth,
@@ -3972,6 +3977,259 @@ const convertMeetingToSolarMitra =
     }
   };
 
+
+const downloadSelectedStandeePdfs = async () => {
+  if (selectedStandeeMitraIds.length === 0) {
+    alert('Select at least one Solar Mitra');
+    return;
+  }
+
+  const selectedIds = new Set(selectedStandeeMitraIds);
+
+  const selectedMitras = mitras.filter((item) =>
+    selectedIds.has(item.id),
+  );
+
+  if (selectedMitras.length !== selectedIds.size) {
+    alert(
+      'Some selected Solar Mitras are no longer loaded. Refresh the list and select them again.',
+    );
+    return;
+  }
+
+  const missingQr = selectedMitras.find(
+    (item) => !item.publicReferralToken,
+  );
+
+  if (missingQr) {
+    alert(
+      `Referral QR is unavailable for Solar Mitra #${missingQr.id}`,
+    );
+    return;
+  }
+
+  try {
+    const { generateSolarMitraStandeePdf } =
+      await import('@/lib/solar-mitra/standeePdf');
+
+    const pdfBytes = await generateSolarMitraStandeePdf(
+      selectedMitras.map((item) => ({
+        id: item.id,
+        name: item.name,
+        publicReferralToken: item.publicReferralToken,
+      })),
+    );
+
+    const fileName =
+      `solar-mitra-standees-${selectedMitras.length}.pdf`;
+
+    const blob = new Blob(
+      [new Uint8Array(pdfBytes)],
+      { type: 'application/pdf' },
+    );
+
+    const { Capacitor } = await import('@capacitor/core');
+
+    if (Capacitor.isNativePlatform()) {
+      const { Filesystem, Directory } =
+        await import('@capacitor/filesystem');
+
+      const { Share } =
+        await import('@capacitor/share');
+
+      const base64Data = await new Promise<string>(
+        (resolve, reject) => {
+          const reader = new FileReader();
+
+          reader.onloadend = () => {
+            const result = String(reader.result || '');
+            const base64 = result.split(',')[1];
+
+            if (!base64) {
+              reject(new Error('Unable to encode standee PDF'));
+              return;
+            }
+
+            resolve(base64);
+          };
+
+          reader.onerror = () =>
+            reject(new Error('Failed to prepare PDF for sharing'));
+
+          reader.readAsDataURL(blob);
+        },
+      );
+
+      const savedFile = await Filesystem.writeFile({
+        path: `shared/${Date.now()}-${fileName}`,
+        data: base64Data,
+        directory: Directory.Cache,
+        recursive: true,
+      });
+
+      await Share.share({
+        title: 'Solar Mitra Bulk Standee PDF',
+        text: `${selectedMitras.length} Solar Mitra standees`,
+        url: savedFile.uri,
+        dialogTitle: 'Save or Share Standee PDF',
+      });
+
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = fileName;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      (error.name === 'AbortError' ||
+        error.message.toLowerCase().includes('cancelled') ||
+        error.message.toLowerCase().includes('canceled'))
+    ) {
+      return;
+    }
+
+    console.error('Bulk standee PDF generation failed:', error);
+
+    alert(
+      error instanceof Error
+        ? error.message
+        : 'Failed to generate bulk standee PDF',
+    );
+  }
+};
+
+
+  
+const downloadStandeePdf = async (
+  item: SolarMitra,
+) => {
+  if (!item.publicReferralToken) {
+    alert('Referral QR is unavailable for this Solar Mitra');
+    return;
+  }
+
+  try {
+    const { generateSolarMitraStandeePdf } =
+      await import('@/lib/solar-mitra/standeePdf');
+
+    const pdfBytes =
+      await generateSolarMitraStandeePdf([
+        {
+          id: item.id,
+          name: item.name,
+          publicReferralToken: item.publicReferralToken,
+        },
+      ]);
+
+    const fileName =
+      `solar-mitra-${item.id}-standee.pdf`;
+
+    const { Capacitor } =
+      await import('@capacitor/core');
+
+    // Android APK: save PDF and open native share sheet.
+    if (Capacitor.isNativePlatform()) {
+      const {
+        Filesystem,
+        Directory,
+      } = await import('@capacitor/filesystem');
+
+      const { Share } =
+        await import('@capacitor/share');
+
+      const pdfBlob = new Blob(
+        [new Uint8Array(pdfBytes)],
+        { type: 'application/pdf' },
+      );
+
+      const base64Data =
+        await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+
+          reader.onloadend = () => {
+            const result = String(reader.result || '');
+            const base64 = result.split(',')[1];
+
+            if (!base64) {
+              reject(new Error('Unable to encode standee PDF'));
+              return;
+            }
+
+            resolve(base64);
+          };
+
+          reader.onerror = () =>
+            reject(new Error('Failed to prepare PDF for sharing'));
+
+          reader.readAsDataURL(pdfBlob);
+        });
+
+      const savedFile =
+        await Filesystem.writeFile({
+          path: `shared/${Date.now()}-${fileName}`,
+          data: base64Data,
+          directory: Directory.Cache,
+          recursive: true,
+        });
+
+      await Share.share({
+        title: 'Solar Mitra Standee PDF',
+        text: `${item.name} - Solar Mitra Standee`,
+        url: savedFile.uri,
+        dialogTitle: 'Save or Share Standee PDF',
+      });
+
+      return;
+    }
+
+    // Web browser: download the generated PDF.
+    const blob = new Blob(
+      [new Uint8Array(pdfBytes)],
+      { type: 'application/pdf' },
+    );
+
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      (error.name === 'AbortError' ||
+        error.message.toLowerCase().includes('cancelled') ||
+        error.message.toLowerCase().includes('canceled'))
+    ) {
+      return;
+    }
+
+    console.error('Standee PDF generation/share failed:', error);
+
+    alert(
+      error instanceof Error
+        ? error.message
+        : 'Failed to generate or share Standee PDF',
+    );
+  }
+};
+
+
   const copyReferralLink = async (
     item: SolarMitra,
   ) => {
@@ -5143,14 +5401,77 @@ const exportSolarReferralsCsv = async (
   </p>
 </div>
 
+<div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4">
+  <button
+    type="button"
+    disabled={filteredMitras.length === 0}
+    onClick={() => {
+      setSelectedStandeeMitraIds((previous) => [
+        ...new Set([
+          ...previous,
+          ...filteredMitras.map((item) => item.id),
+        ]),
+      ]);
+    }}
+    className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    Select All Filtered ({filteredMitras.length})
+  </button>
+
+  <button
+    type="button"
+    disabled={selectedStandeeMitraIds.length === 0}
+    onClick={() => setSelectedStandeeMitraIds([])}
+    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    Clear Selection
+  </button>
+
+  <span className="text-sm font-semibold text-orange-900">
+  Selected: {selectedStandeeMitraIds.length} Solar Mitra(s)
+</span>
+
+<button
+  type="button"
+  disabled={selectedStandeeMitraIds.length === 0}
+  onClick={downloadSelectedStandeePdfs}
+  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+>
+  🖨️ Download / Share Selected Standees
+  {' '}({selectedStandeeMitraIds.length})
+</button>
+</div>
+
 <div className="mt-5 grid gap-4 xl:grid-cols-2">
-            {filteredMitras.map(
-              (item) => (
-                <div
-                  key={item.id}
-                  className="rounded-2xl border border-gray-200 p-5"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
+  {filteredMitras.map(
+    (item) => (
+      <div
+        key={item.id}
+        className="rounded-2xl border border-gray-200 p-5"
+      >
+        <label className="mb-4 flex cursor-pointer items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2">
+          <input
+            type="checkbox"
+            checked={selectedStandeeMitraIds.includes(item.id)}
+            onChange={(event) => {
+              const checked = event.target.checked;
+
+              setSelectedStandeeMitraIds((previous) =>
+                checked
+                  ? previous.includes(item.id)
+                    ? previous
+                    : [...previous, item.id]
+                  : previous.filter((id) => id !== item.id),
+              );
+            }}
+            className="h-4 w-4 accent-orange-600"
+          />
+          <span className="text-sm font-semibold text-orange-900">
+            Select for QR Standee PDF
+          </span>
+        </label>
+
+        <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-lg font-black text-gray-900">
@@ -5424,14 +5745,23 @@ const exportSolarReferralsCsv = async (
   📍 Navigate
 </button>
                     <button
-                      type="button"
-                      onClick={() =>
-                        openQr(item)
-                      }
-                      className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-bold text-white"
-                    >
-                      Show QR
-                    </button>
+  type="button"
+  onClick={() =>
+    openQr(item)
+  }
+  className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-bold text-white"
+>
+  Show QR
+</button>
+
+<button
+  type="button"
+  disabled={!item.publicReferralToken}
+  onClick={() => downloadStandeePdf(item)}
+  className="rounded-lg bg-orange-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+>
+  🖨️ Download / Share Standee PDF
+</button>
 
                     <button
   type="button"
