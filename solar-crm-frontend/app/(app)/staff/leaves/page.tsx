@@ -60,13 +60,40 @@ export default function StaffLeavesPage() {
   };
 
   const fetchStaff = async () => {
-    const res = await axios.get(`${API_BASE_URL}/staff`, {
-      params: { page: 1, limit: 100, showHidden: false },
+  try {
+    const firstRes = await axios.get(`${API_BASE_URL}/staff`, {
+      params: {
+        page: 1,
+        limit: 100,
+        showHidden: false,
+      },
       headers: headers(),
     });
 
-    setStaff(res.data?.data || []);
-  };
+    const allStaff = [...(firstRes.data?.data || [])];
+
+    const totalPages = Number(
+      firstRes.data?.totalPages || 1,
+    );
+
+    for (let page = 2; page <= totalPages; page++) {
+      const res = await axios.get(`${API_BASE_URL}/staff`, {
+        params: {
+          page,
+          limit: 100,
+          showHidden: false,
+        },
+        headers: headers(),
+      });
+
+      allStaff.push(...(res.data?.data || []));
+    }
+
+    setStaff(allStaff);
+  } catch (error) {
+    console.error('Failed to fetch leave staff:', error);
+  }
+};
 
   const fetchLeaves = async () => {
     const res = await axios.get(`${API_BASE_URL}/staff/leaves`, {
