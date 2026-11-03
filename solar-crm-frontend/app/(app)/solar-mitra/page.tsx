@@ -504,6 +504,11 @@ export default function SolarMitraPage() {
 const [selectedStandeeMitraIds, setSelectedStandeeMitraIds] =
   useState<number[]>([]);
 
+  const [
+  selectedPosterQrMitraIds,
+  setSelectedPosterQrMitraIds,
+] = useState<number[]>([]);
+
 const [referrals, setReferrals] =
   useState<SolarMitraReferral[]>([]);
 
@@ -3984,13 +3989,20 @@ const convertMeetingToSolarMitra =
   };
 
 
-const downloadSelectedStandeePdfs = async () => {
-  if (selectedStandeeMitraIds.length === 0) {
+const downloadSelectedStandeePdfs = async (
+  format: 'SMALL_STANDEE' | 'POSTER_QR_INSERT' = 'SMALL_STANDEE',
+) => {
+  const selectedMitraIds =
+    format === 'SMALL_STANDEE'
+      ? selectedStandeeMitraIds
+      : selectedPosterQrMitraIds;
+
+  if (selectedMitraIds.length === 0) {
     alert('Select at least one Solar Mitra');
     return;
   }
 
-  const selectedIds = new Set(selectedStandeeMitraIds);
+  const selectedIds = new Set(selectedMitraIds);
 
   const selectedMitras = mitras.filter((item) =>
     selectedIds.has(item.id),
@@ -4024,10 +4036,13 @@ const downloadSelectedStandeePdfs = async () => {
     name: item.businessName?.trim() || '',
     publicReferralToken: item.publicReferralToken,
   })),
+  format,
 );
 
     const fileName =
-      `solar-mitra-standees-${selectedMitras.length}.pdf`;
+  format === 'SMALL_STANDEE'
+    ? `solar-mitra-small-standees-${selectedMitras.length}.pdf`
+    : `solar-mitra-poster-qr-inserts-${selectedMitras.length}.pdf`;
 
     const blob = new Blob(
       [new Uint8Array(pdfBytes)],
@@ -4073,12 +4088,17 @@ const downloadSelectedStandeePdfs = async () => {
         recursive: true,
       });
 
-      await Share.share({
-        title: 'Solar Mitra Bulk Standee PDF',
-        text: `${selectedMitras.length} Solar Mitra standees`,
-        url: savedFile.uri,
-        dialogTitle: 'Save or Share Standee PDF',
-      });
+      const formatLabel =
+  format === 'SMALL_STANDEE'
+    ? 'Small Standees'
+    : 'Poster QR Inserts';
+
+await Share.share({
+  title: `Solar Mitra ${formatLabel} PDF`,
+  text: `${selectedMitras.length} Solar Mitra ${formatLabel}`,
+  url: savedFile.uri,
+  dialogTitle: `Save or Share ${formatLabel} PDF`,
+});
 
       return;
     }
@@ -4118,6 +4138,7 @@ const downloadSelectedStandeePdfs = async () => {
   
 const downloadStandeePdf = async (
   item: SolarMitra,
+  format: 'SMALL_STANDEE' | 'POSTER_QR_INSERT' = 'SMALL_STANDEE',
 ) => {
   if (!item.publicReferralToken) {
     alert('Referral QR is unavailable for this Solar Mitra');
@@ -4129,16 +4150,21 @@ const downloadStandeePdf = async (
       await import('@/lib/solar-mitra/standeePdf');
 
     const pdfBytes =
-  await generateSolarMitraStandeePdf([
-    {
-      id: item.id,
-      name: item.businessName?.trim() || '',
-      publicReferralToken: item.publicReferralToken,
-    },
-  ]);
+  await generateSolarMitraStandeePdf(
+    [
+      {
+        id: item.id,
+        name: item.businessName?.trim() || '',
+        publicReferralToken: item.publicReferralToken,
+      },
+    ],
+    format,
+  );
 
     const fileName =
-      `solar-mitra-${item.id}-standee.pdf`;
+  format === 'SMALL_STANDEE'
+    ? `solar-mitra-${item.id}-small-standee.pdf`
+    : `solar-mitra-${item.id}-poster-qr-insert.pdf`;
 
     const { Capacitor } =
       await import('@capacitor/core');
@@ -4188,12 +4214,17 @@ const downloadStandeePdf = async (
           recursive: true,
         });
 
-      await Share.share({
-        title: 'Solar Mitra Standee PDF',
-        text: `${item.name} - Solar Mitra Standee`,
-        url: savedFile.uri,
-        dialogTitle: 'Save or Share Standee PDF',
-      });
+      const formatLabel =
+  format === 'SMALL_STANDEE'
+    ? 'Small Standee'
+    : 'Poster QR Insert';
+
+await Share.share({
+  title: `Solar Mitra ${formatLabel} PDF`,
+  text: `${item.businessName?.trim() || item.name} - ${formatLabel}`,
+  url: savedFile.uri,
+  dialogTitle: `Save or Share ${formatLabel} PDF`,
+});
 
       return;
     }
@@ -5407,45 +5438,106 @@ const exportSolarReferralsCsv = async (
   </p>
 </div>
 
-<div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4">
-  <button
-    type="button"
-    disabled={filteredMitras.length === 0}
-    onClick={() => {
-      setSelectedStandeeMitraIds((previous) => [
-        ...new Set([
-          ...previous,
-          ...filteredMitras.map((item) => item.id),
-        ]),
-      ]);
-    }}
-    className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-  >
-    Select All Filtered ({filteredMitras.length})
-  </button>
+<div className="mt-5 grid gap-4 lg:grid-cols-2">
+  {/* Small Standee controls */}
+  <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+    <p className="mb-3 text-sm font-black text-orange-900">
+      Small Standee (4 × 6 inches)
+    </p>
 
-  <button
-    type="button"
-    disabled={selectedStandeeMitraIds.length === 0}
-    onClick={() => setSelectedStandeeMitraIds([])}
-    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-  >
-    Clear Selection
-  </button>
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        disabled={filteredMitras.length === 0}
+        onClick={() =>
+          setSelectedStandeeMitraIds((previous) => [
+            ...new Set([
+              ...previous,
+              ...filteredMitras.map((item) => item.id),
+            ]),
+          ])
+        }
+        className="rounded-lg bg-orange-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+      >
+        Select All Filtered ({filteredMitras.length})
+      </button>
 
-  <span className="text-sm font-semibold text-orange-900">
-  Selected: {selectedStandeeMitraIds.length} Solar Mitra(s)
-</span>
+      <button
+        type="button"
+        disabled={selectedStandeeMitraIds.length === 0}
+        onClick={() => setSelectedStandeeMitraIds([])}
+        className="rounded-lg border border-orange-300 bg-white px-3 py-2 text-xs font-bold text-orange-900 disabled:opacity-50"
+      >
+        Clear Selection
+      </button>
+    </div>
 
-<button
+    <p className="mt-3 text-sm font-semibold text-orange-900">
+      Selected: {selectedStandeeMitraIds.length}
+    </p>
+
+    <button
+      type="button"
+      disabled={selectedStandeeMitraIds.length === 0}
+      onClick={() =>
+  void downloadSelectedStandeePdfs('SMALL_STANDEE')
+}
+      className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+    >
+      Download / Share Selected Standees
+      {' '}({selectedStandeeMitraIds.length})
+    </button>
+  </div>
+
+  {/* Poster QR Insert controls */}
+  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+    <p className="mb-3 text-sm font-black text-blue-900">
+      Poster QR Insert (6 × 6.5 inches)
+    </p>
+
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        disabled={filteredMitras.length === 0}
+        onClick={() =>
+          setSelectedPosterQrMitraIds((previous) => [
+            ...new Set([
+              ...previous,
+              ...filteredMitras.map((item) => item.id),
+            ]),
+          ])
+        }
+        className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+      >
+        Select All Filtered ({filteredMitras.length})
+      </button>
+
+      <button
+        type="button"
+        disabled={selectedPosterQrMitraIds.length === 0}
+        onClick={() => setSelectedPosterQrMitraIds([])}
+        className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-bold text-blue-900 disabled:opacity-50"
+      >
+        Clear Selection
+      </button>
+    </div>
+
+    <p className="mt-3 text-sm font-semibold text-blue-900">
+      Selected: {selectedPosterQrMitraIds.length}
+    </p>
+
+    <button
   type="button"
-  disabled={selectedStandeeMitraIds.length === 0}
-  onClick={downloadSelectedStandeePdfs}
-  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+  disabled={selectedPosterQrMitraIds.length === 0}
+  onClick={() =>
+    void downloadSelectedStandeePdfs('POSTER_QR_INSERT')
+  }
+  className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
 >
-  🖨️ Download / Share Selected Standees
-  {' '}({selectedStandeeMitraIds.length})
+  🖨️ Download / Share Selected QR Inserts
+  {' '}({selectedPosterQrMitraIds.length})
 </button>
+  </div>
 </div>
 
 <div className="mt-5 grid gap-4 xl:grid-cols-2">
@@ -5455,27 +5547,55 @@ const exportSolarReferralsCsv = async (
         key={item.id}
         className="rounded-2xl border border-gray-200 p-5"
       >
-        <label className="mb-4 flex cursor-pointer items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2">
-          <input
-            type="checkbox"
-            checked={selectedStandeeMitraIds.includes(item.id)}
-            onChange={(event) => {
-              const checked = event.target.checked;
+        <div className="mb-4 grid gap-2 sm:grid-cols-2">
+  {/* Small branded standee selection */}
+  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-3 py-3">
+    <input
+      type="checkbox"
+      checked={selectedStandeeMitraIds.includes(item.id)}
+      onChange={(event) => {
+        const checked = event.target.checked;
 
-              setSelectedStandeeMitraIds((previous) =>
-                checked
-                  ? previous.includes(item.id)
-                    ? previous
-                    : [...previous, item.id]
-                  : previous.filter((id) => id !== item.id),
-              );
-            }}
-            className="h-4 w-4 accent-orange-600"
-          />
-          <span className="text-sm font-semibold text-orange-900">
-            Select for QR Standee PDF
-          </span>
-        </label>
+        setSelectedStandeeMitraIds((previous) =>
+          checked
+            ? previous.includes(item.id)
+              ? previous
+              : [...previous, item.id]
+            : previous.filter((id) => id !== item.id),
+        );
+      }}
+      className="h-4 w-4 accent-orange-600"
+    />
+
+    <span className="text-xs font-bold text-orange-900">
+      Small Standee (4 × 6)
+    </span>
+  </label>
+
+  {/* Poster QR insert selection */}
+  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-3">
+    <input
+      type="checkbox"
+      checked={selectedPosterQrMitraIds.includes(item.id)}
+      onChange={(event) => {
+        const checked = event.target.checked;
+
+        setSelectedPosterQrMitraIds((previous) =>
+          checked
+            ? previous.includes(item.id)
+              ? previous
+              : [...previous, item.id]
+            : previous.filter((id) => id !== item.id),
+        );
+      }}
+      className="h-4 w-4 accent-blue-600"
+    />
+
+    <span className="text-xs font-bold text-blue-900">
+      Poster QR Insert (6 × 6.5)
+    </span>
+  </label>
+</div>
 
         <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -5763,10 +5883,23 @@ const exportSolarReferralsCsv = async (
 <button
   type="button"
   disabled={!item.publicReferralToken}
-  onClick={() => downloadStandeePdf(item)}
+  onClick={() =>
+    void downloadStandeePdf(item, 'SMALL_STANDEE')
+  }
   className="rounded-lg bg-orange-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
 >
-  🖨️ Download / Share Standee PDF
+  🖨️ Small Standee PDF (4 × 6)
+</button>
+
+<button
+  type="button"
+  disabled={!item.publicReferralToken}
+  onClick={() =>
+    void downloadStandeePdf(item, 'POSTER_QR_INSERT')
+  }
+  className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+>
+  🖨️ Poster QR Insert PDF (6 × 6.5)
 </button>
 
                     <button

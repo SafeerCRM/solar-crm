@@ -14,6 +14,10 @@ export type StandeeMitra = {
   publicReferralToken?: string | null;
 };
 
+export type SolarMitraPrintFormat =
+  | 'POSTER_QR_INSERT'
+  | 'SMALL_STANDEE';
+
 const TEMPLATE_PATH =
   '/solar-mitra-assets/qr-standee-template.pdf';
 
@@ -24,6 +28,9 @@ const INCH = 72;
 
 const POSTER_WIDTH = 11 * INCH;
 const POSTER_HEIGHT = 17 * INCH;
+
+const STANDEE_WIDTH = 4 * INCH;
+const STANDEE_HEIGHT = 6 * INCH;
 
 const BOX_WIDTH = 6 * INCH;
 const BOX_HEIGHT = 6.5 * INCH;
@@ -39,6 +46,7 @@ const REFERRAL_BASE_URL =
 
 export async function generateSolarMitraStandeePdf(
   mitras: StandeeMitra[],
+  format: SolarMitraPrintFormat = 'POSTER_QR_INSERT',
 ): Promise<Uint8Array> {
   if (mitras.length === 0) {
     throw new Error(
@@ -96,33 +104,113 @@ export async function generateSolarMitraStandeePdf(
     );
   }
 
-    const page = output.addPage([
-      POSTER_WIDTH,
-      POSTER_HEIGHT,
-    ]);
+    const isQrInsert =
+  format === 'POSTER_QR_INSERT';
 
-    // Scale original artwork to the exact poster size.
-    page.drawPage(templatePage, {
-      x: 0,
-      y: 0,
-      width: POSTER_WIDTH,
-      height: POSTER_HEIGHT,
-    });
+const page = output.addPage(
+  isQrInsert
+    ? [BOX_WIDTH, BOX_HEIGHT]
+    : [STANDEE_WIDTH, STANDEE_HEIGHT],
+);
+
+const standeeScale = Math.min(
+  STANDEE_WIDTH / templatePage.width,
+  STANDEE_HEIGHT / templatePage.height,
+);
+
+const standeeArtworkWidth =
+  templatePage.width * standeeScale;
+
+const standeeArtworkHeight =
+  templatePage.height * standeeScale;
+
+const standeeArtworkX =
+  (STANDEE_WIDTH - standeeArtworkWidth) / 2;
+
+const standeeArtworkY =
+  (STANDEE_HEIGHT - standeeArtworkHeight) / 2;
+
+const contentWidth = isQrInsert
+  ? BOX_WIDTH
+  : BOX_WIDTH * standeeScale;
+
+const contentHeight = isQrInsert
+  ? BOX_HEIGHT
+  : BOX_HEIGHT * standeeScale;
+
+const contentX = isQrInsert
+  ? 0
+  : standeeArtworkX +
+    (STANDEE_WIDTH - 2 * standeeArtworkX -
+      contentWidth) / 2;
+
+const contentY = isQrInsert
+  ? 0
+  : standeeArtworkY +
+    (POSTER_HEIGHT - 5 * INCH - BOX_HEIGHT) *
+      standeeScale;
+
+  if (!isQrInsert) {
+    // Fit the original artwork proportionally
+// inside the 4 x 6 inch standee.
+const artworkScale = Math.min(
+  STANDEE_WIDTH / templatePage.width,
+  STANDEE_HEIGHT / templatePage.height,
+);
+
+const artworkWidth =
+  templatePage.width * artworkScale;
+
+const artworkHeight =
+  templatePage.height * artworkScale;
+
+const artworkX =
+  (STANDEE_WIDTH - artworkWidth) / 2;
+
+const artworkY =
+  (STANDEE_HEIGHT - artworkHeight) / 2;
+
+// White background for any tiny side margins.
+page.drawRectangle({
+  x: 0,
+  y: 0,
+  width: STANDEE_WIDTH,
+  height: STANDEE_HEIGHT,
+  color: rgb(1, 1, 1),
+});
+
+page.drawPage(templatePage, {
+  x: artworkX,
+  y: artworkY,
+  width: artworkWidth,
+  height: artworkHeight,
+});
 
     // Cover the reference QR/name panel.
     // This area is based on the supplied template preview.
     const originalPanel = {
-      x: (135 / 778) * POSTER_WIDTH,
-      y:
-        POSTER_HEIGHT -
-        (821 / 1200) * POSTER_HEIGHT,
-      width:
-        ((642 - 135) / 778) *
-        POSTER_WIDTH,
-      height:
-        ((821 - 293) / 1200) *
-        POSTER_HEIGHT,
-    };
+  x:
+    standeeArtworkX +
+    (135 / 778) *
+      POSTER_WIDTH *
+      standeeScale,
+
+  y:
+    standeeArtworkY +
+    (POSTER_HEIGHT -
+      (821 / 1200) * POSTER_HEIGHT) *
+      standeeScale,
+
+  width:
+    ((642 - 135) / 778) *
+    POSTER_WIDTH *
+    standeeScale,
+
+  height:
+    ((821 - 293) / 1200) *
+    POSTER_HEIGHT *
+    standeeScale,
+};
 
     page.drawRectangle({
       x: originalPanel.x,
@@ -131,17 +219,22 @@ export async function generateSolarMitraStandeePdf(
       height: originalPanel.height,
       color: rgb(1, 1, 1),
     });
+    }
 
     // Exact 6 x 6.5 inch QR/name box.
     page.drawRectangle({
-      x: BOX_X,
-      y: BOX_Y,
-      width: BOX_WIDTH,
-      height: BOX_HEIGHT,
-      color: rgb(1, 1, 1),
-      borderColor: rgb(0.35, 0.35, 0.35),
-      borderWidth: 0.75,
-    });
+  x: contentX,
+  y: contentY,
+  width: contentWidth,
+  height: contentHeight,
+  color: rgb(1, 1, 1),
+  ...(isQrInsert
+    ? {
+        borderColor: rgb(0.35, 0.35, 0.35),
+        borderWidth: 0.75,
+      }
+    : {}),
+});
 
     const referralUrl =
       REFERRAL_BASE_URL +
@@ -164,13 +257,16 @@ export async function generateSolarMitraStandeePdf(
 
     // Keep the QR centered with sufficient
 // space for the Solar Mitra name below.
-const qrSize = 4.6 * INCH;
+const qrSize = isQrInsert
+  ? 4.6 * INCH
+  : 4.6 * INCH * standeeScale;
 
 const qrX =
-  BOX_X + (BOX_WIDTH - qrSize) / 2;
+  contentX + (contentWidth - qrSize) / 2;
 
 const qrY =
-  BOX_Y + 120;
+  contentY +
+  (isQrInsert ? 120 : 120 * standeeScale);
 
 page.drawImage(qrImage, {
   x: qrX,
@@ -182,7 +278,9 @@ page.drawImage(qrImage, {
 const heading = 'सोलर मित्र :';
 const shopName = mitra.name.trim();
 
-const maxTextWidth = BOX_WIDTH - 30;
+const maxTextWidth = isQrInsert
+  ? BOX_WIDTH - 30
+  : contentWidth - 30 * standeeScale;
 
 const wrapShopName = (
   size: number,
@@ -224,12 +322,19 @@ const wrapShopName = (
 
 // Keep the heading on its own line.
 // Allow up to two additional lines for the shop name.
-let fontSize = 40;
+let fontSize = isQrInsert
+  ? 40
+  : 40 * standeeScale;
 let shopLines: string[] = [];
 let labelLines: string[] = [];
 
-const labelBottomY = BOX_Y + 24;
-const qrClearance = 12;
+const labelBottomY =
+  contentY +
+  (isQrInsert ? 24 : 24 * standeeScale);
+
+const qrClearance = isQrInsert
+  ? 12
+  : 12 * standeeScale;
 
 const fitsLabel = (size: number): boolean => {
   shopLines = wrapShopName(size);
@@ -264,11 +369,19 @@ const fitsLabel = (size: number): boolean => {
   return widthFits && heightFits;
 };
 
+const minFontSize = isQrInsert
+  ? 12
+  : 12 * standeeScale;
+
+const fontStep = isQrInsert
+  ? 1
+  : standeeScale;
+
 while (
-  fontSize > 12 &&
+  fontSize > minFontSize &&
   !fitsLabel(fontSize)
 ) {
-  fontSize--;
+  fontSize -= fontStep;
 }
 
 if (!fitsLabel(fontSize)) {
@@ -293,8 +406,8 @@ labelLines.forEach((line, index) => {
 
   page.drawText(line, {
     x:
-      BOX_X +
-      (BOX_WIDTH - textWidth) / 2,
+  contentX +
+  (contentWidth - textWidth) / 2,
     y,
     size: fontSize,
     font: hindiFont,
