@@ -173,13 +173,18 @@ page.drawImage(qrImage, {
   height: qrSize,
 });
 
-const label =
-  `सोलर मित्र : ${mitra.name.trim()}`;
+const heading = 'सोलर मित्र :';
+const shopName = mitra.name.trim();
 
 const maxTextWidth = BOX_WIDTH - 30;
 
-const wrapLabel = (size: number): string[] => {
-  const words = label.split(/\s+/).filter(Boolean);
+const wrapShopName = (
+  size: number,
+): string[] => {
+  const words = shopName
+    .split(/\s+/)
+    .filter(Boolean);
+
   const lines: string[] = [];
   let currentLine = '';
 
@@ -211,46 +216,62 @@ const wrapLabel = (size: number): string[] => {
   return lines;
 };
 
+// Keep the heading on its own line.
+// Allow up to two additional lines for the shop name.
 let fontSize = 40;
-let labelLines = wrapLabel(fontSize);
+let shopLines: string[] = [];
+let labelLines: string[] = [];
 
-// Fit the complete label into a maximum of two lines.
-while (
-  fontSize > 12 &&
-  (
-    labelLines.length > 2 ||
-    labelLines.some(
-      (line) =>
-        hindiFont.widthOfTextAtSize(
-          line,
-          fontSize,
-        ) > maxTextWidth,
-    )
-  )
-) {
-  fontSize--;
-  labelLines = wrapLabel(fontSize);
-}
+const labelBottomY = BOX_Y + 24;
+const qrClearance = 12;
 
-if (
-  labelLines.length > 2 ||
-  labelLines.some(
+const fitsLabel = (size: number): boolean => {
+  shopLines = wrapShopName(size);
+  labelLines = [heading, ...shopLines];
+
+  if (
+    !shopName ||
+    shopLines.length > 2 ||
+    shopLines.length === 0
+  ) {
+    return false;
+  }
+
+  const widthFits = labelLines.every(
     (line) =>
       hindiFont.widthOfTextAtSize(
         line,
-        fontSize,
-      ) > maxTextWidth,
-  )
+        size,
+      ) <= maxTextWidth,
+  );
+
+  const lineHeight = size * 1.15;
+
+  const labelTopY =
+    labelBottomY +
+    (labelLines.length - 1) * lineHeight +
+    size;
+
+  const heightFits =
+    labelTopY <= qrY - qrClearance;
+
+  return widthFits && heightFits;
+};
+
+while (
+  fontSize > 12 &&
+  !fitsLabel(fontSize)
 ) {
+  fontSize--;
+}
+
+if (!fitsLabel(fontSize)) {
   throw new Error(
-    `Solar Mitra #${mitra.id} name is too long for the standee`,
+    `Solar Mitra #${mitra.id} name cannot fit safely below the QR`,
   );
 }
 
 const lineHeight = fontSize * 1.15;
-
-// Reserve the area beneath the QR for the name.
-const labelBottomY = BOX_Y + 24;
 
 labelLines.forEach((line, index) => {
   const textWidth =
