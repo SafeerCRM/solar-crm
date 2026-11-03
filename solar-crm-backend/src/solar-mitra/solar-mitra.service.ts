@@ -942,12 +942,28 @@ async getSolarMitraPortalReferral(
   }
 
   const name =
-    String(body?.name || '').trim();
+  String(body?.name || '').trim();
 
-  const primaryPhone =
-    this.normalizePhone(
-      body?.primaryPhone,
-    );
+const businessName =
+  String(body?.businessName || '')
+    .trim()
+    .toUpperCase();
+
+if (!businessName) {
+  throw new BadRequestException(
+    'Business / Shop Name is required',
+  );
+}
+
+body = {
+  ...body,
+  businessName,
+};
+
+const primaryPhone =
+  this.normalizePhone(
+    body?.primaryPhone,
+  );
 
   if (!name) {
     throw new BadRequestException(
@@ -1896,15 +1912,33 @@ async getMySolarMitraProfile(
    * ordinary Solar Mitra profile changes.
    */
   const requestedName =
-    body?.name !== undefined
-      ? String(body.name || '').trim()
-      : mitra.name;
+  body?.name !== undefined
+    ? String(body.name || '').trim()
+    : mitra.name;
 
-  if (!requestedName) {
+if (!requestedName) {
+  throw new BadRequestException(
+    'Solar Mitra name is required',
+  );
+}
+
+if (body?.businessName !== undefined) {
+  const businessName =
+    String(body.businessName || '')
+      .trim()
+      .toUpperCase();
+
+  if (!businessName) {
     throw new BadRequestException(
-      'Solar Mitra name is required',
+      'Business / Shop Name is required',
     );
   }
+
+  body = {
+    ...body,
+    businessName,
+  };
+}
 
   const requestedEmail =
     body?.email !== undefined

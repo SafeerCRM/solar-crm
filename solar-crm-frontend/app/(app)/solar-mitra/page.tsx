@@ -3188,17 +3188,23 @@ const openNewMeetingModal =
     event.preventDefault();
 
     if (
-      !mitraForm.name.trim() ||
-      !mitraForm.primaryPhone.trim()
-    ) {
-      alert(
-        'Name and primary phone are required',
-      );
-      return;
-    }
+  !mitraForm.name.trim() ||
+  !mitraForm.businessName.trim() ||
+  !mitraForm.primaryPhone.trim()
+) {
+  alert(
+    'Name, Business / Shop Name, and primary phone are required',
+  );
+  return;
+}
 
     const payload = {
       ...mitraForm,
+
+      businessName:
+  mitraForm.businessName
+    .trim()
+    .toUpperCase(),
 
       payoutAmountOverride:
         mitraForm.payoutAmountOverride ===
@@ -4013,12 +4019,12 @@ const downloadSelectedStandeePdfs = async () => {
       await import('@/lib/solar-mitra/standeePdf');
 
     const pdfBytes = await generateSolarMitraStandeePdf(
-      selectedMitras.map((item) => ({
-        id: item.id,
-        name: item.name,
-        publicReferralToken: item.publicReferralToken,
-      })),
-    );
+  selectedMitras.map((item) => ({
+    id: item.id,
+    name: item.businessName?.trim() || '',
+    publicReferralToken: item.publicReferralToken,
+  })),
+);
 
     const fileName =
       `solar-mitra-standees-${selectedMitras.length}.pdf`;
@@ -4123,13 +4129,13 @@ const downloadStandeePdf = async (
       await import('@/lib/solar-mitra/standeePdf');
 
     const pdfBytes =
-      await generateSolarMitraStandeePdf([
-        {
-          id: item.id,
-          name: item.name,
-          publicReferralToken: item.publicReferralToken,
-        },
-      ]);
+  await generateSolarMitraStandeePdf([
+    {
+      id: item.id,
+      name: item.businessName?.trim() || '',
+      publicReferralToken: item.publicReferralToken,
+    },
+  ]);
 
     const fileName =
       `solar-mitra-${item.id}-standee.pdf`;
@@ -8119,20 +8125,20 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
                   />
 
                   <FormField
-                    label="Business / Shop Name"
-                    value={
-                      mitraForm.businessName
-                    }
-                    onChange={(value) =>
-                      setMitraForm(
-                        (prev: any) => ({
-                          ...prev,
-                          businessName:
-                            value,
-                        }),
-                      )
-                    }
-                  />
+  label="Business / Shop Name *"
+  value={
+    mitraForm.businessName
+  }
+  onChange={(value) =>
+    setMitraForm(
+      (prev: any) => ({
+        ...prev,
+        businessName:
+          value.toUpperCase(),
+      }),
+    )
+  }
+/>
 
                   <FormField
                     label="Primary Phone *"

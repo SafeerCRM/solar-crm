@@ -90,6 +90,12 @@ export async function generateSolarMitraStandeePdf(
       );
     }
 
+      if (!mitra.name?.trim()) {
+    throw new Error(
+      `Business / Shop Name is missing for Solar Mitra #${mitra.id}. Please edit the Solar Mitra and enter the shop name before generating the standee.`,
+    );
+  }
+
     const page = output.addPage([
       POSTER_WIDTH,
       POSTER_HEIGHT,
