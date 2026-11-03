@@ -4091,7 +4091,7 @@ const downloadSelectedStandeePdfs = async (
       const formatLabel =
   format === 'SMALL_STANDEE'
     ? 'Small Standees'
-    : 'Poster QR Inserts';
+    : 'Blank Posters (11 × 17)';
 
 await Share.share({
   title: `Solar Mitra ${formatLabel} PDF`,
@@ -4217,7 +4217,7 @@ const downloadStandeePdf = async (
       const formatLabel =
   format === 'SMALL_STANDEE'
     ? 'Small Standee'
-    : 'Poster QR Insert';
+    : 'Blank Poster (11 × 17)';
 
 await Share.share({
   title: `Solar Mitra ${formatLabel} PDF`,
@@ -5489,10 +5489,10 @@ const exportSolarReferralsCsv = async (
     </button>
   </div>
 
-  {/* Poster QR Insert controls */}
+  {/* Blank Poster (11 × 17) controls */}
   <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
     <p className="mb-3 text-sm font-black text-blue-900">
-      Poster QR Insert (6 × 6.5 inches)
+      Blank Poster (11 × 17 inches)
     </p>
 
     <div className="flex flex-wrap items-center gap-2">
@@ -5534,7 +5534,7 @@ const exportSolarReferralsCsv = async (
   }
   className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
 >
-  🖨️ Download / Share Selected QR Inserts
+  🖨️ Download / Share Selected Blank Posters
   {' '}({selectedPosterQrMitraIds.length})
 </button>
   </div>
@@ -5572,7 +5572,7 @@ const exportSolarReferralsCsv = async (
     </span>
   </label>
 
-  {/* Poster QR insert selection */}
+  {/* Blank Poster selection */}
   <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-3">
     <input
       type="checkbox"
@@ -5592,7 +5592,7 @@ const exportSolarReferralsCsv = async (
     />
 
     <span className="text-xs font-bold text-blue-900">
-      Poster QR Insert (6 × 6.5)
+      Blank Poster (11 × 17)
     </span>
   </label>
 </div>
@@ -5899,7 +5899,7 @@ const exportSolarReferralsCsv = async (
   }
   className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
 >
-  🖨️ Poster QR Insert PDF (6 × 6.5)
+  🖨️ Blank Poster PDF (11 × 17)
 </button>
 
                     <button
@@ -8245,17 +8245,17 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <FormField
-                    label="Name *"
-                    value={mitraForm.name}
-                    onChange={(value) =>
-                      setMitraForm(
-                        (prev: any) => ({
-                          ...prev,
-                          name: value,
-                        }),
-                      )
-                    }
-                  />
+  label="Name *"
+  value={mitraForm.name}
+  onChange={(value) =>
+    setMitraForm(
+      (prev: any) => ({
+        ...prev,
+        name: value.toUpperCase(),
+      }),
+    )
+  }
+/>
 
                   <FormField
   label="Business / Shop Name *"

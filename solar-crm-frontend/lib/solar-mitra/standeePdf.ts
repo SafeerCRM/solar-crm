@@ -109,7 +109,7 @@ export async function generateSolarMitraStandeePdf(
 
 const page = output.addPage(
   isQrInsert
-    ? [BOX_WIDTH, BOX_HEIGHT]
+    ? [POSTER_WIDTH, POSTER_HEIGHT]
     : [STANDEE_WIDTH, STANDEE_HEIGHT],
 );
 
@@ -139,13 +139,13 @@ const contentHeight = isQrInsert
   : BOX_HEIGHT * standeeScale;
 
 const contentX = isQrInsert
-  ? 0
+  ? BOX_X
   : standeeArtworkX +
     (STANDEE_WIDTH - 2 * standeeArtworkX -
       contentWidth) / 2;
 
 const contentY = isQrInsert
-  ? 0
+  ? BOX_Y
   : standeeArtworkY +
     (POSTER_HEIGHT - 5 * INCH - BOX_HEIGHT) *
       standeeScale;
