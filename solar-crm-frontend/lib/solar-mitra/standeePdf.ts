@@ -39,7 +39,7 @@ const BOX_X =
   (POSTER_WIDTH - BOX_WIDTH) / 2;
 
 const BOX_Y =
-  POSTER_HEIGHT - 5 * INCH - BOX_HEIGHT;
+  POSTER_HEIGHT - 4 * INCH - BOX_HEIGHT;
 
 const REFERRAL_BASE_URL =
   'https://solar-crm-frontend.vercel.app/solar-mitra-referral/';
