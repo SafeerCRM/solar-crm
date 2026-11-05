@@ -31,6 +31,7 @@ import {
   SolarMitraInterestStatus,
   SolarMitraPrintingStatus,
   SolarMitraPosterVerificationStatus,
+  SolarMitraShopStatus,
 } from './solar-mitra.entity';
 
 import {
@@ -960,6 +961,18 @@ body = {
   businessName,
 };
 
+const shopStatus =
+  String(body?.shopStatus || '').trim();
+
+if (
+  shopStatus !== SolarMitraShopStatus.WITH_SHOP &&
+  shopStatus !== SolarMitraShopStatus.WITHOUT_SHOP
+) {
+  throw new BadRequestException(
+    'Please select Shop Status: With Shop or Without Shop',
+  );
+}
+
 const primaryPhone =
   this.normalizePhone(
     body?.primaryPhone,
@@ -1093,15 +1106,18 @@ const primaryPhone =
         );
 
       const mitra =
-        mitraRepository.create({
-          name,
+  mitraRepository.create({
+    name,
 
-          businessName:
-            String(
-              body?.businessName || '',
-            ).trim() || null,
+    businessName:
+      String(
+        body?.businessName || '',
+      ).trim() || null,
 
-          primaryPhone,
+    shopStatus:
+      shopStatus as SolarMitraShopStatus,
+
+    primaryPhone,
 
           secondaryPhone,
 
@@ -1671,6 +1687,40 @@ const hasPhoto = Boolean(
   };
 }
 
+async updateSolarMitraShopStatus(
+  mitraId: number,
+  body: any,
+  user: any,
+) {
+  const status = String(
+    body?.shopStatus || '',
+  ).trim().toUpperCase();
+
+  if (
+    status !== SolarMitraShopStatus.WITH_SHOP &&
+    status !== SolarMitraShopStatus.WITHOUT_SHOP
+  ) {
+    throw new BadRequestException(
+      'Shop Status must be WITH_SHOP or WITHOUT_SHOP',
+    );
+  }
+
+  const mitra =
+    await this.getSolarMitra(mitraId);
+
+  mitra.shopStatus =
+    status as SolarMitraShopStatus;
+
+  await this.solarMitraRepository.save(mitra);
+
+  return {
+    message:
+      'Solar Mitra Shop Status updated successfully',
+    id: mitra.id,
+    shopStatus: mitra.shopStatus,
+  };
+}
+
 async updateSolarMitraPrintingStatus(
   mitraId: number,
   body: any,
@@ -1937,6 +1987,26 @@ if (body?.businessName !== undefined) {
   body = {
     ...body,
     businessName,
+  };
+}
+
+if (body?.shopStatus !== undefined) {
+  const shopStatus =
+    String(body.shopStatus || '').trim();
+
+  if (
+    shopStatus !== SolarMitraShopStatus.WITH_SHOP &&
+    shopStatus !== SolarMitraShopStatus.WITHOUT_SHOP &&
+    shopStatus !== SolarMitraShopStatus.NOT_SET
+  ) {
+    throw new BadRequestException(
+      'Invalid Shop Status. Select With Shop or Without Shop.',
+    );
+  }
+
+  body = {
+    ...body,
+    shopStatus,
   };
 }
 
@@ -2287,10 +2357,15 @@ if (body?.businessName !== undefined) {
       }
 
       transactionalMitra.name =
-        requestedName;
+  requestedName;
 
-      transactionalMitra.primaryPhone =
-        requestedPrimaryPhone;
+if (body?.shopStatus !== undefined) {
+  transactionalMitra.shopStatus =
+    body.shopStatus as SolarMitraShopStatus;
+}
+
+transactionalMitra.primaryPhone =
+  requestedPrimaryPhone;
 
       (transactionalMitra as any)
         .secondaryPhone =

@@ -24,6 +24,12 @@ export enum SolarMitraPrintingStatus {
   PRINTED = 'PRINTED',
 }
 
+export enum SolarMitraShopStatus {
+  WITH_SHOP = 'WITH_SHOP',
+  WITHOUT_SHOP = 'WITHOUT_SHOP',
+  NOT_SET = 'NOT_SET',
+}
+
 export enum SolarMitraPosterVerificationStatus {
   NOT_ATTACHED = 'NOT_ATTACHED',
   PENDING_VERIFICATION = 'PENDING_VERIFICATION',
@@ -39,11 +45,17 @@ export class SolarMitra {
   @Column({ type: 'text' })
   name: string;
 
-  @Column({ type: 'text', nullable: true })
-  businessName: string;
+@Column({ type: 'text', nullable: true })
+businessName: string;
 
-  @Column({ type: 'text' })
-  primaryPhone: string;
+@Column({
+  type: 'text',
+  default: SolarMitraShopStatus.NOT_SET,
+})
+shopStatus: SolarMitraShopStatus;
+
+@Column({ type: 'text' })
+primaryPhone: string;
 
   @Column({ type: 'text', nullable: true })
   secondaryPhone: string;

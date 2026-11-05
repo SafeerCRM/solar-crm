@@ -1017,6 +1017,35 @@ async updatePrintingStatus(
   );
 }
 
+@Patch(':id/shop-status')
+async updateShopStatus(
+  @Req() req: any,
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  this.assertManagementAccess(req.user);
+
+  const roles: UserRole[] =
+    Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+
+  if (
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.FRANCHISE_HEAD)
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Franchise Head can update Solar Mitra Shop Status',
+    );
+  }
+
+  return this.service.updateSolarMitraShopStatus(
+    id,
+    body,
+    req.user,
+  );
+}
+
 @Patch(':id/interest-status')
 async updateInterestStatus(
   @Req() req: any,
