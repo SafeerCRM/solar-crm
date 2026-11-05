@@ -59,6 +59,7 @@ type SolarMitra = {
   id: number;
   name: string;
   businessName?: string | null;
+  shopStatus?: 'WITH_SHOP' | 'WITHOUT_SHOP' | 'NOT_SET';
   primaryPhone: string;
   secondaryPhone?: string | null;
   email?: string | null;
@@ -287,6 +288,7 @@ type SolarMitraMeeting = {
 const emptyMitraForm = {
   name: '',
   businessName: '',
+  shopStatus: '',
   primaryPhone: '',
   secondaryPhone: '',
   email: '',
@@ -656,6 +658,11 @@ const [uploadingShopPhoto, setUploadingShopPhoto] =
 const [
   mitraPrintingStatus,
   setMitraPrintingStatus,
+] = useState('');
+
+const [
+  mitraShopStatus,
+  setMitraShopStatus,
 ] = useState('');
 
 const [
@@ -1069,6 +1076,57 @@ const canAssignFranchiseManager =
     );
   } finally {
     setUpdatingPosterVerification(false);
+  }
+};
+
+const updateMitraShopStatus = async (
+  item: SolarMitra,
+  value: string,
+) => {
+  if (updatingMitraStatusId !== null) return;
+
+  if (
+    value !== 'WITH_SHOP' &&
+    value !== 'WITHOUT_SHOP'
+  ) {
+    return;
+  }
+
+  const statusLabel =
+    value === 'WITH_SHOP'
+      ? 'With Shop'
+      : 'Without Shop';
+
+  const confirmed = window.confirm(
+    `Update Shop Status for ${item.name} ` +
+      `(ID: ${item.id}) to ${statusLabel}?`,
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setUpdatingMitraStatusId(item.id);
+
+    await axios.patch(
+      `${API_BASE_URL}/solar-mitra/${item.id}/shop-status`,
+      {
+        shopStatus: value,
+      },
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    await loadMitras();
+  } catch (error) {
+    alert(
+      getErrorMessage(
+        error,
+        'Failed to update Solar Mitra Shop Status',
+      ),
+    );
+  } finally {
+    setUpdatingMitraStatusId(null);
   }
 };
 
@@ -1502,6 +1560,13 @@ const updateMitraVerificationStatus = async (
     }
 
     if (
+  mitraShopStatus &&
+  (item.shopStatus || 'NOT_SET') !== mitraShopStatus
+) {
+  return false;
+}
+
+    if (
       mitraCreatedBy &&
       Number(item.createdBy) !== Number(mitraCreatedBy)
     ) {
@@ -1558,6 +1623,7 @@ const updateMitraVerificationStatus = async (
   mitraStatus,
   mitraInterestStatus,
   mitraPrintingStatus,
+  mitraShopStatus,
   mitraCreatedBy,
   mitraDateFilterType,
   mitraSelectedMonth,
@@ -1691,6 +1757,14 @@ if (
 }
 
 if (
+  mitraShopStatus &&
+  (item.shopStatus || 'NOT_SET') !==
+    mitraShopStatus
+) {
+  return false;
+}
+
+if (
   mitraPosterVerificationStatus &&
   (item.posterVerificationStatus || 'NOT_ATTACHED') !==
     mitraPosterVerificationStatus
@@ -1772,6 +1846,7 @@ if (mitraDateFilterType !== 'ALL') {
   mitraStatus,
   mitraInterestStatus,
   mitraPrintingStatus,
+  mitraShopStatus,
   mitraPosterVerificationStatus,
   mitraCreatedBy,
   mitraDateFilterType,
@@ -2137,12 +2212,14 @@ const referralPerformance = useMemo(() => {
   ) => {
     setEditingMitra(item);
 
-    setMitraForm({
-      name: item.name || '',
-      businessName:
-        item.businessName || '',
-      primaryPhone:
-        item.primaryPhone || '',
+setMitraForm({
+  name: item.name || '',
+  businessName:
+    item.businessName || '',
+  shopStatus:
+    item.shopStatus || 'NOT_SET',
+  primaryPhone:
+    item.primaryPhone || '',
       secondaryPhone:
         item.secondaryPhone || '',
       email: item.email || '',
@@ -3222,6 +3299,18 @@ const openNewMeetingModal =
   return;
 }
 
+if (
+  !editingMitra &&
+  !['WITH_SHOP', 'WITHOUT_SHOP'].includes(
+    mitraForm.shopStatus,
+  )
+) {
+  alert(
+    'Please select Shop Status: With Shop or Without Shop',
+  );
+  return;
+}
+
     const payload = {
       ...mitraForm,
 
@@ -4034,6 +4123,36 @@ const downloadSelectedStandeePdfs = async (
     return;
   }
 
+    if (
+    mitraShopStatus === 'WITH_SHOP' &&
+    selectedMitras.some(
+      (item) => item.shopStatus !== 'WITH_SHOP',
+    )
+  ) {
+    alert(
+      'Some selected Solar Mitras do not have With Shop status. ' +
+      'Please clear the previous selection and select only With Shop Solar Mitras.',
+    );
+    return;
+  }
+
+  const unconfirmedShopMitras =
+    selectedMitras.filter(
+      (item) => item.shopStatus !== 'WITH_SHOP',
+    );
+
+  if (unconfirmedShopMitras.length > 0) {
+    const confirmed = window.confirm(
+      `Bulk Printing Warning\n\n` +
+      `${unconfirmedShopMitras.length} of ${selectedMitras.length} selected Solar Mitras ` +
+      `are marked Without Shop or Not Set.\n\n` +
+      `Printing their posters or standees may be unnecessary.\n\n` +
+      `Do you want to continue printing all ${selectedMitras.length} selected Solar Mitras?`,
+    );
+
+    if (!confirmed) return;
+  }
+
   const missingQr = selectedMitras.find(
     (item) => !item.publicReferralToken,
   );
@@ -4159,9 +4278,28 @@ const downloadStandeePdf = async (
   item: SolarMitra,
   format: 'SMALL_STANDEE' | 'POSTER_QR_INSERT' = 'SMALL_STANDEE',
 ) => {
-  if (!item.publicReferralToken) {
+   if (!item.publicReferralToken) {
     alert('Referral QR is unavailable for this Solar Mitra');
     return;
+  }
+
+  if (item.shopStatus !== 'WITH_SHOP') {
+    const shopStatusLabel =
+      item.shopStatus === 'WITHOUT_SHOP'
+        ? 'Without Shop'
+        : 'Not Set / Pending Verification';
+
+    const confirmed = window.confirm(
+      `Printing Warning\n\n` +
+      `Solar Mitra: ${item.name}\n` +
+      `ID: ${item.id}\n` +
+      `Shop Status: ${shopStatusLabel}\n\n` +
+      `This Solar Mitra does not have a confirmed shop. ` +
+      `Printing a poster or standee may be unnecessary.\n\n` +
+      `Do you want to continue printing?`,
+    );
+
+    if (!confirmed) return;
   }
 
   try {
@@ -5242,6 +5380,29 @@ const exportSolarReferralsCsv = async (
   </>
 )}
 
+<select
+  value={mitraShopStatus}
+  onChange={(event) =>
+    setMitraShopStatus(
+      event.target.value,
+    )
+  }
+  className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
+>
+  <option value="">
+    All Shop Statuses
+  </option>
+  <option value="WITH_SHOP">
+    With Shop — दुकान है
+  </option>
+  <option value="WITHOUT_SHOP">
+    Without Shop — दुकान नहीं है
+  </option>
+  <option value="NOT_SET">
+    Not Set — Pending Verification
+  </option>
+</select>
+
             <select
               value={mitraPrintingStatus}
               onChange={(event) =>
@@ -5319,6 +5480,7 @@ const exportSolarReferralsCsv = async (
     setMitraCreatedBy('');
     setMitraInterestStatus('');
     setMitraPrintingStatus('');
+    setMitraShopStatus('');
     setMitraPosterVerificationStatus('');
     setMitraDateFilterType('ALL');
     setMitraSelectedMonth(dayjs().format('YYYY-MM'));
@@ -5483,13 +5645,10 @@ const exportSolarReferralsCsv = async (
         type="button"
         disabled={filteredMitras.length === 0}
         onClick={() =>
-          setSelectedStandeeMitraIds((previous) => [
-            ...new Set([
-              ...previous,
-              ...filteredMitras.map((item) => item.id),
-            ]),
-          ])
-        }
+  setSelectedStandeeMitraIds(
+    filteredMitras.map((item) => item.id),
+  )
+}
         className="rounded-lg bg-orange-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
       >
         Select All Filtered ({filteredMitras.length})
@@ -5533,13 +5692,10 @@ const exportSolarReferralsCsv = async (
         type="button"
         disabled={filteredMitras.length === 0}
         onClick={() =>
-          setSelectedPosterQrMitraIds((previous) => [
-            ...new Set([
-              ...previous,
-              ...filteredMitras.map((item) => item.id),
-            ]),
-          ])
-        }
+  setSelectedPosterQrMitraIds(
+    filteredMitras.map((item) => item.id),
+  )
+}
         className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
       >
         Select All Filtered ({filteredMitras.length})
@@ -5771,7 +5927,48 @@ const exportSolarReferralsCsv = async (
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+<div className="mt-4 grid gap-3 sm:grid-cols-2">
+  {/* Shop Status */}
+  <div className="rounded-xl border border-green-200 bg-green-50/40 p-3">
+    <p className="text-xs font-bold text-gray-700">
+      🏪 Shop Status
+    </p>
+
+    <div className="mt-2">
+      <StatusBadge
+        value={item.shopStatus || 'NOT_SET'}
+      />
+    </div>
+
+    {isOwner || isFranchiseHead ? (
+      <select
+        value={item.shopStatus || 'NOT_SET'}
+        disabled={updatingMitraStatusId !== null}
+        onChange={(event) =>
+          updateMitraShopStatus(
+            item,
+            event.target.value,
+          )
+        }
+        className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+      >
+        <option value="NOT_SET" disabled>
+          Not Set — Pending Verification
+        </option>
+        <option value="WITH_SHOP">
+          With Shop — दुकान है
+        </option>
+        <option value="WITHOUT_SHOP">
+          Without Shop — दुकान नहीं है
+        </option>
+      </select>
+    ) : (
+      <p className="mt-3 text-xs text-gray-500">
+        Managed by Franchise Head
+      </p>
+    )}
+  </div>
+
   {/* Calling Interest Verification */}
   <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3">
     <p className="text-xs font-bold text-gray-700">
@@ -8305,6 +8502,42 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
     )
   }
 />
+
+<label className="text-sm">
+  <span className="mb-1 block font-medium">
+    Shop Status {!editingMitra && '*'}
+  </span>
+
+  <select
+    value={mitraForm.shopStatus || ''}
+    onChange={(event) =>
+      setMitraForm((prev: any) => ({
+        ...prev,
+        shopStatus: event.target.value,
+      }))
+    }
+    required={!editingMitra}
+    className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-orange-500"
+  >
+    <option value="">
+      Select Shop Status
+    </option>
+
+    {editingMitra && (
+      <option value="NOT_SET">
+        Not Set — Not Yet Verified
+      </option>
+    )}
+
+    <option value="WITH_SHOP">
+      With Shop — दुकान है
+    </option>
+
+    <option value="WITHOUT_SHOP">
+      Without Shop — दुकान नहीं है
+    </option>
+  </select>
+</label>
 
                   <FormField
                     label="Primary Phone *"
