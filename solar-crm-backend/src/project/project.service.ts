@@ -1135,12 +1135,9 @@ private async getNextAvailableBillingInvoiceSequence(
     1,
   );
 
-  const finalInvoiceRepository =
-    manager
-      ? manager.getRepository(
-          ProjectFinalInvoice,
-        )
-      : this.projectFinalInvoiceRepository;
+  const finalInvoiceRepository = manager
+    ? manager.getRepository(ProjectFinalInvoice)
+    : this.projectFinalInvoiceRepository;
 
   for (
     let sequence = 1;
@@ -1154,39 +1151,62 @@ private async getNextAvailableBillingInvoiceSequence(
         invoiceDate,
       );
 
-    const hiddenInvoice =
+    const lastSlashIndex =
+      invoiceNumber.lastIndexOf('/');
+
+    const invoicePrefix =
+      invoiceNumber.substring(
+        0,
+        lastSlashIndex + 1,
+      );
+
+    const matchingInvoices =
       await finalInvoiceRepository
         .createQueryBuilder('invoice')
         .where(
-          'LOWER(TRIM(invoice.invoiceNumber)) = LOWER(TRIM(:invoiceNumber))',
+          'LOWER(LEFT(TRIM(invoice.invoiceNumber), :prefixLength)) = LOWER(:invoicePrefix)',
           {
-            invoiceNumber,
+            prefixLength: invoicePrefix.length,
+            invoicePrefix,
           },
         )
         .andWhere(
-          'invoice.isHidden = true',
+          `SUBSTRING(
+            TRIM(invoice.invoiceNumber)
+            FROM :sequenceStart
+          ) ~ '^[0-9]+$'`,
+          {
+            sequenceStart: invoicePrefix.length + 1,
+          },
         )
-        .getOne();
+        .andWhere(
+          `CAST(
+            SUBSTRING(
+              TRIM(invoice.invoiceNumber)
+              FROM :sequenceStart
+            ) AS BIGINT
+          ) = :sequence`,
+          {
+            sequence,
+          },
+        )
+        .getMany();
 
-    if (!hiddenInvoice) {
+    const hasHiddenInvoice =
+      matchingInvoices.some(
+        (invoice) => invoice.isHidden,
+      );
+
+    if (!hasHiddenInvoice) {
       continue;
     }
 
-    const activeInvoice =
-      await finalInvoiceRepository
-        .createQueryBuilder('invoice')
-        .where(
-          'LOWER(TRIM(invoice.invoiceNumber)) = LOWER(TRIM(:invoiceNumber))',
-          {
-            invoiceNumber,
-          },
-        )
-        .andWhere(
-          'invoice.isHidden = false',
-        )
-        .getOne();
+    const hasActiveInvoice =
+      matchingInvoices.some(
+        (invoice) => !invoice.isHidden,
+      );
 
-    if (!activeInvoice) {
+    if (!hasActiveInvoice) {
       return sequence;
     }
   }
@@ -1310,25 +1330,68 @@ private async reserveBillingInvoiceNumber(
   overridden = true;
 }
 
-        const duplicate =
-          await manager
-            .getRepository(
-              ProjectFinalInvoice,
-            )
-            .createQueryBuilder(
-              'invoice',
-            )
-            .where(
-              'LOWER(TRIM(invoice.invoiceNumber)) = LOWER(TRIM(:invoiceNumber))',
+                const normalizedInvoiceNumber =
+          finalInvoiceNumber.match(
+            /^(.*\/)(\d+)$/,
+          );
+
+        let duplicateQuery = manager
+          .getRepository(ProjectFinalInvoice)
+          .createQueryBuilder('invoice')
+          .where('invoice.isHidden = false');
+
+        if (normalizedInvoiceNumber) {
+          const invoicePrefix =
+            normalizedInvoiceNumber[1];
+
+          const invoiceSequence =
+            Number(normalizedInvoiceNumber[2]);
+
+          if (!Number.isSafeInteger(invoiceSequence)) {
+            throw new BadRequestException(
+              'Invalid invoice sequence number',
+            );
+          }
+
+          duplicateQuery = duplicateQuery
+            .andWhere(
+              'LOWER(LEFT(TRIM(invoice.invoiceNumber), :prefixLength)) = LOWER(:invoicePrefix)',
               {
-                invoiceNumber:
-                  finalInvoiceNumber,
+                prefixLength: invoicePrefix.length,
+                invoicePrefix,
               },
             )
             .andWhere(
-              'invoice.isHidden = false',
+              `SUBSTRING(
+                TRIM(invoice.invoiceNumber)
+                FROM :sequenceStart
+              ) ~ '^[0-9]+$'`,
+              {
+                sequenceStart: invoicePrefix.length + 1,
+              },
             )
-            .getOne();
+            .andWhere(
+              `CAST(
+                SUBSTRING(
+                  TRIM(invoice.invoiceNumber)
+                  FROM :sequenceStart
+                ) AS BIGINT
+              ) = :invoiceSequence`,
+              {
+                invoiceSequence,
+              },
+            );
+        } else {
+          duplicateQuery = duplicateQuery.andWhere(
+            'LOWER(TRIM(invoice.invoiceNumber)) = LOWER(TRIM(:invoiceNumber))',
+            {
+              invoiceNumber: finalInvoiceNumber,
+            },
+          );
+        }
+
+        const duplicate =
+          await duplicateQuery.getOne();
 
         if (duplicate) {
           throw new BadRequestException(
@@ -1336,28 +1399,49 @@ private async reserveBillingInvoiceNumber(
           );
         }
 
-        /*
-         * Sequence advances once a number
-         * has been reserved for generation.
+                /*
+         * Genuine hidden-number reuse must not advance
+         * the normal sequence.
          *
-         * Even if Owner manually overrides
-         * the displayed invoice number,
-         * the company's normal automatic
-         * sequence still progresses by one.
+         * A manual override to a higher number belonging
+         * to this billing entity and financial year must
+         * advance the counter beyond that number.
          */
-                if (
-          !isReusedHiddenSequence
-        ) {
+        const invoiceNumberPrefix =
+          suggested.substring(
+            0,
+            suggested.lastIndexOf('/') + 1,
+          );
+
+        const overrideSequenceText =
+          overridden &&
+          finalInvoiceNumber.startsWith(invoiceNumberPrefix)
+            ? finalInvoiceNumber.substring(invoiceNumberPrefix.length)
+            : '';
+
+        const overrideSequence =
+          /^\d+$/.test(overrideSequenceText)
+            ? Number(overrideSequenceText)
+            : null;
+
+        const validHigherOverride =
+          overridden &&
+          overrideSequence !== null &&
+          Number.isSafeInteger(overrideSequence) &&
+          overrideSequence >= normalNextSequence;
+
+        if (!isReusedHiddenSequence || validHigherOverride) {
           company.nextInvoiceNumber =
-            normalNextSequence + 1;
+            validHigherOverride
+              ? Math.max(
+                  normalNextSequence + 1,
+                  overrideSequence! + 1,
+                )
+              : normalNextSequence + 1;
 
           await manager
-            .getRepository(
-              ProjectVendorCompany,
-            )
-            .save(
-              company,
-            );
+            .getRepository(ProjectVendorCompany)
+            .save(company);
         }
 
         return {
@@ -36930,24 +37014,68 @@ async createFinalInvoice(
     true;
 }
 
-        const duplicate =
-          await manager
-            .getRepository(
-              ProjectFinalInvoice,
-            )
-            .createQueryBuilder(
-              'invoice',
-            )
-            .where(
-              'LOWER(TRIM(invoice.invoiceNumber)) = LOWER(TRIM(:invoiceNumber))',
+                const normalizedInvoiceNumber =
+          invoiceNumber.match(
+            /^(.*\/)(\d+)$/,
+          );
+
+        let duplicateQuery = manager
+          .getRepository(ProjectFinalInvoice)
+          .createQueryBuilder('invoice')
+          .where('invoice.isHidden = false');
+
+        if (normalizedInvoiceNumber) {
+          const invoicePrefix =
+            normalizedInvoiceNumber[1];
+
+          const invoiceSequence =
+            Number(normalizedInvoiceNumber[2]);
+
+          if (!Number.isSafeInteger(invoiceSequence)) {
+            throw new BadRequestException(
+              'Invalid invoice sequence number',
+            );
+          }
+
+          duplicateQuery = duplicateQuery
+            .andWhere(
+              'LOWER(LEFT(TRIM(invoice.invoiceNumber), :prefixLength)) = LOWER(:invoicePrefix)',
               {
-                invoiceNumber,
+                prefixLength: invoicePrefix.length,
+                invoicePrefix,
               },
             )
             .andWhere(
-              'invoice.isHidden = false',
+              `SUBSTRING(
+                TRIM(invoice.invoiceNumber)
+                FROM :sequenceStart
+              ) ~ '^[0-9]+$'`,
+              {
+                sequenceStart: invoicePrefix.length + 1,
+              },
             )
-            .getOne();
+            .andWhere(
+              `CAST(
+                SUBSTRING(
+                  TRIM(invoice.invoiceNumber)
+                  FROM :sequenceStart
+                ) AS BIGINT
+              ) = :invoiceSequence`,
+              {
+                invoiceSequence,
+              },
+            );
+        } else {
+          duplicateQuery = duplicateQuery.andWhere(
+            'LOWER(TRIM(invoice.invoiceNumber)) = LOWER(TRIM(:invoiceNumber))',
+            {
+              invoiceNumber,
+            },
+          );
+        }
+
+        const duplicate =
+          await duplicateQuery.getOne();
 
         if (
           duplicate
@@ -37338,20 +37466,49 @@ const savedInvoice:
          * inter-company outstanding reflected.
          */
 
-                if (
-          !isReusedHiddenSequence
-        ) {
-          lockedSeller
-            .nextInvoiceNumber =
-            normalNextSequence + 1;
+          /*
+         * Reusing a hidden invoice number does not
+         * consume the normal sequence.
+         *
+         * A higher manual override for the same
+         * billing entity and financial year advances
+         * the normal counter beyond that number.
+         */
+        const invoiceNumberPrefix =
+          suggestedInvoiceNumber.substring(
+            0,
+            suggestedInvoiceNumber.lastIndexOf('/') + 1,
+          );
+
+        const overrideSequenceText =
+          invoiceNumberOverridden &&
+          invoiceNumber.startsWith(invoiceNumberPrefix)
+            ? invoiceNumber.substring(invoiceNumberPrefix.length)
+            : '';
+
+        const overrideSequence =
+          /^\d+$/.test(overrideSequenceText)
+            ? Number(overrideSequenceText)
+            : null;
+
+        const validHigherOverride =
+          invoiceNumberOverridden &&
+          overrideSequence !== null &&
+          Number.isSafeInteger(overrideSequence) &&
+          overrideSequence >= normalNextSequence;
+
+        if (!isReusedHiddenSequence || validHigherOverride) {
+          lockedSeller.nextInvoiceNumber =
+            validHigherOverride
+              ? Math.max(
+                  normalNextSequence + 1,
+                  overrideSequence! + 1,
+                )
+              : normalNextSequence + 1;
 
           await manager
-            .getRepository(
-              ProjectVendorCompany,
-            )
-            .save(
-              lockedSeller,
-            );
+            .getRepository(ProjectVendorCompany)
+            .save(lockedSeller);
         }
 
         return {
