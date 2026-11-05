@@ -645,6 +645,7 @@ const [uploadingShopPhoto, setUploadingShopPhoto] =
 ] = useState(false);
 
   const [mitraSearch, setMitraSearch] = useState('');
+ const [mitraExactId, setMitraExactId] = useState('');
   const [mitraStatus, setMitraStatus] = useState('');
 
   const [
@@ -1475,6 +1476,13 @@ const updateMitraVerificationStatus = async (
   const search = mitraSearch.trim().toLowerCase();
 
   return mitras.filter((item) => {
+    if (
+      mitraExactId &&
+      Number(item.id) !== Number(mitraExactId)
+    ) {
+      return false;
+    }
+
     if (mitraStatus && item.status !== mitraStatus) {
       return false;
     }
@@ -1529,6 +1537,7 @@ const updateMitraVerificationStatus = async (
     if (!search) return true;
 
     return [
+      item.id,
       item.name,
       item.businessName,
       item.primaryPhone,
@@ -1545,6 +1554,7 @@ const updateMitraVerificationStatus = async (
 }, [
   mitras,
   mitraSearch,
+  mitraExactId,
   mitraStatus,
   mitraInterestStatus,
   mitraPrintingStatus,
@@ -1651,6 +1661,13 @@ const posterVerificationCounts = useMemo(() => {
 
       return mitras.filter((item) => {
         if (
+          mitraExactId &&
+          Number(item.id) !== Number(mitraExactId)
+        ) {
+          return false;
+        }
+
+        if (
           mitraStatus &&
           item.status !== mitraStatus
         ) {
@@ -1732,6 +1749,7 @@ if (mitraDateFilterType !== 'ALL') {
         if (!search) return true;
 
         return [
+  item.id,
   item.name,
   item.businessName,
   item.primaryPhone,
@@ -1750,6 +1768,7 @@ if (mitraDateFilterType !== 'ALL') {
     }, [
   mitras,
   mitraSearch,
+  mitraExactId,
   mitraStatus,
   mitraInterestStatus,
   mitraPrintingStatus,
@@ -5092,15 +5111,28 @@ const exportSolarReferralsCsv = async (
         <div className="rounded-2xl bg-white p-4 shadow-sm md:p-5">
           <div className="flex flex-col flex-wrap gap-3 lg:flex-row lg:items-center">
             <input
-              value={mitraSearch}
-              onChange={(event) =>
-                setMitraSearch(
-                  event.target.value,
-                )
-              }
-              placeholder="Search name, business, phone, city, area or manager..."
-              className="w-full min-w-[220px] flex-[2_1_280px] rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-orange-500"
-            />
+  value={mitraSearch}
+  onChange={(event) =>
+    setMitraSearch(
+      event.target.value,
+    )
+  }
+  placeholder="Search name, business, phone, city, area or manager..."
+  className="w-full min-w-[220px] flex-[2_1_280px] rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-orange-500"
+/>
+
+<input
+  type="text"
+  inputMode="numeric"
+  value={mitraExactId}
+  onChange={(event) =>
+    setMitraExactId(
+      event.target.value.replace(/\D/g, ''),
+    )
+  }
+  placeholder="Exact Solar Mitra ID"
+  className="w-full min-w-[160px] flex-[1_1_180px] rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-orange-500"
+/>
 
             <select
               value={mitraStatus}
@@ -5282,6 +5314,7 @@ const exportSolarReferralsCsv = async (
   type="button"
   onClick={() => {
     setMitraSearch('');
+    setMitraExactId('');
     setMitraStatus('');
     setMitraCreatedBy('');
     setMitraInterestStatus('');
