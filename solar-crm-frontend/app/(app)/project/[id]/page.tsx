@@ -7325,34 +7325,45 @@ const isLoanProcessCompleted =
   </div>
 )}
 
-          {canShareProjectPdf && (
-  <div className="flex flex-wrap gap-2">
-    <button
-      onClick={() => generateProjectPdf(false)}
-      disabled={generatingPdf}
-      className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
-    >
-      {generatingPdf ? 'Generating...' : 'Download Project PDF'}
-    </button>
+          
+{(canShareProjectPdf || canEditProject) && (
+  <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
 
-    <button
-      onClick={() => generateProjectPdf(true)}
-      disabled={generatingPdf}
-      className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
-    >
-      Share Project PDF
-    </button>
+    {canShareProjectPdf && (
+      <>
+        <button
+          type="button"
+          onClick={() => generateProjectPdf(false)}
+          disabled={generatingPdf}
+          className="flex min-h-11 w-full items-center justify-center rounded-xl bg-orange-600 px-4 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
+        >
+          {generatingPdf ? 'Generating...' : 'Download Project PDF'}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => generateProjectPdf(true)}
+          disabled={generatingPdf}
+          className="flex min-h-11 w-full items-center justify-center rounded-xl bg-green-600 px-4 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+        >
+          Share Project PDF
+        </button>
+      </>
+    )}
+
+    {canEditProject && (
+      <button
+        type="button"
+        onClick={openEditProject}
+        className="flex min-h-11 w-full items-center justify-center rounded-xl bg-gray-800 px-4 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-gray-900"
+      >
+        Edit Project
+      </button>
+    )}
+
   </div>
 )}
 
-          {canEditProject && (
-  <button
-    onClick={openEditProject}
-    className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
-  >
-    Edit Project
-  </button>
-)}
                 </div>
 
       {hasRole(['SOLAR_FRANCHISE']) && (

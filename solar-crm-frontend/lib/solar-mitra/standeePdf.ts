@@ -54,6 +54,10 @@ export async function generateSolarMitraStandeePdf(
     );
   }
 
+    console.time(
+    `Solar Mitra FULL generation (${format}, ${mitras.length} records)`,
+  );
+
   const [templateResponse, fontResponse] =
     await Promise.all([
       fetch(TEMPLATE_PATH),
@@ -246,7 +250,7 @@ page.drawPage(templatePage, {
       await QRCode.toDataURL(
         referralUrl,
         {
-          width: 1400,
+          width: 1000,
           margin: 2,
           errorCorrectionLevel: 'H',
         },
@@ -416,5 +420,19 @@ labelLines.forEach((line, index) => {
 });
   }
 
-  return output.save();
+    console.time(
+    `Solar Mitra PDF generation (${format}, ${mitras.length} records)`,
+  );
+
+  const pdfBytes = await output.save();
+
+    console.timeEnd(
+    `Solar Mitra PDF generation (${format}, ${mitras.length} records)`,
+  );
+
+  console.timeEnd(
+    `Solar Mitra FULL generation (${format}, ${mitras.length} records)`,
+  );
+
+  return pdfBytes;
 }

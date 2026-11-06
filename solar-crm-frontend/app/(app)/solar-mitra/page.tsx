@@ -105,6 +105,20 @@ franchiseManagerName?: string | null;
   printingUpdatedBy?: number | null;
   printingUpdatedByName?: string | null;
 
+
+  // Blank Poster (11 × 17 inches)
+  posterPrintingStatus?: 'UNPRINTED' | 'PRINTED';
+  posterPrintingUpdatedAt?: string | null;
+  posterPrintingUpdatedBy?: number | null;
+  posterPrintingUpdatedByName?: string | null;
+
+  // Small Standee (4 × 6 inches)
+  standeePrintingStatus?: 'UNPRINTED' | 'PRINTED';
+  standeePrintingUpdatedAt?: string | null;
+  standeePrintingUpdatedBy?: number | null;
+  standeePrintingUpdatedByName?: string | null;
+
+
   posterVerificationStatus?:
     | 'NOT_ATTACHED'
     | 'PENDING_VERIFICATION'
@@ -1129,6 +1143,135 @@ const updateMitraShopStatus = async (
     setUpdatingMitraStatusId(null);
   }
 };
+
+
+const [updatingBulkPrinting, setUpdatingBulkPrinting] =
+  useState(false);
+
+
+const updateBulkPrintingStatus = async (
+  format: 'POSTER' | 'STANDEE',
+  printingStatus: 'PRINTED' | 'UNPRINTED',
+) => {
+  if (updatingBulkPrinting) return;
+
+  const selectedIds =
+    format === 'POSTER'
+      ? selectedPosterQrMitraIds
+      : selectedStandeeMitraIds;
+
+  const mitraIds = [...new Set(selectedIds)];
+
+  if (mitraIds.length === 0) {
+    alert('Please select at least one Solar Mitra.');
+    return;
+  }
+
+  const formatLabel =
+    format === 'POSTER'
+      ? 'Blank Poster'
+      : 'Small Standee';
+
+  const actionLabel =
+    printingStatus === 'PRINTED'
+      ? 'PRINTED'
+      : 'UNPRINTED';
+
+  const confirmed = window.confirm(
+    `Are you sure you want to mark ${mitraIds.length} ` +
+      `${formatLabel} record(s) as ${actionLabel}?\n\n` +
+      'This will update their printing status in the CRM. ' +
+      'Downloading a PDF alone does not mark it as printed.',
+  );
+
+  if (!confirmed) return;
+
+  const batchSize = 500;
+  let updatedCount = 0;
+  let processedCount = 0;
+  let failed = false;
+
+  try {
+    setUpdatingBulkPrinting(true);
+
+    for (let i = 0; i < mitraIds.length; i += batchSize) {
+      const batchIds = mitraIds.slice(i, i + batchSize);
+
+      try {
+        const response = await axios.post(
+          `${API_BASE_URL}/solar-mitra/printing-status/bulk`,
+          {
+            format,
+            printingStatus,
+            mitraIds: batchIds,
+          },
+          {
+            headers: getAuthHeaders(),
+          },
+        );
+
+        updatedCount += Number(
+          response.data?.updatedCount ?? 0,
+        );
+
+        processedCount += batchIds.length;
+      } catch (error) {
+        failed = true;
+
+        alert(
+          `Bulk update stopped after processing ` +
+            `${processedCount} of ${mitraIds.length} ` +
+            `${formatLabel} records.\n\n` +
+            getErrorMessage(
+              error,
+              'Failed to update printing status',
+            ),
+        );
+
+        break;
+      }
+    }
+
+    // Refresh statuses even if an earlier batch succeeded
+    // and a later batch failed.
+    try {
+      await loadMitras();
+    } catch (error) {
+      alert(
+        getErrorMessage(
+          error,
+          'Printing status updated, but refreshing records failed',
+        ),
+      );
+    }
+
+    // Preserve selection when any batch fails or
+    // the backend updates fewer records than requested.
+    if (!failed && updatedCount === mitraIds.length) {
+      if (format === 'POSTER') {
+        setSelectedPosterQrMitraIds([]);
+      } else {
+        setSelectedStandeeMitraIds([]);
+      }
+
+      alert(
+        `${updatedCount} ${formatLabel} record(s) ` +
+          `marked as ${actionLabel}.`,
+      );
+    } else {
+      alert(
+        `${updatedCount} of ${mitraIds.length} ` +
+          `${formatLabel} records updated.\n\n` +
+          'Selection has been preserved. ' +
+          'Please review the printing statuses before retrying.',
+      );
+    }
+  } finally {
+    setUpdatingBulkPrinting(false);
+  }
+};
+
+
 
 const updateMitraVerificationStatus = async (
   item: SolarMitra,
@@ -5640,15 +5783,77 @@ const exportSolarReferralsCsv = async (
       Small Standee (4 × 6 inches)
     </p>
 
+
+<div className="mb-3 flex flex-wrap gap-2">
+  <span className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-800">
+    Pending: {
+      filteredMitras.filter(
+        (item) =>
+          (item.standeePrintingStatus || 'UNPRINTED') ===
+          'UNPRINTED',
+      ).length
+    }
+  </span>
+
+  <span className="rounded-lg border border-emerald-300 bg-emerald-100 px-3 py-1.5 text-xs font-bold text-emerald-800">
+    Printed: {
+      filteredMitras.filter(
+        (item) => item.standeePrintingStatus === 'PRINTED',
+      ).length
+    }
+  </span>
+</div>
+
+
     <div className="flex flex-wrap items-center gap-2">
+           <button
+        type="button"
+        disabled={filteredMitras.length === 0}
+        onClick={() =>
+  setSelectedStandeeMitraIds(
+    filteredMitras
+      .filter(
+        (item) =>
+          (item.standeePrintingStatus || 'UNPRINTED') ===
+          'UNPRINTED',
+      )
+      .slice(0, 50)
+      .map((item) => item.id),
+  )
+}
+        className="rounded-lg border border-orange-300 bg-white px-3 py-2 text-xs font-bold text-orange-900 disabled:opacity-50"
+      >
+        Select Next 50 Pending
+      </button>
+
       <button
         type="button"
         disabled={filteredMitras.length === 0}
         onClick={() =>
   setSelectedStandeeMitraIds(
-    filteredMitras.map((item) => item.id),
+    filteredMitras
+      .filter(
+        (item) =>
+          (item.standeePrintingStatus || 'UNPRINTED') ===
+          'UNPRINTED',
+      )
+      .slice(0, 100)
+      .map((item) => item.id),
   )
 }
+        className="rounded-lg border border-orange-300 bg-white px-3 py-2 text-xs font-bold text-orange-900 disabled:opacity-50"
+      >
+        Select Next 100 Pending
+      </button>
+
+      <button
+        type="button"
+        disabled={filteredMitras.length === 0}
+        onClick={() =>
+          setSelectedStandeeMitraIds(
+            filteredMitras.map((item) => item.id),
+          )
+        }
         className="rounded-lg bg-orange-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
       >
         Select All Filtered ({filteredMitras.length})
@@ -5667,6 +5872,46 @@ const exportSolarReferralsCsv = async (
     <p className="mt-3 text-sm font-semibold text-orange-900">
       Selected: {selectedStandeeMitraIds.length}
     </p>
+
+
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        disabled={
+          selectedStandeeMitraIds.length === 0 ||
+          updatingBulkPrinting
+        }
+        onClick={() =>
+          void updateBulkPrintingStatus(
+            'STANDEE',
+            'PRINTED',
+          )
+        }
+        className="rounded-lg bg-orange-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {updatingBulkPrinting
+          ? 'Updating...'
+          : `Mark Selected as Printed (${selectedStandeeMitraIds.length})`}
+      </button>
+
+      <button
+        type="button"
+        disabled={
+          selectedStandeeMitraIds.length === 0 ||
+          updatingBulkPrinting
+        }
+        onClick={() =>
+          void updateBulkPrintingStatus(
+            'STANDEE',
+            'UNPRINTED',
+          )
+        }
+        className="rounded-lg border border-orange-400 bg-white px-3 py-2 text-xs font-bold text-orange-900 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Reset Selected to Unprinted
+      </button>
+    </div>
+
 
     <button
       type="button"
@@ -5687,15 +5932,77 @@ const exportSolarReferralsCsv = async (
       Blank Poster (11 × 17 inches)
     </p>
 
+
+<div className="mb-3 flex flex-wrap gap-2">
+  <span className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-800">
+    Pending: {
+      filteredMitras.filter(
+        (item) =>
+          (item.posterPrintingStatus || 'UNPRINTED') ===
+          'UNPRINTED',
+      ).length
+    }
+  </span>
+
+  <span className="rounded-lg border border-emerald-300 bg-emerald-100 px-3 py-1.5 text-xs font-bold text-emerald-800">
+    Printed: {
+      filteredMitras.filter(
+        (item) => item.posterPrintingStatus === 'PRINTED',
+      ).length
+    }
+  </span>
+</div>
+
+
     <div className="flex flex-wrap items-center gap-2">
+            <button
+        type="button"
+        disabled={filteredMitras.length === 0}
+        onClick={() =>
+  setSelectedPosterQrMitraIds(
+    filteredMitras
+      .filter(
+        (item) =>
+          (item.posterPrintingStatus || 'UNPRINTED') ===
+          'UNPRINTED',
+      )
+      .slice(0, 50)
+      .map((item) => item.id),
+  )
+}
+        className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-bold text-blue-900 disabled:opacity-50"
+      >
+        Select Next 50 Pending
+      </button>
+
       <button
         type="button"
         disabled={filteredMitras.length === 0}
         onClick={() =>
   setSelectedPosterQrMitraIds(
-    filteredMitras.map((item) => item.id),
+    filteredMitras
+      .filter(
+        (item) =>
+          (item.posterPrintingStatus || 'UNPRINTED') ===
+          'UNPRINTED',
+      )
+      .slice(0, 100)
+      .map((item) => item.id),
   )
 }
+        className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-bold text-blue-900 disabled:opacity-50"
+      >
+        Select Next 100 Pending
+      </button>
+
+      <button
+        type="button"
+        disabled={filteredMitras.length === 0}
+        onClick={() =>
+          setSelectedPosterQrMitraIds(
+            filteredMitras.map((item) => item.id),
+          )
+        }
         className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
       >
         Select All Filtered ({filteredMitras.length})
@@ -5714,6 +6021,46 @@ const exportSolarReferralsCsv = async (
     <p className="mt-3 text-sm font-semibold text-blue-900">
       Selected: {selectedPosterQrMitraIds.length}
     </p>
+
+
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        disabled={
+          selectedPosterQrMitraIds.length === 0 ||
+          updatingBulkPrinting
+        }
+        onClick={() =>
+          void updateBulkPrintingStatus(
+            'POSTER',
+            'PRINTED',
+          )
+        }
+        className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {updatingBulkPrinting
+          ? 'Updating...'
+          : `Mark Selected as Printed (${selectedPosterQrMitraIds.length})`}
+      </button>
+
+      <button
+        type="button"
+        disabled={
+          selectedPosterQrMitraIds.length === 0 ||
+          updatingBulkPrinting
+        }
+        onClick={() =>
+          void updateBulkPrintingStatus(
+            'POSTER',
+            'UNPRINTED',
+          )
+        }
+        className="rounded-lg border border-blue-400 bg-white px-3 py-2 text-xs font-bold text-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Reset Selected to Unprinted
+      </button>
+    </div>
+
 
     <button
   type="button"
