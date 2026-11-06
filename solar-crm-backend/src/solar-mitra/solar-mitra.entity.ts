@@ -142,6 +142,44 @@ printingUpdatedBy: number;
 @Column({ type: 'text', nullable: true })
 printingUpdatedByName: string;
 
+/*
+ * Independent printing tracking for the two
+ * Solar Mitra PDF formats.
+ *
+ * Downloading a PDF does not automatically
+ * mark the material as printed.
+ */
+
+@Column({
+  type: 'text',
+  default: SolarMitraPrintingStatus.UNPRINTED,
+})
+posterPrintingStatus: SolarMitraPrintingStatus;
+
+@Column({ type: 'timestamp', nullable: true })
+posterPrintingUpdatedAt: Date | null;
+
+@Column({ type: 'integer', nullable: true })
+posterPrintingUpdatedBy: number | null;
+
+@Column({ type: 'text', nullable: true })
+posterPrintingUpdatedByName: string | null;
+
+@Column({
+  type: 'text',
+  default: SolarMitraPrintingStatus.UNPRINTED,
+})
+standeePrintingStatus: SolarMitraPrintingStatus;
+
+@Column({ type: 'timestamp', nullable: true })
+standeePrintingUpdatedAt: Date | null;
+
+@Column({ type: 'integer', nullable: true })
+standeePrintingUpdatedBy: number | null;
+
+@Column({ type: 'text', nullable: true })
+standeePrintingUpdatedByName: string | null;
+
 @Column({
   type: 'text',
   default: SolarMitraPosterVerificationStatus.NOT_ATTACHED,

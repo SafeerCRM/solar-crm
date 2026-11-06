@@ -1721,6 +1721,101 @@ async updateSolarMitraShopStatus(
   };
 }
 
+
+async updateSolarMitraBulkPrintingStatus(
+  body: any,
+  user: any,
+) {
+  const format = String(body?.format || '')
+    .trim()
+    .toUpperCase();
+
+  if (!['POSTER', 'STANDEE'].includes(format)) {
+    throw new BadRequestException(
+      'Format must be POSTER or STANDEE',
+    );
+  }
+
+  const status = String(body?.printingStatus || '')
+    .trim()
+    .toUpperCase();
+
+  if (
+    status !== SolarMitraPrintingStatus.PRINTED &&
+    status !== SolarMitraPrintingStatus.UNPRINTED
+  ) {
+    throw new BadRequestException(
+      'Printing status must be PRINTED or UNPRINTED',
+    );
+  }
+
+  const ids = body?.mitraIds;
+
+  if (
+    !Array.isArray(ids) ||
+    ids.length === 0 ||
+    ids.length > 1000 ||
+    ids.some(
+      (id: unknown) =>
+        typeof id !== 'number' ||
+        !Number.isSafeInteger(id) ||
+        id <= 0,
+    )
+  ) {
+    throw new BadRequestException(
+      'mitraIds must contain 1 to 1000 positive integer IDs',
+    );
+  }
+
+  const uniqueIds = [...new Set(ids)] as number[];
+
+  const statusField =
+    format === 'POSTER'
+      ? 'posterPrintingStatus'
+      : 'standeePrintingStatus';
+
+  const updatedAtField =
+    format === 'POSTER'
+      ? 'posterPrintingUpdatedAt'
+      : 'standeePrintingUpdatedAt';
+
+  const updatedByField =
+    format === 'POSTER'
+      ? 'posterPrintingUpdatedBy'
+      : 'standeePrintingUpdatedBy';
+
+  const updatedByNameField =
+    format === 'POSTER'
+      ? 'posterPrintingUpdatedByName'
+      : 'standeePrintingUpdatedByName';
+
+  const result = await this.solarMitraRepository
+    .createQueryBuilder()
+    .update(SolarMitra)
+    .set({
+      [statusField]: status,
+      [updatedAtField]: new Date(),
+      [updatedByField]: Number(user.id),
+      [updatedByNameField]: String(
+        user?.name || '',
+      ).trim(),
+    })
+    .where('id IN (:...ids)', {
+      ids: uniqueIds,
+    })
+    .execute();
+
+  return {
+    message: 'Bulk printing status updated successfully',
+    format,
+    printingStatus: status,
+    requestedCount: uniqueIds.length,
+    updatedCount: result.affected ?? 0,
+  };
+}
+
+
+
 async updateSolarMitraPrintingStatus(
   mitraId: number,
   body: any,

@@ -990,6 +990,33 @@ async updatePosterVerification(
   );
 }
 
+
+@Post('printing-status/bulk')
+async updateBulkPrintingStatus(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  const roles: string[] =
+    Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+
+  if (
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.FRANCHISE_HEAD)
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Franchise Head can update bulk printing status',
+    );
+  }
+
+  return this.service.updateSolarMitraBulkPrintingStatus(
+    body,
+    req.user,
+  );
+}
+
+
 @Patch(':id/printing-status')
 async updatePrintingStatus(
   @Req() req: any,
