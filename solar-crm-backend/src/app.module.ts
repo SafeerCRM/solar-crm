@@ -31,6 +31,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { PaymentModule } from './payment/payment.module';
 import { SolarMitraModule } from './solar-mitra/solar-mitra.module';
 import { SolarStoreModule } from './solar-store/solar-store.module';
+import { LegalModule } from './legal/legal.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ WhatsappModule,
 PaymentModule,
 SolarMitraModule,
 SolarStoreModule,
+LegalModule,
   ],
   controllers: [AppController],
   providers: [AppService],
