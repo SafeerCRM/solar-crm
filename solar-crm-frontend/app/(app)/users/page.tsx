@@ -49,6 +49,7 @@ const allRoles = [
   'INSPECTION_MANAGER',
   'CUSTOMER_MANAGER',
   'HR_MANAGER',
+  'LEGAL_ADVISOR',
 'TRADING_MANAGER',
 'TRADING_HEAD',
 'FRANCHISE_HEAD',
@@ -72,10 +73,17 @@ const [roleFilter, setRoleFilter] = useState('');
 const [showHidden, setShowHidden] = useState(false);
   const [editingRoles, setEditingRoles] = useState<Record<number, string[]>>({});
 
+  const [expandedRoleUserId, setExpandedRoleUserId] =
+  useState<number | null>(null);
+
+  const [expandedActionUserId, setExpandedActionUserId] =
+  useState<number | null>(null);
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [roles, setRoles] = useState<string[]>([]);
+  const [showCreateRoles, setShowCreateRoles] = useState(false);
 
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [resetPasswordMap, setResetPasswordMap] = useState<Record<number, string>>({});
@@ -256,7 +264,8 @@ if (
       setEmail('');
       setPassword('');
       setRoles([]);
-      await fetchUsers();
+setShowCreateRoles(false);
+await fetchUsers();
     } catch (error: any) {
       console.error(error);
       setMessage(error?.response?.data?.message || 'Failed to create user');
@@ -276,8 +285,10 @@ if (
         { headers: getAuthHeaders() },
       );
 
-      setMessage('Roles updated successfully');
       await fetchUsers();
+
+setMessage('Roles updated successfully');
+setExpandedRoleUserId(null);
     } catch (error: any) {
       console.error(error);
       setMessage(error?.response?.data?.message || 'Failed to update roles');
@@ -420,26 +431,62 @@ const handleRestoreUser = async (userId: number) => {
             </button>
           </div>
 
-          <div className="md:col-span-2">
-            <p className="mb-2 font-medium">Select Roles</p>
+          <div className="md:col-span-2 space-y-3">
+  <div className="flex flex-wrap items-center justify-between gap-2">
+    <p className="font-medium">Select Roles</p>
 
-            <div className="flex flex-wrap gap-2">
-              {allRoles.map((role) => (
-                <button
-                  type="button"
-                  key={role}
-                  onClick={() => toggleCreateRole(role)}
-                  className={`rounded-xl border px-3 py-2 ${
-                    roles.includes(role)
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}
-                >
-                  {role}
-                </button>
-              ))}
-            </div>
-          </div>
+    <button
+      type="button"
+      onClick={() => setShowCreateRoles((prev) => !prev)}
+      aria-expanded={showCreateRoles}
+      className="rounded-lg border-2 border-blue-400 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition-colors hover:border-blue-600 hover:bg-blue-100"
+    >
+      {showCreateRoles ? 'Close Role Selection' : '+ Select Roles'}
+    </button>
+  </div>
+
+  {/* Show only selected roles */}
+  <div className="flex flex-wrap gap-2">
+    {roles.length > 0 ? (
+      roles.map((role) => (
+        <span
+          key={role}
+          className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700"
+        >
+          {role.replace(/_/g, ' ')}
+        </span>
+      ))
+    ) : (
+      <p className="text-sm text-gray-400">
+        No roles selected
+      </p>
+    )}
+  </div>
+
+  {/* Expand available roles only when requested */}
+  {showCreateRoles && (
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+      <div className="flex max-h-56 flex-wrap gap-2 overflow-y-auto">
+        {allRoles
+          .filter((role) => isCurrentOwner || role !== 'OWNER')
+          .map((role) => (
+            <button
+              type="button"
+              key={role}
+              onClick={() => toggleCreateRole(role)}
+              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                roles.includes(role)
+                  ? 'border-blue-600 bg-blue-600 text-white'
+                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {role.replace(/_/g, ' ')}
+            </button>
+          ))}
+      </div>
+    </div>
+  )}
+</div>
 
           {message && (
             <p className="md:col-span-2 text-sm text-blue-600">{message}</p>
@@ -521,43 +568,121 @@ const canManageThisUser = isCurrentOwner || !isOwnerUser;
                     <td className="border p-2">{user.name}</td>
                     <td className="border p-2">{user.email}</td>
 
-                    <td className="border p-2">
-                      <div className="flex flex-wrap gap-2">
-                        {allRoles.map((role) => (
-                          <button
-                            type="button"
-                            key={`${user.id}-${role}`}
-                            onClick={() => toggleEditRole(user.id, role)}
-                            disabled={
-  !canManageThisUser ||
-  (!isCurrentOwner && role === 'OWNER') ||
-  (isOwnerUser && role !== 'OWNER')
-}
-                            className={`rounded px-2 py-1 text-xs ${
-                              safeRoles.includes(role)
-                                ? 'bg-gray-300 text-gray-900'
-                                : 'bg-gray-100 text-gray-500'
-                            } ${isOwnerUser && role !== 'OWNER' ? 'cursor-not-allowed opacity-60' : ''}`}
-                          >
-                            {role}
-                          </button>
-                        ))}
-                      </div>
-                    </td>
+                    <td className="border p-2 align-top">
+  <div className="min-w-[180px] space-y-3">
 
-                    <td className="border p-2">
-                      <div className="flex min-w-[160px] flex-col gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleSaveRoles(user.id)}
-                          disabled={
-  !canManageThisUser ||
-  savingRolesId === user.id
-}
-                          className="rounded bg-green-600 px-3 py-2 text-white"
-                        >
-                          {savingRolesId === user.id ? 'Saving...' : 'Save Roles'}
-                        </button>
+    {/* Show only assigned roles by default */}
+    <div className="flex flex-wrap gap-1.5">
+      {safeRoles.length > 0 ? (
+        safeRoles.map((role) => (
+          <span
+            key={role}
+            className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700"
+          >
+            {role.replace(/_/g, ' ')}
+          </span>
+        ))
+      ) : (
+        <span className="text-xs text-gray-400">
+          No roles assigned
+        </span>
+      )}
+    </div>
+
+    {/* Expand or collapse role editor */}
+    {canManageThisUser && (
+      <button
+        type="button"
+        onClick={() => {
+          if (expandedRoleUserId === user.id) {
+            setEditingRoles((prev) => ({
+              ...prev,
+              [user.id]: [...originalRoles],
+            }));
+            setExpandedRoleUserId(null);
+          } else {
+            setExpandedRoleUserId(user.id);
+          }
+        }}
+        className="rounded-lg border-2 border-blue-400 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:border-blue-600 hover:bg-blue-100"
+      >
+        {expandedRoleUserId === user.id
+          ? 'Cancel Editing'
+          : 'Edit Roles'}
+      </button>
+    )}
+
+    {/* Available roles shown only when editing */}
+    {expandedRoleUserId === user.id && canManageThisUser && (
+      <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+
+        <p className="text-xs font-semibold text-gray-600">
+          Select Roles
+        </p>
+
+        <div className="flex max-h-52 flex-wrap gap-1.5 overflow-y-auto">
+          {allRoles
+            .filter((role) => isCurrentOwner || role !== 'OWNER')
+            .map((role) => (
+              <button
+                key={`${user.id}-${role}`}
+                type="button"
+                onClick={() => toggleEditRole(user.id, role)}
+                disabled={isOwnerUser && role !== 'OWNER'}
+                className={`rounded-lg border px-2 py-1.5 text-xs ${
+                  safeRoles.includes(role)
+                    ? 'border-blue-600 bg-blue-600 text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100'
+                } ${
+                  isOwnerUser && role !== 'OWNER'
+                    ? 'cursor-not-allowed opacity-50'
+                    : ''
+                }`}
+              >
+                {role.replace(/_/g, ' ')}
+              </button>
+            ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={async () => {
+            await handleSaveRoles(user.id);
+          }}
+          disabled={savingRolesId === user.id}
+          className="rounded-lg bg-green-600 px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
+        >
+          {savingRolesId === user.id
+            ? 'Saving...'
+            : 'Save Roles'}
+        </button>
+
+      </div>
+    )}
+  </div>
+</td>
+
+                    <td className="border p-2 align-top">
+  <div className="flex min-w-[160px] flex-col gap-2">
+
+    <button
+      type="button"
+      onClick={() =>
+        setExpandedActionUserId((prev) =>
+          prev === user.id ? null : user.id
+        )
+      }
+      aria-expanded={expandedActionUserId === user.id}
+      className="rounded-lg border-2 border-slate-400 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800 transition-colors hover:border-blue-500 hover:bg-blue-50"
+    >
+      {expandedActionUserId === user.id
+        ? 'Close Actions'
+        : 'Actions'}
+    </button>
+
+    {expandedActionUserId === user.id && (
+      <div className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                        
 
                         <div className="relative">
                           <input
@@ -621,6 +746,8 @@ const canManageThisUser = isCurrentOwner || !isOwnerUser;
     Restore User
   </button>
 )}
+      </div>
+    )}
                       </div>
                     </td>
                   </tr>

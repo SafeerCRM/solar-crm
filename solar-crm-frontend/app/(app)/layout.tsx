@@ -93,6 +93,17 @@ const navItems = [
   { name: 'Users', href: '/users', roles: ['OWNER', 'HR_MANAGER',] },
 
   {
+  name: 'Legal Management',
+  href: '/legal',
+  roles: [
+    'OWNER',
+    'LEGAL_ADVISOR',
+    'PAYMENT_MANAGER',
+    'PROJECT_MANAGER',
+  ],
+},
+
+  {
   name: 'Staff Live Location',
   href: '/live-location',
   roles: ['OWNER'],
