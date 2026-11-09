@@ -22,6 +22,17 @@ export class AnalyticsController {
     return this.analyticsService.getDepartmentReport(query, user);
   }
 
+  @Get('activity-report')
+getActivityReport(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.analyticsService.getActivityReport(
+    query,
+    user,
+  );
+}
+
   @Get('users/search')
   searchUsers(@Query() query: any, @CurrentUser() user: any) {
     return this.analyticsService.searchUsers(query, user);

@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -93,6 +96,9 @@ import { ProjectExecutionActivity } from '../project/project-execution-activity.
 import { ProjectTimelineDelayNote } from '../project/project-timeline-delay-note.entity';
 
 import { ProjectManagerAnalyticsBuilder } from './builders/project-manager.analytics';
+import { AnalyticsActivityRegistry } from './activity/analytics-activity.registry';
+import { TradingMeetingActivityProvider } from './activity/trading-meeting.activity';
+import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
 
 type AnalyticsQuery = {
   month?: string;
@@ -111,6 +117,11 @@ type AnalyticsQuery = {
 
 @Injectable()
 export class AnalyticsService {
+  private readonly activityRegistry =
+  new AnalyticsActivityRegistry();
+
+  private readonly employeeResolver: AnalyticsEmployeeResolver;
+
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
@@ -215,7 +226,17 @@ private readonly tradingMeetingRepository: Repository<ProjectTradingMeeting>,
 
 @InjectRepository(Dealer)
 private readonly dealerRepository: Repository<Dealer>,
-  ) {}
+  ) {
+
+    this.employeeResolver = new AnalyticsEmployeeResolver(
+  this.userRepository,
+);
+    this.activityRegistry.register(
+      new TradingMeetingActivityProvider(
+        this.tradingMeetingRepository,
+      ),
+    );
+  }
 
   private getUserRoles(user?: any): string[] {
     if (Array.isArray(user?.roles)) return user.roles;
@@ -603,6 +624,55 @@ private readonly dealerRepository: Repository<Dealer>,
       },
     };
   }
+
+
+async getActivityReport(
+  query: AnalyticsQuery,
+  user: any,
+) {
+  const selection = await this.employeeResolver.resolve(
+    user,
+    {
+      userId: query.userId,
+      role: query.role,
+    },
+  );
+
+  const { start, end } = this.getDateRange(query);
+
+  if (
+    Number.isNaN(start.getTime()) ||
+    Number.isNaN(end.getTime()) ||
+    start > end
+  ) {
+    throw new BadRequestException(
+      'Invalid analytics date range',
+    );
+  }
+
+  const sections = await this.activityRegistry.buildReport({
+    userIds: selection.userIds,
+    fromDate: start,
+    toDate: end,
+    role: selection.selectedRole,
+  });
+
+  return {
+    reportType: 'ACTIVITY',
+    period: {
+      fromDate: start.toISOString(),
+      toDate: end.toISOString(),
+    },
+    selection: {
+      userIds: selection.userIds,
+      role: selection.selectedRole ?? null,
+    },
+    registeredModules:
+      this.activityRegistry.getRegisteredModules(),
+    sections,
+  };
+}
+
 
   async getDepartmentReport(query: AnalyticsQuery, user: any) {
     const department = String(query.department || '').trim().toUpperCase();
