@@ -98,6 +98,7 @@ import { ProjectTimelineDelayNote } from '../project/project-timeline-delay-note
 import { ProjectManagerAnalyticsBuilder } from './builders/project-manager.analytics';
 import { AnalyticsActivityRegistry } from './activity/analytics-activity.registry';
 import { TradingMeetingActivityProvider } from './activity/trading-meeting.activity';
+import { MeetingActivityProvider } from './activity/meeting.activity';
 import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
 
 type AnalyticsQuery = {
@@ -236,6 +237,13 @@ private readonly dealerRepository: Repository<Dealer>,
         this.tradingMeetingRepository,
       ),
     );
+
+    this.activityRegistry.register(
+  new MeetingActivityProvider(
+    this.meetingRepository,
+    this.projectRepository,
+  ),
+);
   }
 
   private getUserRoles(user?: any): string[] {
