@@ -123,7 +123,7 @@ export class TradingMeetingActivityProvider
           SUM(
             CASE
               WHEN meeting.expectedOrderValue > 0
-              THEN meeting.expectedOrderValue
+              THEN "meeting"."expectedOrderValue"
               ELSE 0
             END
           ),
