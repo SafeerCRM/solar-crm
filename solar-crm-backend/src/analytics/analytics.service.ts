@@ -100,6 +100,7 @@ import { AnalyticsActivityRegistry } from './activity/analytics-activity.registr
 import { TradingMeetingActivityProvider } from './activity/trading-meeting.activity';
 import { MeetingActivityProvider } from './activity/meeting.activity';
 import { FollowUpActivityProvider } from './activity/follow-up.activity';
+import { LeadActivityProvider } from './activity/lead.activity';
 import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
 
 type AnalyticsQuery = {
@@ -248,6 +249,10 @@ private readonly dealerRepository: Repository<Dealer>,
 
 this.activityRegistry.register(
   new FollowUpActivityProvider(this.followUpRepository),
+);
+
+this.activityRegistry.register(
+  new LeadActivityProvider(this.leadRepository),
 );
   }
 
