@@ -45,6 +45,7 @@ import { ProjectLoanDetail } from '../project/project-loan-detail.entity';
 import { ProjectSubsidyDetail } from '../project/project-subsidy-detail.entity';
 import { ProjectElectricityDetail } from '../project/project-electricity-detail.entity';
 import { ProjectExecutionActivity } from '../project/project-execution-activity.entity';
+import { ProjectExecutionProof } from '../project/project-execution-proof.entity';
 import { ProjectTimelineDelayNote } from '../project/project-timeline-delay-note.entity';
 
 
@@ -66,6 +67,7 @@ ProjectLoanDetail,
 ProjectSubsidyDetail,
 ProjectElectricityDetail,
 ProjectExecutionActivity,
+ProjectExecutionProof,
 ProjectTimelineDelayNote,
 ProjectAccountExpense,
 ProjectPartyLedger,

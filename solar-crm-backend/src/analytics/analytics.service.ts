@@ -93,6 +93,7 @@ import { SubsidyManagerAnalyticsBuilder } from './builders/subsidy-manager.analy
 import { ProjectElectricityDetail } from '../project/project-electricity-detail.entity';
 import { ElectricityManagerAnalyticsBuilder } from './builders/electricity-manager.analytics';
 import { ProjectExecutionActivity } from '../project/project-execution-activity.entity';
+import { ProjectExecutionProof } from '../project/project-execution-proof.entity';
 import { ProjectTimelineDelayNote } from '../project/project-timeline-delay-note.entity';
 
 import { ProjectManagerAnalyticsBuilder } from './builders/project-manager.analytics';
@@ -103,6 +104,7 @@ import { FollowUpActivityProvider } from './activity/follow-up.activity';
 import { LeadActivityProvider } from './activity/lead.activity';
 import { TelecallingActivityProvider } from './activity/telecalling.activity';
 import { ProjectManagementActivityProvider } from './activity/project-management.activity';
+import { ProjectExecutionActivityProvider } from './activity/project-execution.activity';
 import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
 
 type AnalyticsQuery = {
@@ -161,6 +163,9 @@ private readonly electricityDetailRepository: Repository<ProjectElectricityDetai
 @InjectRepository(ProjectExecutionActivity)
 private readonly executionActivityRepository:
   Repository<ProjectExecutionActivity>,
+
+  @InjectRepository(ProjectExecutionProof)
+private readonly projectExecutionProofRepository: Repository<ProjectExecutionProof>,
 
 @InjectRepository(ProjectTimelineDelayNote)
 private readonly timelineDelayNoteRepository:
@@ -267,6 +272,13 @@ this.activityRegistry.register(
 this.activityRegistry.register(
   new ProjectManagementActivityProvider(
     this.projectRepository,
+  ),
+);
+
+this.activityRegistry.register(
+  new ProjectExecutionActivityProvider(
+    this.executionActivityRepository,
+    this.projectExecutionProofRepository,
   ),
 );
   }
