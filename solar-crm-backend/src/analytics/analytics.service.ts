@@ -99,6 +99,7 @@ import { ProjectManagerAnalyticsBuilder } from './builders/project-manager.analy
 import { AnalyticsActivityRegistry } from './activity/analytics-activity.registry';
 import { TradingMeetingActivityProvider } from './activity/trading-meeting.activity';
 import { MeetingActivityProvider } from './activity/meeting.activity';
+import { FollowUpActivityProvider } from './activity/follow-up.activity';
 import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
 
 type AnalyticsQuery = {
@@ -243,6 +244,10 @@ private readonly dealerRepository: Repository<Dealer>,
     this.meetingRepository,
     this.projectRepository,
   ),
+);
+
+this.activityRegistry.register(
+  new FollowUpActivityProvider(this.followUpRepository),
 );
   }
 
