@@ -101,6 +101,7 @@ import { TradingMeetingActivityProvider } from './activity/trading-meeting.activ
 import { MeetingActivityProvider } from './activity/meeting.activity';
 import { FollowUpActivityProvider } from './activity/follow-up.activity';
 import { LeadActivityProvider } from './activity/lead.activity';
+import { TelecallingActivityProvider } from './activity/telecalling.activity';
 import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
 
 type AnalyticsQuery = {
@@ -253,6 +254,13 @@ this.activityRegistry.register(
 
 this.activityRegistry.register(
   new LeadActivityProvider(this.leadRepository),
+);
+
+this.activityRegistry.register(
+  new TelecallingActivityProvider(
+    this.contactRepository,
+    this.callLogRepository,
+  ),
 );
   }
 
