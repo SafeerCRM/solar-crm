@@ -102,6 +102,7 @@ import { MeetingActivityProvider } from './activity/meeting.activity';
 import { FollowUpActivityProvider } from './activity/follow-up.activity';
 import { LeadActivityProvider } from './activity/lead.activity';
 import { TelecallingActivityProvider } from './activity/telecalling.activity';
+import { ProjectManagementActivityProvider } from './activity/project-management.activity';
 import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
 
 type AnalyticsQuery = {
@@ -260,6 +261,12 @@ this.activityRegistry.register(
   new TelecallingActivityProvider(
     this.contactRepository,
     this.callLogRepository,
+  ),
+);
+
+this.activityRegistry.register(
+  new ProjectManagementActivityProvider(
+    this.projectRepository,
   ),
 );
   }
