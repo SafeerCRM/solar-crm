@@ -44,6 +44,7 @@ import { Dealer } from '../dealer/dealer.entity';
 import { ProjectLoanDetail } from '../project/project-loan-detail.entity';
 import { ProjectSubsidyDetail } from '../project/project-subsidy-detail.entity';
 import { ProjectElectricityDetail } from '../project/project-electricity-detail.entity';
+import { ProjectElectricityWork } from '../project/project-electricity-work.entity';
 import { ProjectExecutionActivity } from '../project/project-execution-activity.entity';
 import { ProjectExecutionProof } from '../project/project-execution-proof.entity';
 import { ProjectTimelineDelayNote } from '../project/project-timeline-delay-note.entity';
@@ -66,6 +67,7 @@ ProjectPaymentInstallment,
 ProjectLoanDetail,
 ProjectSubsidyDetail,
 ProjectElectricityDetail,
+ProjectElectricityWork,
 ProjectExecutionActivity,
 ProjectExecutionProof,
 ProjectTimelineDelayNote,

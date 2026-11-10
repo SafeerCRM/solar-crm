@@ -91,6 +91,7 @@ import { LoanManagerAnalyticsBuilder } from './builders/loan-manager.analytics';
 import { ProjectSubsidyDetail } from '../project/project-subsidy-detail.entity';
 import { SubsidyManagerAnalyticsBuilder } from './builders/subsidy-manager.analytics';
 import { ProjectElectricityDetail } from '../project/project-electricity-detail.entity';
+import { ProjectElectricityWork } from '../project/project-electricity-work.entity';
 import { ElectricityManagerAnalyticsBuilder } from './builders/electricity-manager.analytics';
 import { ProjectExecutionActivity } from '../project/project-execution-activity.entity';
 import { ProjectExecutionProof } from '../project/project-execution-proof.entity';
@@ -107,6 +108,7 @@ import { ProjectManagementActivityProvider } from './activity/project-management
 import { ProjectExecutionActivityProvider } from './activity/project-execution.activity';
 import { LoanManagementActivityProvider } from './activity/loan-management.activity';
 import { SubsidyManagementActivityProvider } from './activity/subsidy-management.activity';
+import { ElectricityManagementActivityProvider } from './activity/electricity-management.activity';
 import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
 
 type AnalyticsQuery = {
@@ -161,6 +163,9 @@ private readonly subsidyDetailRepository: Repository<ProjectSubsidyDetail>,
 
 @InjectRepository(ProjectElectricityDetail)
 private readonly electricityDetailRepository: Repository<ProjectElectricityDetail>,
+
+@InjectRepository(ProjectElectricityWork)
+private readonly electricityWorkRepository: Repository<ProjectElectricityWork>,
 
 @InjectRepository(ProjectExecutionActivity)
 private readonly executionActivityRepository:
@@ -293,6 +298,13 @@ this.activityRegistry.register(
 this.activityRegistry.register(
   new SubsidyManagementActivityProvider(
     this.subsidyDetailRepository,
+  ),
+);
+
+this.activityRegistry.register(
+  new ElectricityManagementActivityProvider(
+    this.electricityDetailRepository,
+    this.electricityWorkRepository,
   ),
 );
   }
