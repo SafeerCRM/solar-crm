@@ -106,6 +106,7 @@ import { TelecallingActivityProvider } from './activity/telecalling.activity';
 import { ProjectManagementActivityProvider } from './activity/project-management.activity';
 import { ProjectExecutionActivityProvider } from './activity/project-execution.activity';
 import { LoanManagementActivityProvider } from './activity/loan-management.activity';
+import { SubsidyManagementActivityProvider } from './activity/subsidy-management.activity';
 import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
 
 type AnalyticsQuery = {
@@ -286,6 +287,12 @@ this.activityRegistry.register(
 this.activityRegistry.register(
   new LoanManagementActivityProvider(
     this.loanDetailRepository,
+  ),
+);
+
+this.activityRegistry.register(
+  new SubsidyManagementActivityProvider(
+    this.subsidyDetailRepository,
   ),
 );
   }
