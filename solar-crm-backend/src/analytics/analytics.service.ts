@@ -105,6 +105,7 @@ import { LeadActivityProvider } from './activity/lead.activity';
 import { TelecallingActivityProvider } from './activity/telecalling.activity';
 import { ProjectManagementActivityProvider } from './activity/project-management.activity';
 import { ProjectExecutionActivityProvider } from './activity/project-execution.activity';
+import { LoanManagementActivityProvider } from './activity/loan-management.activity';
 import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
 
 type AnalyticsQuery = {
@@ -279,6 +280,12 @@ this.activityRegistry.register(
   new ProjectExecutionActivityProvider(
     this.executionActivityRepository,
     this.projectExecutionProofRepository,
+  ),
+);
+
+this.activityRegistry.register(
+  new LoanManagementActivityProvider(
+    this.loanDetailRepository,
   ),
 );
   }
