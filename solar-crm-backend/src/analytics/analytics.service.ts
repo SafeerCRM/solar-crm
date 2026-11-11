@@ -54,6 +54,12 @@ import {
   ProjectCleaningStatus,
 } from '../project/project-cleaning-assignment.entity';
 
+import { ProjectVendorBill } from '../project/project-vendor-bill.entity';
+import { ProjectVendorPayment } from '../project/project-vendor-payment.entity';
+import { ProjectVendorDocument } from '../project/project-vendor-document.entity';
+import { ProjectVendorPaymentReceipt } from '../project/project-vendor-payment-receipt.entity';
+import { ProjectVendorCompany } from '../project/project-vendor-company.entity';
+
 import {
   CustomerComplaint,
   CustomerComplaintPriority,
@@ -115,6 +121,7 @@ import { ElectricityManagementActivityProvider } from './activity/electricity-ma
 import { PaymentCollectionActivityProvider } from './activity/payment-collection.activity';
 import { AccountsExpensesActivityProvider } from './activity/accounts-expenses.activity';
 import { StockInventoryActivityProvider } from './activity/stock-inventory.activity';
+import { PurchaseProcurementActivityProvider } from './activity/purchase-procurement.activity';
 import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
 
 type AnalyticsQuery = {
@@ -250,6 +257,21 @@ private readonly stockMovementRepository: Repository<ProjectStockMovement>,
 @InjectRepository(ProjectStockFile)
 private readonly stockFileRepository: Repository<ProjectStockFile>,
 
+@InjectRepository(ProjectVendorBill)
+private readonly vendorBillRepository: Repository<ProjectVendorBill>,
+
+@InjectRepository(ProjectVendorPayment)
+private readonly vendorPaymentRepository: Repository<ProjectVendorPayment>,
+
+@InjectRepository(ProjectVendorDocument)
+private readonly vendorDocumentRepository: Repository<ProjectVendorDocument>,
+
+@InjectRepository(ProjectVendorPaymentReceipt)
+private readonly vendorPaymentReceiptRepository: Repository<ProjectVendorPaymentReceipt>,
+
+@InjectRepository(ProjectVendorCompany)
+private readonly vendorCompanyRepository: Repository<ProjectVendorCompany>,
+
 @InjectRepository(ProjectTradingMeeting)
 private readonly tradingMeetingRepository: Repository<ProjectTradingMeeting>,
 
@@ -338,6 +360,17 @@ this.activityRegistry.register(
   new StockInventoryActivityProvider(
     this.stockMovementRepository,
     this.stockFileRepository,
+  ),
+);
+
+this.activityRegistry.register(
+  new PurchaseProcurementActivityProvider(
+    this.purchaseOrderRepository,
+    this.vendorBillRepository,
+    this.vendorPaymentRepository,
+    this.vendorDocumentRepository,
+    this.vendorPaymentReceiptRepository,
+    this.vendorCompanyRepository,
   ),
 );
   }

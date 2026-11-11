@@ -38,6 +38,12 @@ import { ProjectDealerOrder } from '../project/project-dealer-order.entity';
 import { ProjectDealerPayment } from '../project/project-dealer-payment.entity';
 import { ProjectConsumption } from '../project/project-consumption.entity';
 
+import { ProjectVendorBill } from '../project/project-vendor-bill.entity';
+import { ProjectVendorPayment } from '../project/project-vendor-payment.entity';
+import { ProjectVendorDocument } from '../project/project-vendor-document.entity';
+import { ProjectVendorPaymentReceipt } from '../project/project-vendor-payment-receipt.entity';
+import { ProjectVendorCompany } from '../project/project-vendor-company.entity';
+
 import { ProjectStockItem } from '../project/project-stock-item.entity';
 import { ProjectStockMovement } from '../project/project-stock-movement.entity';
 import { ProjectStockFile } from '../project/project-stock-file.entity';
@@ -82,6 +88,12 @@ ProjectFinalInvoice,
 ProjectDealerOrder,
 ProjectDealerPayment,
 ProjectConsumption,
+
+ProjectVendorBill,
+ProjectVendorPayment,
+ProjectVendorDocument,
+ProjectVendorPaymentReceipt,
+ProjectVendorCompany,
 
 ProjectContractor,
 ProjectContractorAssignment,
