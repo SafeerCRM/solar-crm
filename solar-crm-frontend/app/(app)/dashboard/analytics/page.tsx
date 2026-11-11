@@ -17,7 +17,7 @@ import { getAuthHeaders } from '@/lib/authHeaders';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-type ReportMode = 'overview' | 'department';
+type ReportMode = 'overview' | 'department' | 'activity';
 
 type UserOption = {
   id: number;
@@ -147,6 +147,7 @@ export default function AnalyticsPage() {
   const [role, setRole] = useState('');
   const [userSearch, setUserSearch] = useState('');
   const [userId, setUserId] = useState('');
+  const [selectedEmployeeName, setSelectedEmployeeName] = useState('');
   const [userOptions, setUserOptions] = useState<UserOption[]>([]);
   const [userSearchLoading, setUserSearchLoading] = useState(false);
 
@@ -230,20 +231,46 @@ export default function AnalyticsPage() {
   }, [userSearch, role]);
 
   const generateReport = async () => {
-    try {
-      setLoading(true);
-      setHasGenerated(true);
-      setReportData(null);
+  if (mode === 'activity' && !userId) {
+    alert('Please select an employee to generate the Employee Activity Report.');
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setHasGenerated(true);
+    setReportData(null);
 
       const endpoint =
         mode === 'overview'
-          ? `${apiBaseUrl}/analytics/overview`
-          : `${apiBaseUrl}/analytics/department-report`;
+    ? `${apiBaseUrl}/analytics/overview`
+    : mode === 'department'
+      ? `${apiBaseUrl}/analytics/department-report`
+      : `${apiBaseUrl}/analytics/activity-report`;
 
-      const res = await axios.get(endpoint, {
-        params,
-        headers: getAuthHeaders(),
-      });
+      const activityParams: Record<string, string> = {};
+
+if (mode === 'activity') {
+  if (userId) activityParams.userId = userId;
+  if (role) activityParams.role = role;
+
+  if (month && !fromDate && !toDate) {
+    const [year, selectedMonth] = month.split('-').map(Number);
+
+    const lastDay = new Date(year, selectedMonth, 0).getDate();
+
+    activityParams.fromDate = `${month}-01`;
+    activityParams.toDate = `${month}-${String(lastDay).padStart(2, '0')}`;
+  } else {
+    if (fromDate) activityParams.fromDate = fromDate;
+    if (toDate) activityParams.toDate = toDate;
+  }
+}
+
+const res = await axios.get(endpoint, {
+  params: mode === 'activity' ? activityParams : params,
+  headers: getAuthHeaders(),
+});
 
       setReportData(res.data);
       setGeneratedAt(new Date().toLocaleString('en-IN'));
@@ -255,17 +282,26 @@ export default function AnalyticsPage() {
     }
   };
 
+  const clearActivityReport = () => {
+  if (mode === 'activity') {
+    setReportData(null);
+    setHasGenerated(false);
+  }
+};
+
   const quickToday = () => {
-    setMonth('');
-    setFromDate(today());
-    setToDate(today());
-  };
+  setMonth('');
+  setFromDate(today());
+  setToDate(today());
+  clearActivityReport();
+};
 
   const quickMonth = () => {
-    setMonth(thisMonth());
-    setFromDate('');
-    setToDate('');
-  };
+  setMonth(thisMonth());
+  setFromDate('');
+  setToDate('');
+  clearActivityReport();
+};
 
   const quickPreviousMonth = () => {
     const now = new Date();
@@ -273,6 +309,7 @@ export default function AnalyticsPage() {
     setMonth(previous.toISOString().slice(0, 7));
     setFromDate('');
     setToDate('');
+    clearActivityReport();
   };
 
   const selectedDepartmentLabel =
@@ -291,7 +328,7 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="rounded-[2rem] bg-white p-4 shadow-lg md:p-5">
-        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
           <button
             onClick={() => {
               setMode('overview');
@@ -327,6 +364,24 @@ export default function AnalyticsPage() {
               Role-wise working report
             </span>
           </button>
+
+          <button
+  onClick={() => {
+    setMode('activity');
+    setReportData(null);
+    setHasGenerated(false);
+  }}
+  className={`rounded-2xl px-4 py-3 text-left font-black ${
+    mode === 'activity'
+      ? 'bg-slate-900 text-white'
+      : 'bg-slate-100 text-slate-800'
+  }`}
+>
+  Employee Activity
+  <span className="block text-xs font-medium opacity-75">
+    Employee-wise work across CRM modules
+  </span>
+</button>
         </div>
 
         <div className="mb-4 flex flex-wrap gap-2">
@@ -358,6 +413,7 @@ export default function AnalyticsPage() {
               setMonth(e.target.value);
               setFromDate('');
               setToDate('');
+              clearActivityReport();
             }}
             className="rounded-2xl border px-3 py-2"
           />
@@ -368,6 +424,7 @@ export default function AnalyticsPage() {
             onChange={(e) => {
               setFromDate(e.target.value);
               setMonth('');
+              clearActivityReport();
             }}
             className="rounded-2xl border px-3 py-2"
           />
@@ -378,6 +435,7 @@ export default function AnalyticsPage() {
             onChange={(e) => {
               setToDate(e.target.value);
               setMonth('');
+              clearActivityReport();
             }}
             className="rounded-2xl border px-3 py-2"
           />
@@ -408,8 +466,10 @@ export default function AnalyticsPage() {
             onChange={(e) => {
               setRole(e.target.value);
               setUserId('');
+              setSelectedEmployeeName('');
               setUserSearch('');
               setUserOptions([]);
+              clearActivityReport();
             }}
             className="rounded-2xl border px-3 py-2"
           >
@@ -492,17 +552,38 @@ export default function AnalyticsPage() {
               placeholder="Type user name / email / ID"
               value={userSearch}
               onChange={(e) => {
-                setUserSearch(e.target.value);
-                setUserId('');
-              }}
+  setUserSearch(e.target.value);
+  setUserId('');
+  setSelectedEmployeeName('');
+
+  if (mode === 'activity') {
+    setReportData(null);
+    setHasGenerated(false);
+  }
+}}
               className="mb-2 w-full rounded-2xl border px-3 py-2"
             />
 
             <select
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              className="w-full rounded-2xl border px-3 py-2"
-            >
+  value={userId}
+  onChange={(e) => {
+  const selectedId = e.target.value;
+
+  setUserId(selectedId);
+
+  const selectedUser = userOptions.find(
+    (item) => String(item.id) === selectedId,
+  );
+
+  setSelectedEmployeeName(selectedUser?.name || '');
+
+  if (mode === 'activity') {
+    setReportData(null);
+    setHasGenerated(false);
+  }
+}}
+  className="w-full rounded-2xl border px-3 py-2"
+>
               <option value="">
                 {userSearchLoading ? 'Searching users...' : 'All users / no user selected'}
               </option>
@@ -558,23 +639,140 @@ export default function AnalyticsPage() {
       )}
 
       {!loading && hasGenerated && reportData && (
-        <>
-          {mode === 'overview' ? (
-            <OverviewReport data={reportData} />
-          ) : (
-            <DepartmentReport
-              departmentLabel={selectedDepartmentLabel}
-              data={reportData}
-            />
-          )}
-        </>
-      )}
+  <>
+    {mode === 'overview' ? (
+      <OverviewReport data={reportData} />
+    ) : mode === 'department' ? (
+      <DepartmentReport
+        departmentLabel={selectedDepartmentLabel}
+        data={reportData}
+      />
+    ) : (
+      <EmployeeActivityReport
+  data={reportData}
+  employeeName={
+    selectedEmployeeName
+      ? `${selectedEmployeeName} (#${userId})`
+      : `Employee #${userId}`
+  }
+/>
+    )}
+  </>
+)}
 
       {!loading && hasGenerated && !reportData && (
         <div className="rounded-[2rem] bg-white p-8 text-center text-sm text-slate-500 shadow">
           No records found for the selected filters. Try changing the date range or filters.
         </div>
       )}
+    </div>
+  );
+}
+
+function EmployeeActivityReport({
+  data,
+  employeeName,
+}: {
+  data: any;
+  employeeName: string;
+}) {
+  const sections = Array.isArray(data?.sections) ? data.sections : [];
+
+  const formatMetricValue = (
+    value: number | null,
+    unit?: string,
+  ) => {
+    if (value === null || value === undefined) return 'N/A';
+
+    if (unit === 'INR') return formatCurrency(value);
+
+    if (unit === 'PERCENT') return `${value}%`;
+
+    return new Intl.NumberFormat('en-IN').format(value);
+  };
+
+  return (
+    <div className="space-y-6">
+      <SectionTitle
+  title={`Employee Activity Report — ${employeeName}`}
+  subtitle="Employee-wise activity across CRM modules, based on recorded work and attribution."
+/>
+
+      {sections.length === 0 ? (
+        <div className="rounded-[2rem] bg-white p-8 text-center shadow">
+          <p className="font-bold text-slate-700">
+            No recorded activity found for this employee.
+          </p>
+        </div>
+      ) : (
+        sections.map((section: any) => {
+          const metrics = Array.isArray(section.metrics)
+            ? section.metrics
+            : [];
+
+          const displayMetrics = metrics;
+
+          return (
+            <div
+              key={section.moduleKey}
+              className="overflow-hidden rounded-[2rem] bg-white shadow-lg"
+            >
+              <div className="border-b border-slate-200 bg-slate-50 p-5">
+                <h3 className="text-xl font-black text-slate-900">
+                  {section.moduleLabel}
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
+                {displayMetrics.map((metric: any) => {
+                 return (
+                    <div
+                      key={metric.key}
+                      className="rounded-2xl border border-slate-200 bg-white p-4"
+                    >
+                      <p className="text-sm font-bold text-slate-700">
+                        {metric.label}
+                      </p>
+
+                      <div className="mt-4">
+  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+    {metric.timeScope === 'PERIOD'
+      ? 'Selected Period'
+      : 'Current / Total'}
+  </p>
+
+  <p
+    className={`mt-1 text-2xl font-black ${
+      metric.timeScope === 'PERIOD'
+        ? 'text-blue-700'
+        : 'text-slate-900'
+    }`}
+  >
+    {formatMetricValue(metric.value, metric.unit)}
+  </p>
+</div>
+
+                      {metric.description && (
+                        <p className="mt-3 text-xs text-slate-500">
+                          {metric.description}
+                        </p>
+                      )}
+
+                      {metric.attribution && (
+                        <p className="mt-2 text-xs text-slate-400">
+                          Attribution: {metric.attribution}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })
+      )}
+
+      <ReportFooter />
     </div>
   );
 }
