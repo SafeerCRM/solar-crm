@@ -15,6 +15,7 @@ import { Meeting } from '../meeting/meeting.entity';
 
 import { Project } from '../project/project.entity';
 import { ProjectPaymentInstallment } from '../project/project-payment-installment.entity';
+import { ProjectPaymentReceipt } from '../project/project-payment-receipt.entity';
 import { ProjectAccountExpense } from '../project/project-account-expense.entity';
 import { ProjectPartyLedger } from '../project/project-party-ledger.entity';
 
@@ -64,6 +65,7 @@ import { ProjectTimelineDelayNote } from '../project/project-timeline-delay-note
 
       Project,
 ProjectPaymentInstallment,
+ProjectPaymentReceipt,
 ProjectLoanDetail,
 ProjectSubsidyDetail,
 ProjectElectricityDetail,
@@ -73,27 +75,26 @@ ProjectExecutionProof,
 ProjectTimelineDelayNote,
 ProjectAccountExpense,
 ProjectPartyLedger,
-
-      ProjectPurchaseOrder,
+ProjectPurchaseOrder,
 ProjectProformaInvoice,
 ProjectFinalInvoice,
 ProjectDealerOrder,
 ProjectDealerPayment,
 ProjectConsumption,
 
-      ProjectContractor,
-      ProjectContractorAssignment,
-      ProjectContractorProof,
-      ProjectContractorComment,
-      ProjectContractorRescheduleRequest,
-      ProjectCleaningAssignment,
+ProjectContractor,
+ProjectContractorAssignment,
+ProjectContractorProof,
+ProjectContractorComment,
+ProjectContractorRescheduleRequest,
+ProjectCleaningAssignment,
 
-      CustomerComplaint,
-      CustomerComplaintActivity,
+CustomerComplaint,
+CustomerComplaintActivity,
 
-      DealerComplaint,
+DealerComplaint,
 
-      ProjectStockItem,
+ProjectStockItem,
 ProjectStockMovement,
 ProjectTradingMeeting,
 Dealer,

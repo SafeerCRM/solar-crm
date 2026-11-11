@@ -25,6 +25,8 @@ import {
   ProjectPaymentInstallmentStatus,
 } from '../project/project-payment-installment.entity';
 
+import { ProjectPaymentReceipt } from '../project/project-payment-receipt.entity';
+
 import {
   ProjectAccountExpense,
   ProjectAccountExpenseApprovalStatus,
@@ -109,6 +111,7 @@ import { ProjectExecutionActivityProvider } from './activity/project-execution.a
 import { LoanManagementActivityProvider } from './activity/loan-management.activity';
 import { SubsidyManagementActivityProvider } from './activity/subsidy-management.activity';
 import { ElectricityManagementActivityProvider } from './activity/electricity-management.activity';
+import { PaymentCollectionActivityProvider } from './activity/payment-collection.activity';
 import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
 
 type AnalyticsQuery = {
@@ -180,6 +183,9 @@ private readonly timelineDelayNoteRepository:
 
 @InjectRepository(ProjectPaymentInstallment)
 private readonly paymentRepository: Repository<ProjectPaymentInstallment>,
+
+@InjectRepository(ProjectPaymentReceipt)
+private readonly paymentReceiptRepository: Repository<ProjectPaymentReceipt>,
 
     @InjectRepository(ProjectAccountExpense)
     private readonly expenseRepository: Repository<ProjectAccountExpense>,
@@ -305,6 +311,13 @@ this.activityRegistry.register(
   new ElectricityManagementActivityProvider(
     this.electricityDetailRepository,
     this.electricityWorkRepository,
+  ),
+);
+
+this.activityRegistry.register(
+  new PaymentCollectionActivityProvider(
+    this.paymentReceiptRepository,
+    this.paymentRepository,
   ),
 );
   }
