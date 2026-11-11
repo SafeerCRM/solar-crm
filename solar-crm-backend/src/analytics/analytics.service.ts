@@ -66,6 +66,10 @@ import {
   CustomerComplaintStatus,
 } from '../customer-portal/customer-complaint.entity';
 import { CustomerComplaintActivity } from '../customer-portal/customer-complaint-activity.entity';
+import { CustomerAfterSalesRequest } from '../customer-portal/customer-after-sales-request.entity';
+import { CustomerAfterSalesRequestActivity } from '../customer-portal/customer-after-sales-request-activity.entity';
+import { CustomerComplaintAttachment } from '../customer-portal/customer-complaint-attachment.entity';
+import { CustomerAfterSalesRequestRating } from '../customer-portal/customer-after-sales-request-rating.entity';
 
 import {
   DealerComplaint,
@@ -138,6 +142,7 @@ import { StaffComplaint } from '../staff-complaint/staff-complaint.entity';
 import { StaffLocationTrackingSession } from '../staff-location/staff-location-tracking-session.entity';
 import { StaffLocationEvent } from '../staff-location/staff-location-event.entity';
 import { HrStaffManagementActivityProvider } from './activity/hr-staff-management.activity';
+import { CustomerAfterSalesActivityProvider } from './activity/customer-after-sales.activity';
 
 type AnalyticsQuery = {
   month?: string;
@@ -259,6 +264,22 @@ private readonly consumptionRepository: Repository<ProjectConsumption>,
 
     @InjectRepository(CustomerComplaintActivity)
     private readonly customerComplaintActivityRepository: Repository<CustomerComplaintActivity>,
+
+    @InjectRepository(CustomerAfterSalesRequest)
+private readonly customerAfterSalesRequestRepository:
+  Repository<CustomerAfterSalesRequest>,
+
+@InjectRepository(CustomerAfterSalesRequestActivity)
+private readonly customerAfterSalesRequestActivityRepository:
+  Repository<CustomerAfterSalesRequestActivity>,
+
+@InjectRepository(CustomerComplaintAttachment)
+private readonly customerComplaintAttachmentRepository:
+  Repository<CustomerComplaintAttachment>,
+
+@InjectRepository(CustomerAfterSalesRequestRating)
+private readonly customerAfterSalesRequestRatingRepository:
+  Repository<CustomerAfterSalesRequestRating>,
 
     @InjectRepository(DealerComplaint)
     private readonly dealerComplaintRepository: Repository<DealerComplaint>,
@@ -447,6 +468,17 @@ this.activityRegistry.register(
     this.staffComplaintRepository,
     this.staffLocationSessionRepository,
     this.staffLocationEventRepository,
+  ),
+);
+
+this.activityRegistry.register(
+  new CustomerAfterSalesActivityProvider(
+    this.customerAfterSalesRequestRepository,
+    this.customerComplaintRepository,
+    this.customerComplaintActivityRepository,
+    this.customerAfterSalesRequestActivityRepository,
+    this.customerComplaintAttachmentRepository,
+    this.customerAfterSalesRequestRatingRepository,
   ),
 );
   }

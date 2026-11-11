@@ -28,6 +28,10 @@ import { ProjectCleaningAssignment } from '../project/project-cleaning-assignmen
 
 import { CustomerComplaint } from '../customer-portal/customer-complaint.entity';
 import { CustomerComplaintActivity } from '../customer-portal/customer-complaint-activity.entity';
+import { CustomerAfterSalesRequest } from '../customer-portal/customer-after-sales-request.entity';
+import { CustomerAfterSalesRequestActivity } from '../customer-portal/customer-after-sales-request-activity.entity';
+import { CustomerComplaintAttachment } from '../customer-portal/customer-complaint-attachment.entity';
+import { CustomerAfterSalesRequestRating } from '../customer-portal/customer-after-sales-request-rating.entity';
 
 import { DealerComplaint } from '../dealer/dealer-complaint.entity';
 
@@ -119,6 +123,11 @@ ProjectCleaningAssignment,
 
 CustomerComplaint,
 CustomerComplaintActivity,
+
+CustomerAfterSalesRequest,
+CustomerAfterSalesRequestActivity,
+CustomerComplaintAttachment,
+CustomerAfterSalesRequestRating,
 
 DealerComplaint,
 
