@@ -86,6 +86,7 @@ import { TradingAnalyticsBuilder } from './builders/trading.analytics';
 
 import { ProjectStockItem } from '../project/project-stock-item.entity';
 import { ProjectStockMovement } from '../project/project-stock-movement.entity';
+import { ProjectStockFile } from '../project/project-stock-file.entity';
 import { ProjectTradingMeeting } from '../project/project-trading-meeting.entity';
 import { Dealer } from '../dealer/dealer.entity';
 import { ProjectLoanDetail } from '../project/project-loan-detail.entity';
@@ -113,6 +114,7 @@ import { SubsidyManagementActivityProvider } from './activity/subsidy-management
 import { ElectricityManagementActivityProvider } from './activity/electricity-management.activity';
 import { PaymentCollectionActivityProvider } from './activity/payment-collection.activity';
 import { AccountsExpensesActivityProvider } from './activity/accounts-expenses.activity';
+import { StockInventoryActivityProvider } from './activity/stock-inventory.activity';
 import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
 
 type AnalyticsQuery = {
@@ -245,6 +247,9 @@ private readonly stockItemRepository: Repository<ProjectStockItem>,
 @InjectRepository(ProjectStockMovement)
 private readonly stockMovementRepository: Repository<ProjectStockMovement>,
 
+@InjectRepository(ProjectStockFile)
+private readonly stockFileRepository: Repository<ProjectStockFile>,
+
 @InjectRepository(ProjectTradingMeeting)
 private readonly tradingMeetingRepository: Repository<ProjectTradingMeeting>,
 
@@ -326,6 +331,13 @@ this.activityRegistry.register(
   new AccountsExpensesActivityProvider(
     this.expenseRepository,
     this.ledgerRepository,
+  ),
+);
+
+this.activityRegistry.register(
+  new StockInventoryActivityProvider(
+    this.stockMovementRepository,
+    this.stockFileRepository,
   ),
 );
   }

@@ -40,6 +40,7 @@ import { ProjectConsumption } from '../project/project-consumption.entity';
 
 import { ProjectStockItem } from '../project/project-stock-item.entity';
 import { ProjectStockMovement } from '../project/project-stock-movement.entity';
+import { ProjectStockFile } from '../project/project-stock-file.entity';
 import { ProjectTradingMeeting } from '../project/project-trading-meeting.entity';
 import { Dealer } from '../dealer/dealer.entity';
 import { ProjectLoanDetail } from '../project/project-loan-detail.entity';
@@ -96,6 +97,7 @@ DealerComplaint,
 
 ProjectStockItem,
 ProjectStockMovement,
+ProjectStockFile,
 ProjectTradingMeeting,
 Dealer,
     ]),
