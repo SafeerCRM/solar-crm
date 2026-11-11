@@ -123,6 +123,21 @@ import { AccountsExpensesActivityProvider } from './activity/accounts-expenses.a
 import { StockInventoryActivityProvider } from './activity/stock-inventory.activity';
 import { PurchaseProcurementActivityProvider } from './activity/purchase-procurement.activity';
 import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
+import { StaffMember } from '../staff/staff-member.entity';
+import { StaffAttendance } from '../staff/staff-attendance.entity';
+import { StaffLeave } from '../staff/staff-leave.entity';
+import { StaffAttendanceException } from '../staff/staff-attendance-exception.entity';
+import { StaffAttendanceOverride } from '../staff/staff-attendance-override.entity';
+import { StaffPenalty } from '../staff/staff-penalty.entity';
+import { StaffPayroll } from '../staff/staff-payroll.entity';
+import { StaffPerformance } from '../staff/staff-performance.entity';
+import { RecruitmentCandidate } from '../staff/recruitment-candidate.entity';
+import { RecruitmentCandidateDocument } from '../staff/recruitment-candidate-document.entity';
+import { StaffDocument } from '../staff/staff-document.entity';
+import { StaffComplaint } from '../staff-complaint/staff-complaint.entity';
+import { StaffLocationTrackingSession } from '../staff-location/staff-location-tracking-session.entity';
+import { StaffLocationEvent } from '../staff-location/staff-location-event.entity';
+import { HrStaffManagementActivityProvider } from './activity/hr-staff-management.activity';
 
 type AnalyticsQuery = {
   month?: string;
@@ -277,6 +292,48 @@ private readonly tradingMeetingRepository: Repository<ProjectTradingMeeting>,
 
 @InjectRepository(Dealer)
 private readonly dealerRepository: Repository<Dealer>,
+
+    @InjectRepository(StaffMember)
+    private readonly staffMemberRepository: Repository<StaffMember>,
+
+    @InjectRepository(StaffAttendance)
+    private readonly staffAttendanceRepository: Repository<StaffAttendance>,
+
+    @InjectRepository(StaffLeave)
+    private readonly staffLeaveRepository: Repository<StaffLeave>,
+
+    @InjectRepository(StaffAttendanceException)
+    private readonly staffAttendanceExceptionRepository: Repository<StaffAttendanceException>,
+
+    @InjectRepository(StaffAttendanceOverride)
+    private readonly staffAttendanceOverrideRepository: Repository<StaffAttendanceOverride>,
+
+    @InjectRepository(StaffPenalty)
+    private readonly staffPenaltyRepository: Repository<StaffPenalty>,
+
+    @InjectRepository(StaffPayroll)
+    private readonly staffPayrollRepository: Repository<StaffPayroll>,
+
+    @InjectRepository(StaffPerformance)
+    private readonly staffPerformanceRepository: Repository<StaffPerformance>,
+
+    @InjectRepository(RecruitmentCandidate)
+    private readonly recruitmentCandidateRepository: Repository<RecruitmentCandidate>,
+
+    @InjectRepository(RecruitmentCandidateDocument)
+    private readonly recruitmentDocumentRepository: Repository<RecruitmentCandidateDocument>,
+
+    @InjectRepository(StaffDocument)
+    private readonly staffDocumentRepository: Repository<StaffDocument>,
+
+    @InjectRepository(StaffComplaint)
+    private readonly staffComplaintRepository: Repository<StaffComplaint>,
+
+    @InjectRepository(StaffLocationTrackingSession)
+    private readonly staffLocationSessionRepository: Repository<StaffLocationTrackingSession>,
+
+    @InjectRepository(StaffLocationEvent)
+    private readonly staffLocationEventRepository: Repository<StaffLocationEvent>,
   ) {
 
     this.employeeResolver = new AnalyticsEmployeeResolver(
@@ -371,6 +428,24 @@ this.activityRegistry.register(
     this.vendorDocumentRepository,
     this.vendorPaymentReceiptRepository,
     this.vendorCompanyRepository,
+  ),
+);
+
+this.activityRegistry.register(
+  new HrStaffManagementActivityProvider(
+    this.staffMemberRepository,
+    this.staffAttendanceRepository,
+    this.staffLeaveRepository,
+    this.staffAttendanceExceptionRepository,
+    this.staffAttendanceOverrideRepository,
+    this.staffPenaltyRepository,
+    this.staffPayrollRepository,
+    this.staffPerformanceRepository,
+    this.recruitmentCandidateRepository,
+    this.recruitmentDocumentRepository,
+    this.staffDocumentRepository,
+    this.staffComplaintRepository,
+    this.staffLocationSessionRepository,
   ),
 );
   }

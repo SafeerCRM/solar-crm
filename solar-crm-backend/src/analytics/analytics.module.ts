@@ -57,6 +57,21 @@ import { ProjectExecutionActivity } from '../project/project-execution-activity.
 import { ProjectExecutionProof } from '../project/project-execution-proof.entity';
 import { ProjectTimelineDelayNote } from '../project/project-timeline-delay-note.entity';
 
+import { StaffMember } from '../staff/staff-member.entity';
+import { StaffAttendance } from '../staff/staff-attendance.entity';
+import { StaffLeave } from '../staff/staff-leave.entity';
+import { StaffAttendanceException } from '../staff/staff-attendance-exception.entity';
+import { StaffAttendanceOverride } from '../staff/staff-attendance-override.entity';
+import { StaffPenalty } from '../staff/staff-penalty.entity';
+import { StaffPayroll } from '../staff/staff-payroll.entity';
+import { StaffPerformance } from '../staff/staff-performance.entity';
+import { RecruitmentCandidate } from '../staff/recruitment-candidate.entity';
+import { RecruitmentCandidateDocument } from '../staff/recruitment-candidate-document.entity';
+import { StaffDocument } from '../staff/staff-document.entity';
+import { StaffComplaint } from '../staff-complaint/staff-complaint.entity';
+import { StaffLocationTrackingSession } from '../staff-location/staff-location-tracking-session.entity';
+import { StaffLocationEvent } from '../staff-location/staff-location-event.entity';
+
 
 @Module({
   imports: [
@@ -112,6 +127,20 @@ ProjectStockMovement,
 ProjectStockFile,
 ProjectTradingMeeting,
 Dealer,
+StaffMember,
+StaffAttendance,
+StaffLeave,
+StaffAttendanceException,
+StaffAttendanceOverride,
+StaffPenalty,
+StaffPayroll,
+StaffPerformance,
+RecruitmentCandidate,
+RecruitmentCandidateDocument,
+StaffDocument,
+StaffComplaint,
+StaffLocationTrackingSession,
+StaffLocationEvent,
     ]),
   ],
   controllers: [AnalyticsController],
