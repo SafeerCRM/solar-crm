@@ -113,6 +113,7 @@ ProjectDealerOrder,
 ProjectDealerPayment,
 ProjectDealerComment,
 ProjectDealerNotification,
+DealerAnnouncement,
 ProjectConsumption,
 
 ProjectVendorBill,
