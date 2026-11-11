@@ -112,6 +112,7 @@ import { LoanManagementActivityProvider } from './activity/loan-management.activ
 import { SubsidyManagementActivityProvider } from './activity/subsidy-management.activity';
 import { ElectricityManagementActivityProvider } from './activity/electricity-management.activity';
 import { PaymentCollectionActivityProvider } from './activity/payment-collection.activity';
+import { AccountsExpensesActivityProvider } from './activity/accounts-expenses.activity';
 import { AnalyticsEmployeeResolver } from './activity/analytics-employee.resolver';
 
 type AnalyticsQuery = {
@@ -318,6 +319,13 @@ this.activityRegistry.register(
   new PaymentCollectionActivityProvider(
     this.paymentReceiptRepository,
     this.paymentRepository,
+  ),
+);
+
+this.activityRegistry.register(
+  new AccountsExpensesActivityProvider(
+    this.expenseRepository,
+    this.ledgerRepository,
   ),
 );
   }
