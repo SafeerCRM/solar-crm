@@ -33,7 +33,12 @@ import { CustomerAfterSalesRequestActivity } from '../customer-portal/customer-a
 import { CustomerComplaintAttachment } from '../customer-portal/customer-complaint-attachment.entity';
 import { CustomerAfterSalesRequestRating } from '../customer-portal/customer-after-sales-request-rating.entity';
 
+
+import { ProjectDealerComment } from '../project/project-dealer-comment.entity';
+import { ProjectDealerNotification } from '../project/project-dealer-notification.entity';
+
 import { DealerComplaint } from '../dealer/dealer-complaint.entity';
+import { DealerAnnouncement } from '../dealer/dealer-announcement.entity';
 
 import { ProjectPurchaseOrder } from '../project/project-purchase-order.entity';
 import { ProjectProformaInvoice } from '../project/project-proforma-invoice.entity';
@@ -106,6 +111,8 @@ ProjectProformaInvoice,
 ProjectFinalInvoice,
 ProjectDealerOrder,
 ProjectDealerPayment,
+ProjectDealerComment,
+ProjectDealerNotification,
 ProjectConsumption,
 
 ProjectVendorBill,

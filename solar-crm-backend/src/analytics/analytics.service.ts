@@ -76,6 +76,12 @@ import {
   DealerComplaintStatus,
 } from '../dealer/dealer-complaint.entity';
 
+
+import { ProjectDealerComment } from '../project/project-dealer-comment.entity';
+import { ProjectDealerNotification } from '../project/project-dealer-notification.entity';
+
+import { DealerAnnouncement } from '../dealer/dealer-announcement.entity';
+
 import { TelecallingAnalyticsBuilder } from './builders/telecalling.analytics';
 import { TelecallingAssistantAnalyticsBuilder } from './builders/telecalling-assistant.analytics';
 import { LeadAnalyticsBuilder } from './builders/lead.analytics';
@@ -143,6 +149,7 @@ import { StaffLocationTrackingSession } from '../staff-location/staff-location-t
 import { StaffLocationEvent } from '../staff-location/staff-location-event.entity';
 import { HrStaffManagementActivityProvider } from './activity/hr-staff-management.activity';
 import { CustomerAfterSalesActivityProvider } from './activity/customer-after-sales.activity';
+import { DealerOperationsActivityProvider } from './activity/dealer-operations.activity';
 
 type AnalyticsQuery = {
   month?: string;
@@ -237,6 +244,24 @@ private readonly dealerOrderRepository: Repository<ProjectDealerOrder>,
 
 @InjectRepository(ProjectDealerPayment)
 private readonly dealerPaymentRepository: Repository<ProjectDealerPayment>,
+
+@InjectRepository(ProjectDealerOrder)
+private readonly dealerOrderActivityRepository: Repository<ProjectDealerOrder>,
+
+@InjectRepository(ProjectDealerPayment)
+private readonly dealerPaymentActivityRepository: Repository<ProjectDealerPayment>,
+
+@InjectRepository(ProjectDealerComment)
+private readonly dealerCommentActivityRepository: Repository<ProjectDealerComment>,
+
+@InjectRepository(ProjectDealerNotification)
+private readonly dealerNotificationActivityRepository: Repository<ProjectDealerNotification>,
+
+@InjectRepository(DealerComplaint)
+private readonly dealerComplaintActivityRepository: Repository<DealerComplaint>,
+
+@InjectRepository(DealerAnnouncement)
+private readonly dealerAnnouncementActivityRepository: Repository<DealerAnnouncement>,
 
 @InjectRepository(ProjectConsumption)
 private readonly consumptionRepository: Repository<ProjectConsumption>,
@@ -479,6 +504,17 @@ this.activityRegistry.register(
     this.customerAfterSalesRequestActivityRepository,
     this.customerComplaintAttachmentRepository,
     this.customerAfterSalesRequestRatingRepository,
+  ),
+);
+
+this.activityRegistry.register(
+  new DealerOperationsActivityProvider(
+    this.dealerOrderActivityRepository,
+    this.dealerPaymentActivityRepository,
+    this.dealerCommentActivityRepository,
+    this.dealerNotificationActivityRepository,
+    this.dealerComplaintActivityRepository,
+    this.dealerAnnouncementActivityRepository,
   ),
 );
   }
