@@ -121,9 +121,9 @@ export class AnalyticsEmployeeResolver {
           where: { id: selectedUserId },
         });
 
-      if (!selectedUser || selectedUser.isHidden) {
-        return { userIds: [], selectedRole };
-      }
+      if (!selectedUser) {
+       return { userIds: [], selectedRole };
+     }
 
       const selectedRoles = this.normalizeRoles(
         selectedUser.roles,
