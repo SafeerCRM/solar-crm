@@ -446,6 +446,7 @@ this.activityRegistry.register(
     this.staffDocumentRepository,
     this.staffComplaintRepository,
     this.staffLocationSessionRepository,
+    this.staffLocationEventRepository,
   ),
 );
   }

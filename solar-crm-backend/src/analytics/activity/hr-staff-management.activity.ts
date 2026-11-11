@@ -13,6 +13,7 @@ import { RecruitmentCandidateDocument } from '../../staff/recruitment-candidate-
 import { StaffDocument } from '../../staff/staff-document.entity';
 import { StaffComplaint } from '../../staff-complaint/staff-complaint.entity';
 import { StaffLocationTrackingSession } from '../../staff-location/staff-location-tracking-session.entity';
+import { StaffLocationEvent } from '../../staff-location/staff-location-event.entity';
 
 import {
   AnalyticsActivityContext,
@@ -57,6 +58,9 @@ private readonly staffComplaintRepository:
 
   private readonly staffLocationSessionRepository:
   Repository<StaffLocationTrackingSession>,
+
+  private readonly staffLocationEventRepository:
+  Repository<StaffLocationEvent>,
   ) {}
 
   async build(
@@ -1462,14 +1466,14 @@ private readonly staffComplaintRepository:
 
         // Tracking requests rejected by the employee being tracked.
     const trackingRejected = () =>
-      this.staffLocationSessionRepository
-        .createQueryBuilder('session')
-        .where('session.staffUserId IN (:...userIds)', {
-          userIds,
-        })
-        .andWhere('session.isHidden = false')
-        .andWhere('session.requestAccepted = false')
-        .andWhere('session.respondedAt IS NOT NULL');
+  this.staffLocationEventRepository
+    .createQueryBuilder('event')
+    .where('event.staffUserId IN (:...userIds)', {
+      userIds,
+    })
+    .andWhere('event.eventType = :eventType', {
+      eventType: 'REQUEST_REJECTED',
+    });
 
     // Tracking sessions stopped by a recorded CRM user.
     const trackingStopped = () =>
@@ -1491,7 +1495,7 @@ private readonly staffComplaintRepository:
 
       trackingRejected()
         .andWhere(
-          'session.respondedAt >= :fromDate AND session.respondedAt <= :toDate',
+          'event.occurredAt >= :fromDate AND event.occurredAt <= :toDate',
           {
             fromDate: context.fromDate,
             toDate: context.toDate,
@@ -1517,7 +1521,7 @@ private readonly staffComplaintRepository:
       'Location Tracking Requests Rejected',
       'OUTCOME',
       totalTrackingRejected,
-      'staff_location_tracking_session.staffUserId',
+      'staff_location_event.staffUserId',
       'CURRENT',
       'Employee tracking participation outcome; not a productivity measure.',
     );
@@ -1527,7 +1531,7 @@ private readonly staffComplaintRepository:
       'Location Tracking Requests Rejected in Period',
       'OUTCOME',
       periodTrackingRejected,
-      'staff_location_tracking_session.staffUserId + respondedAt',
+      'staff_location_event.staffUserId + occurredAt',
       'PERIOD',
     );
 
