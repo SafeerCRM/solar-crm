@@ -710,7 +710,13 @@ function EmployeeActivityReport({
             ? section.metrics
             : [];
 
-          const displayMetrics = metrics;
+          const periodMetrics = metrics.filter(
+  (metric: any) => metric.timeScope === 'PERIOD',
+);
+
+const currentMetrics = metrics.filter(
+  (metric: any) => metric.timeScope === 'CURRENT',
+);
 
           return (
             <div
@@ -723,50 +729,84 @@ function EmployeeActivityReport({
                 </h3>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
-                {displayMetrics.map((metric: any) => {
-                 return (
-                    <div
-                      key={metric.key}
-                      className="rounded-2xl border border-slate-200 bg-white p-4"
-                    >
-                      <p className="text-sm font-bold text-slate-700">
-                        {metric.label}
-                      </p>
+              <div className="space-y-6 p-5">
+  {[
+    {
+      key: 'period',
+      title: 'Activity During Selected Period',
+      description:
+        'Work recorded within the selected reporting dates.',
+      metrics: periodMetrics,
+    },
+    {
+      key: 'current',
+      title: 'Current Workload / Status',
+      description:
+        'Current assignments and status figures. These do not necessarily represent work performed during the selected period.',
+      metrics: currentMetrics,
+    },
+  ].map((group) => (
+    <div key={group.key} className="space-y-3">
+      <div>
+        <h4 className="text-base font-black text-slate-800">
+          {group.title}
+        </h4>
+        <p className="mt-1 text-xs text-slate-500">
+          {group.description}
+        </p>
+      </div>
 
-                      <div className="mt-4">
-  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-    {metric.timeScope === 'PERIOD'
-      ? 'Selected Period'
-      : 'Current / Total'}
-  </p>
+      {group.metrics.length === 0 ? (
+        <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+          No metrics available in this category.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {group.metrics.map((metric: any) => (
+            <div
+              key={metric.key}
+              className="rounded-2xl border border-slate-200 bg-white p-4"
+            >
+              <p className="text-sm font-bold text-slate-700">
+                {metric.label}
+              </p>
 
-  <p
-    className={`mt-1 text-2xl font-black ${
-      metric.timeScope === 'PERIOD'
-        ? 'text-blue-700'
-        : 'text-slate-900'
-    }`}
-  >
-    {formatMetricValue(metric.value, metric.unit)}
-  </p>
-</div>
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {metric.timeScope === 'PERIOD'
+                    ? 'Selected Period'
+                    : 'Current / Total'}
+                </p>
 
-                      {metric.description && (
-                        <p className="mt-3 text-xs text-slate-500">
-                          {metric.description}
-                        </p>
-                      )}
-
-                      {metric.attribution && (
-                        <p className="mt-2 text-xs text-slate-400">
-                          Attribution: {metric.attribution}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
+                <p
+                  className={`mt-1 text-2xl font-black ${
+                    metric.timeScope === 'PERIOD'
+                      ? 'text-blue-700'
+                      : 'text-slate-900'
+                  }`}
+                >
+                  {formatMetricValue(metric.value, metric.unit)}
+                </p>
               </div>
+
+              {metric.description && (
+                <p className="mt-3 text-xs text-slate-500">
+                  {metric.description}
+                </p>
+              )}
+
+              {metric.attribution && (
+                <p className="mt-2 text-xs text-slate-400">
+                  Attribution: {metric.attribution}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  ))}
+</div>
             </div>
           );
         })
