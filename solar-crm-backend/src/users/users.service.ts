@@ -6,18 +6,24 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Raw } from 'typeorm';
+import { Repository, Raw, DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { User, UserRole } from './user.entity';
+import { UserRoleHistory } from './user-role-history.entity';
 
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-    private readonly jwtService: JwtService,
-  ) {}
+  @InjectRepository(User)
+  private readonly userRepository: Repository<User>,
+
+  @InjectRepository(UserRoleHistory)
+  private readonly userRoleHistoryRepository: Repository<UserRoleHistory>,
+
+  private readonly dataSource: DataSource,
+  private readonly jwtService: JwtService,
+) {}
 
   private normalizeRoles(inputRoles?: UserRole[] | string[]): UserRole[] {
     const allowedRoles = Object.values(UserRole);
@@ -377,8 +383,33 @@ if (!isOwner && !isHRManager) {
       throw new BadRequestException('OWNER role cannot be removed from owner user');
     }
 
+    const previousRoles = [...(user.roles || [])];
+
+const rolesChanged =
+  previousRoles.length !== normalizedRoles.length ||
+  previousRoles.some(
+    (role) => !normalizedRoles.includes(role),
+  );
+
+if (rolesChanged) {
+  await this.dataSource.transaction(async (manager) => {
     user.roles = normalizedRoles;
-    await this.userRepository.save(user);
+
+    await manager.save(User, user);
+
+    const history = this.userRoleHistoryRepository.create({
+  userId: user.id,
+  previousRoles: previousRoles.join(','),
+  newRoles: normalizedRoles.join(','),
+  changedBy:
+    Number(currentUser?.id ?? currentUser?.userId) || undefined,
+  changedByName:
+    String(currentUser?.name ?? '') || undefined,
+});
+
+    await manager.save(UserRoleHistory, history);
+  });
+}
 
     return {
       message: 'User roles updated successfully',

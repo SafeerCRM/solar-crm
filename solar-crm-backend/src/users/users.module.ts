@@ -4,10 +4,11 @@ import { JwtModule } from '@nestjs/jwt';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { User } from './user.entity';
+import { UserRoleHistory } from './user-role-history.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, UserRoleHistory]),
     JwtModule.register({
       secret: 'mysecretkey',
       signOptions: { expiresIn: '7d' },
