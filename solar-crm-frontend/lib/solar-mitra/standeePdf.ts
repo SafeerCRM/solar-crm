@@ -117,10 +117,15 @@ const page = output.addPage(
     : [STANDEE_WIDTH, STANDEE_HEIGHT],
 );
 
-const standeeScale = Math.min(
-  STANDEE_WIDTH / templatePage.width,
-  STANDEE_HEIGHT / templatePage.height,
-);
+const standeeScale = isQrInsert
+  ? Math.min(
+      STANDEE_WIDTH / templatePage.width,
+      STANDEE_HEIGHT / templatePage.height,
+    )
+  : Math.max(
+      STANDEE_WIDTH / templatePage.width,
+      STANDEE_HEIGHT / templatePage.height,
+    );
 
 const standeeArtworkWidth =
   templatePage.width * standeeScale;
@@ -157,10 +162,7 @@ const contentY = isQrInsert
   if (!isQrInsert) {
     // Fit the original artwork proportionally
 // inside the 4 x 6 inch standee.
-const artworkScale = Math.min(
-  STANDEE_WIDTH / templatePage.width,
-  STANDEE_HEIGHT / templatePage.height,
-);
+const artworkScale = standeeScale;
 
 const artworkWidth =
   templatePage.width * artworkScale;
