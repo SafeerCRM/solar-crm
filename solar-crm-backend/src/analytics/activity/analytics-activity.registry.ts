@@ -48,9 +48,18 @@ export class AnalyticsActivityRegistry {
 
       const section = await provider.build(context);
 
-      if (section.hasActivity) {
-        sections.push(section);
-      }
+      const hasRecordedMetrics = section.metrics.some(
+  (metric) =>
+    metric.value !== null &&
+    Number.isFinite(metric.value) &&
+    metric.value > 0 &&
+    (metric.timeScope === 'PERIOD' ||
+      metric.timeScope === 'CURRENT'),
+);
+
+if (hasRecordedMetrics) {
+  sections.push(section);
+}
     }
 
     return sections;
