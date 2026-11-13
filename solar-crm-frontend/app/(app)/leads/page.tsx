@@ -174,6 +174,22 @@ const isOwner = currentRoles.includes('OWNER');
 
 const canAssignLeads = isOwner;
 
+const canManageLeadOperations = currentRoles.some((role) =>
+  [
+    'OWNER',
+    'LEAD_MANAGER',
+    'MARKETING_HEAD',
+    'TELECALLING_MANAGER',
+    'TELECALLER',
+    'LEAD_EXECUTIVE',
+    'MEETING_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'PROJECT_MANAGER',
+    'TELECALLING_ASSISTANT',
+    'SOLAR_STORE',
+  ].includes(role),
+);
+
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
 
@@ -2711,12 +2727,14 @@ fetchStorageLeads(1);
                 </div>
 
                                 <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                  <Link
-                    href={`/meeting/create?leadId=${lead.id}&name=${lead.name}&phone=${lead.phone}&city=${lead.city || ''}`}
-                    className="w-full rounded bg-purple-600 px-3 py-2 text-sm text-white sm:w-auto"
-                  >
-                    Schedule Meeting
-                  </Link>
+                  {canManageLeadOperations && (
+  <Link
+    href={`/meeting/create?leadId=${lead.id}&name=${lead.name}&phone=${lead.phone}&city=${lead.city || ''}`}
+    className="w-full rounded bg-purple-600 px-3 py-2 text-sm text-white sm:w-auto"
+  >
+    Schedule Meeting
+  </Link>
+)}
 
                   <Link
                     href={`/leads/${lead.id}`}
@@ -2725,7 +2743,7 @@ fetchStorageLeads(1);
                     View History
                   </Link>
 
-                  {(lead.status === 'LOST') && (
+                  {canManageLeadOperations && lead.status === 'LOST' && (
   <button
     type="button"
     onClick={() => {
@@ -2738,9 +2756,9 @@ fetchStorageLeads(1);
     Archive
   </button>
 )}
-                </div>
-
-                                <div className="mt-4 space-y-4">
+</div>
+                    {canManageLeadOperations && (
+                <div className="mt-4 space-y-4">
                   <div>
                     <label className="mb-2 block text-sm font-medium text-gray-700">
                       Lead Status
@@ -2841,6 +2859,7 @@ fetchStorageLeads(1);
                     </div>
                   )}
                 </div>
+                )}
 
                 {canAssignLeads && (
                   <div className="mt-4">
