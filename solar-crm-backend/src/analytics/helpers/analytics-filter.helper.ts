@@ -6,6 +6,7 @@ export type AnalyticsQuery = {
   toDate?: string;
   department?: string;
   role?: string;
+  roleFilterMode?: string;
   userId?: string;
   branchName?: string;
   city?: string;

@@ -3,6 +3,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 
 import { User, UserRole } from '../../users/user.entity';
+import { UserRoleHistory } from '../../users/user-role-history.entity';
 
 export interface AnalyticsEmployeeSelection {
   userIds: number[];
@@ -12,6 +13,7 @@ export interface AnalyticsEmployeeSelection {
 export class AnalyticsEmployeeResolver {
   constructor(
     private readonly userRepository: Repository<User>,
+    private readonly roleHistoryRepository: Repository<UserRoleHistory>,
   ) {}
 
   private normalizeRoles(value: unknown): string[] {
@@ -24,13 +26,78 @@ export class AnalyticsEmployeeResolver {
       .filter(Boolean);
   }
 
+  private async getHistoricalRoleUserIds(
+    role: string,
+    start: Date,
+    end: Date,
+    candidateUserIds?: number[],
+  ): Promise<number[]> {
+    if (candidateUserIds && candidateUserIds.length === 0) {
+      return [];
+    }
+
+    const qb = this.roleHistoryRepository
+      .createQueryBuilder('history')
+      .where('history.createdAt <= :end', { end })
+      .orderBy('history.userId', 'ASC')
+      .addOrderBy('history.createdAt', 'ASC')
+      .addOrderBy('history.id', 'ASC');
+
+    if (candidateUserIds) {
+      qb.andWhere('history.userId IN (:...candidateUserIds)', {
+        candidateUserIds,
+      });
+    }
+
+    const history = await qb.getMany();
+
+    const byUser = new Map<number, UserRoleHistory[]>();
+
+    for (const record of history) {
+      const userId = Number(record.userId);
+      const records = byUser.get(userId) ?? [];
+      records.push(record);
+      byUser.set(userId, records);
+    }
+
+    const matchedUserIds: number[] = [];
+
+    for (const [userId, records] of byUser) {
+      for (let index = 0; index < records.length; index++) {
+        const record = records[index];
+        const intervalStart = record.createdAt;
+        const intervalEnd =
+          records[index + 1]?.createdAt ?? null;
+
+        const overlaps =
+          intervalStart <= end &&
+          (intervalEnd === null || intervalEnd > start);
+
+        if (
+          overlaps &&
+          this.normalizeRoles(record.newRoles).includes(role)
+        ) {
+          matchedUserIds.push(userId);
+          break;
+        }
+      }
+    }
+
+    return matchedUserIds;
+  }
+
   async resolve(
-    requester: any,
-    query: {
-      userId?: string;
-      role?: string;
-    },
-  ): Promise<AnalyticsEmployeeSelection> {
+  requester: any,
+  query: {
+    userId?: string;
+    role?: string;
+    roleFilterMode?: string;
+  },
+  period: {
+    start: Date;
+    end: Date;
+  },
+): Promise<AnalyticsEmployeeSelection> {
     const requesterId = Number(
       requester?.id ?? requester?.userId,
     );
@@ -44,8 +111,6 @@ export class AnalyticsEmployeeResolver {
       );
     }
 
-    // Use the current database record rather than
-    // trusting role information supplied in a request.
     const requesterRecord =
       await this.userRepository.findOne({
         where: { id: requesterId },
@@ -69,8 +134,21 @@ export class AnalyticsEmployeeResolver {
     );
 
     const selectedRole = String(
-      query.role ?? '',
-    ).trim().toUpperCase();
+  query.role ?? '',
+).trim().toUpperCase();
+
+const roleFilterMode = String(
+  query.roleFilterMode ?? 'CURRENT',
+).trim().toUpperCase();
+
+if (
+  roleFilterMode !== 'CURRENT' &&
+  roleFilterMode !== 'HISTORICAL'
+) {
+  throw new ForbiddenException(
+    'Invalid role filter mode',
+  );
+}
 
     const rawSelectedId = String(
       query.userId ?? '',
@@ -122,19 +200,34 @@ export class AnalyticsEmployeeResolver {
         });
 
       if (!selectedUser) {
-       return { userIds: [], selectedRole };
-     }
-
-      const selectedRoles = this.normalizeRoles(
-        selectedUser.roles,
-      );
-
-      if (
-        selectedRole &&
-        !selectedRoles.includes(selectedRole)
-      ) {
-        return { userIds: [], selectedRole };
+        return {
+          userIds: [],
+          selectedRole: selectedRole || undefined,
+        };
       }
+
+      if (selectedRole) {
+  const matchesRole =
+    roleFilterMode === 'CURRENT'
+      ? this.normalizeRoles(
+          selectedUser.roles,
+        ).includes(selectedRole)
+      : (
+          await this.getHistoricalRoleUserIds(
+            selectedRole,
+            period.start,
+            period.end,
+            [selectedUserId],
+          )
+        ).includes(selectedUserId);
+
+  if (!matchesRole) {
+    return {
+      userIds: [],
+      selectedRole,
+    };
+  }
+}
 
       return {
         userIds: [selectedUserId],
@@ -143,24 +236,38 @@ export class AnalyticsEmployeeResolver {
     }
 
     if (selectedRole) {
-      const users = await this.userRepository.find({
-        where: { isHidden: false },
-      });
+  const users = await this.userRepository.find({
+    where: { isHidden: false },
+  });
 
-      return {
-        userIds: users
-          .filter((item) =>
-            this.normalizeRoles(item.roles).includes(
-              selectedRole,
-            ),
-          )
-          .map((item) => Number(item.id)),
-        selectedRole,
-      };
-    }
+  if (roleFilterMode === 'CURRENT') {
+    return {
+      userIds: users
+        .filter((item) =>
+          this.normalizeRoles(item.roles).includes(
+            selectedRole,
+          ),
+        )
+        .map((item) => Number(item.id)),
+      selectedRole,
+    };
+  }
 
-    // No explicit selection means the owner's
-    // own activity, not unrestricted access.
+  const eligibleIds = users.map((item) =>
+    Number(item.id),
+  );
+
+  return {
+    userIds: await this.getHistoricalRoleUserIds(
+      selectedRole,
+      period.start,
+      period.end,
+      eligibleIds,
+    ),
+    selectedRole,
+  };
+}
+
     return {
       userIds: [requesterId],
     };

@@ -150,6 +150,7 @@ import { StaffLocationEvent } from '../staff-location/staff-location-event.entit
 import { HrStaffManagementActivityProvider } from './activity/hr-staff-management.activity';
 import { CustomerAfterSalesActivityProvider } from './activity/customer-after-sales.activity';
 import { DealerOperationsActivityProvider } from './activity/dealer-operations.activity';
+import { UserRoleHistory } from 'src/users/user-role-history.entity';
 
 type AnalyticsQuery = {
   month?: string;
@@ -157,6 +158,7 @@ type AnalyticsQuery = {
   toDate?: string;
   department?: string;
   role?: string;
+  roleFilterMode?: string;
   userId?: string;
   branchName?: string;
   city?: string;
@@ -176,6 +178,9 @@ export class AnalyticsService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+
+    @InjectRepository(UserRoleHistory)
+private readonly userRoleHistoryRepository: Repository<UserRoleHistory>,
 
     @InjectRepository(Lead)
     private readonly leadRepository: Repository<Lead>,
@@ -384,6 +389,7 @@ private readonly dealerRepository: Repository<Dealer>,
 
     this.employeeResolver = new AnalyticsEmployeeResolver(
   this.userRepository,
+  this.userRoleHistoryRepository,
 );
     this.activityRegistry.register(
       new TradingMeetingActivityProvider(
@@ -911,25 +917,27 @@ async getActivityReport(
   query: AnalyticsQuery,
   user: any,
 ) {
-  const selection = await this.employeeResolver.resolve(
-    user,
-    {
-      userId: query.userId,
-      role: query.role,
-    },
-  );
-
   const { start, end } = this.getDateRange(query);
 
-  if (
-    Number.isNaN(start.getTime()) ||
-    Number.isNaN(end.getTime()) ||
-    start > end
-  ) {
-    throw new BadRequestException(
-      'Invalid analytics date range',
-    );
-  }
+if (
+  Number.isNaN(start.getTime()) ||
+  Number.isNaN(end.getTime()) ||
+  start > end
+) {
+  throw new BadRequestException(
+    'Invalid analytics date range',
+  );
+}
+
+const selection = await this.employeeResolver.resolve(
+  user,
+  {
+  userId: query.userId,
+  role: query.role,
+  roleFilterMode: query.roleFilterMode,
+},
+  { start, end },
+);
 
   const sections = await this.activityRegistry.buildReport({
     userIds: selection.userIds,

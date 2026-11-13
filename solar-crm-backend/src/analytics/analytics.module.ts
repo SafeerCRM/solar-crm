@@ -5,6 +5,7 @@ import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
 
 import { User } from '../users/user.entity';
+import { UserRoleHistory } from '../users/user-role-history.entity';
 import { Lead } from '../leads/lead.entity';
 import { FollowUp } from '../followup/follow-up.entity';
 
@@ -86,6 +87,7 @@ import { StaffLocationEvent } from '../staff-location/staff-location-event.entit
   imports: [
     TypeOrmModule.forFeature([
       User,
+      UserRoleHistory,
       Lead,
       FollowUp,
 
