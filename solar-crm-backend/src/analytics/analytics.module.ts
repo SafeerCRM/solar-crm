@@ -81,6 +81,11 @@ import { StaffDocument } from '../staff/staff-document.entity';
 import { StaffComplaint } from '../staff-complaint/staff-complaint.entity';
 import { StaffLocationTrackingSession } from '../staff-location/staff-location-tracking-session.entity';
 import { StaffLocationEvent } from '../staff-location/staff-location-event.entity';
+import { SolarMitra } from '../solar-mitra/solar-mitra.entity';
+import { SolarMitraReferral } from '../solar-mitra/solar-mitra-referral.entity';
+import { SolarMitraMeeting } from '../solar-mitra/solar-mitra-meeting.entity';
+import { SolarMitraPayout } from '../solar-mitra/solar-mitra-payout.entity';
+import { SolarMitraCreatorPayout } from '../solar-mitra/solar-mitra-creator-payout.entity';
 
 
 @Module({
@@ -160,6 +165,11 @@ StaffDocument,
 StaffComplaint,
 StaffLocationTrackingSession,
 StaffLocationEvent,
+SolarMitra,
+SolarMitraReferral,
+SolarMitraMeeting,
+SolarMitraPayout,
+SolarMitraCreatorPayout
     ]),
   ],
   controllers: [AnalyticsController],

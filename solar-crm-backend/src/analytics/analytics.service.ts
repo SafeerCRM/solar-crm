@@ -151,6 +151,12 @@ import { HrStaffManagementActivityProvider } from './activity/hr-staff-managemen
 import { CustomerAfterSalesActivityProvider } from './activity/customer-after-sales.activity';
 import { DealerOperationsActivityProvider } from './activity/dealer-operations.activity';
 import { UserRoleHistory } from 'src/users/user-role-history.entity';
+import { SolarMitra } from '../solar-mitra/solar-mitra.entity';
+import { SolarMitraReferral } from '../solar-mitra/solar-mitra-referral.entity';
+import { SolarMitraMeeting } from '../solar-mitra/solar-mitra-meeting.entity';
+import { SolarMitraPayout } from '../solar-mitra/solar-mitra-payout.entity';
+import { SolarMitraCreatorPayout } from '../solar-mitra/solar-mitra-creator-payout.entity';
+import { SolarMitraActivityProvider } from './activity/solar-mitra.activity';
 
 type AnalyticsQuery = {
   month?: string;
@@ -383,8 +389,24 @@ private readonly dealerRepository: Repository<Dealer>,
     @InjectRepository(StaffLocationTrackingSession)
     private readonly staffLocationSessionRepository: Repository<StaffLocationTrackingSession>,
 
-    @InjectRepository(StaffLocationEvent)
+        @InjectRepository(StaffLocationEvent)
     private readonly staffLocationEventRepository: Repository<StaffLocationEvent>,
+
+    @InjectRepository(SolarMitra)
+    private readonly solarMitraRepository: Repository<SolarMitra>,
+
+    @InjectRepository(SolarMitraReferral)
+    private readonly solarMitraReferralRepository: Repository<SolarMitraReferral>,
+
+    @InjectRepository(SolarMitraMeeting)
+    private readonly solarMitraMeetingRepository: Repository<SolarMitraMeeting>,
+
+    @InjectRepository(SolarMitraPayout)
+    private readonly solarMitraPayoutRepository: Repository<SolarMitraPayout>,
+
+    @InjectRepository(SolarMitraCreatorPayout)
+    private readonly solarMitraCreatorPayoutRepository:
+      Repository<SolarMitraCreatorPayout>,
   ) {
 
     this.employeeResolver = new AnalyticsEmployeeResolver(
@@ -521,6 +543,16 @@ this.activityRegistry.register(
     this.dealerNotificationActivityRepository,
     this.dealerComplaintActivityRepository,
     this.dealerAnnouncementActivityRepository,
+  ),
+);
+
+this.activityRegistry.register(
+  new SolarMitraActivityProvider(
+    this.solarMitraRepository,
+    this.solarMitraReferralRepository,
+    this.solarMitraMeetingRepository,
+    this.solarMitraPayoutRepository,
+    this.solarMitraCreatorPayoutRepository,
   ),
 );
   }
