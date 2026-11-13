@@ -739,11 +739,12 @@ const currentMetrics = metrics.filter(
       metrics: periodMetrics,
     },
     {
-      key: 'current',
-      title: 'Current Status / Recorded Totals',
-description:
-  'Current assignments, latest recorded statuses, and cumulative totals. These figures are not necessarily activity performed during the selected reporting period.',
-    },
+  key: 'current',
+  title: 'Current Status / Recorded Totals',
+  description:
+    'Current assignments, latest recorded statuses, and cumulative totals. These figures are not necessarily activity performed during the selected reporting period.',
+  metrics: currentMetrics,
+},
   ].map((group) => (
     <div key={group.key} className="space-y-3">
       <div>
