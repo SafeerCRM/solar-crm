@@ -75,12 +75,11 @@ create(
   findMeetingManagers() {
     return this.usersService.findMeetingManagers();
   }
-    @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'TELECALLING_MANAGER', 'TELECALLER', 'TELECALLING_ASSISTANT')
-  @Get('lead-managers')
-  findLeadManagers() {
-    return this.usersService.findLeadManagers();
-  }
+    @UseGuards(JwtAuthGuard)
+@Get('lead-managers')
+findLeadManagers() {
+  return this.usersService.findLeadManagers();
+}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER', 'LEAD_MANAGER', 'TELECALLING_MANAGER')

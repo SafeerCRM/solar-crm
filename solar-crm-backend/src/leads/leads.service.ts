@@ -102,8 +102,24 @@ private readonly solarStoreRepository: Repository<SolarStore>,
   return this.hasAnyRole(user, ['TELECALLING_ASSISTANT' as any]);
 }
 
-  private isTelecallingManager(user: any) {
+    private isTelecallingManager(user: any) {
     return this.hasAnyRole(user, [UserRole.TELECALLING_MANAGER]);
+  }
+
+  private canModifyLeadAsOperationalUser(user: any): boolean {
+    return this.hasAnyRole(user, [
+      'OWNER',
+      'LEAD_MANAGER',
+      'MARKETING_HEAD',
+      'TELECALLING_MANAGER',
+      'TELECALLER',
+      'LEAD_EXECUTIVE',
+      'MEETING_MANAGER',
+      'PROJECT_EXECUTIVE',
+      'PROJECT_MANAGER',
+      'TELECALLING_ASSISTANT',
+      'SOLAR_STORE',
+    ]);
   }
 
   private isOwnOnlyLeadRole(user: any) {
@@ -330,7 +346,12 @@ let leadData: Partial<Lead> = {
           : 15,
     };
 
-    if (this.isTelecaller(user)) {
+    if (
+  !this.isOwner(user) &&
+  !this.isLeadManager(user) &&
+  !this.isLeadExecutive(user) &&
+  !this.isSolarStore(user)
+) {
   const selectedLeadManagerId = Number(
     data.assignedTo || 0,
   );
@@ -348,11 +369,11 @@ let leadData: Partial<Lead> = {
       },
     });
 
-  if (!selectedLeadManager) {
-    throw new NotFoundException(
-      'Selected Lead Manager not found',
-    );
-  }
+  if (!selectedLeadManager || selectedLeadManager.isHidden) {
+  throw new BadRequestException(
+    'Selected Lead Manager is not available',
+  );
+}
 
   if (
     !selectedLeadManager.roles?.includes(
@@ -679,15 +700,24 @@ if (this.isSolarStore(user)) {
       { currentUserId },
     );
   } else if (
-    this.isTelecallingAssistant(user)
-  ) {
-    query.andWhere(
-      'lead.createdBy = :currentUserId',
-      {
-        currentUserId,
-      },
-    );
-  }
+  this.isTelecallingAssistant(user)
+) {
+  query.andWhere(
+    'lead.createdBy = :currentUserId',
+    { currentUserId },
+  );
+} else if (
+  !this.isOwner(user) &&
+  !this.isMarketingHead(user) &&
+  !this.isTelecallingManager(user)
+) {
+  // Other authenticated roles can see only
+  // leads they personally created.
+  query.andWhere(
+    'lead.createdBy = :currentUserId',
+    { currentUserId },
+  );
+}
 
   if (filters?.assignedTo) {
     query.andWhere(
@@ -1157,8 +1187,14 @@ leadOwnerName:
     };
   }
 
-  async addLeadNote(id: number, note: string, user: any) {
+    async addLeadNote(id: number, note: string, user: any) {
     const lead = await this.getAccessibleLead(id, user);
+
+    if (!this.canModifyLeadAsOperationalUser(user)) {
+      throw new ForbiddenException(
+        'You can track this lead, but cannot add notes',
+      );
+    }
 
     if (!note || !String(note).trim()) {
       throw new BadRequestException('Note is required');
@@ -1174,13 +1210,19 @@ leadOwnerName:
     return this.leadNoteRepository.save(item);
   }
 
-  async updateLeadNote(
+    async updateLeadNote(
     id: number,
     noteId: number,
     note: string,
     user: any,
   ) {
     await this.getAccessibleLead(id, user);
+
+    if (!this.canModifyLeadAsOperationalUser(user)) {
+      throw new ForbiddenException(
+        'You can track this lead, but cannot edit notes',
+      );
+    }
 
     if (!note || !String(note).trim()) {
       throw new BadRequestException('Note is required');
@@ -1198,25 +1240,41 @@ leadOwnerName:
     return this.leadNoteRepository.save(existingNote);
   }
 
-  async findByAssignedUser(userId: number, user: any) {
+    async findByAssignedUser(userId: number, user: any) {
     const currentUserId = this.getCurrentUserId(user);
 
     if (
-      (this.isTelecaller(user) || this.isLeadExecutive(user)) &&
-      currentUserId !== userId
+      this.isProjectManager(user) &&
+      !this.isOwner(user) &&
+      !this.isLeadManager(user)
     ) {
-      throw new ForbiddenException('You can only access your assigned leads');
-    }
-
-    if (this.isMeetingManager(user) || this.isProjectExecutive(user)) {
-      if (currentUserId !== userId) {
-        throw new ForbiddenException('You can only access your own related leads');
-      }
-    }
-
-    if (this.isProjectManager(user)) {
       throw new ForbiddenException(
         'Project manager cannot access assigned lead buckets directly',
+      );
+    }
+
+    if (
+      !this.isOwner(user) &&
+      !this.isLeadManager(user) &&
+      !this.isTelecallingManager(user) &&
+      !this.isTelecaller(user) &&
+      !this.isLeadExecutive(user) &&
+      !this.isMeetingManager(user) &&
+      !this.isProjectExecutive(user)
+    ) {
+      throw new ForbiddenException(
+        'You can track your created leads through the Leads page',
+      );
+    }
+
+    if (
+      !this.isOwner(user) &&
+      !this.isLeadManager(user) &&
+      !this.isTelecallingManager(user) &&
+      currentUserId !== userId
+    ) {
+      throw new ForbiddenException(
+        'You can only access your assigned leads',
       );
     }
 
@@ -1236,6 +1294,25 @@ leadOwnerName:
     }
 
     await this.getAccessibleLead(id, user);
+
+    const canManageLead =
+  this.isOwner(user) ||
+  this.isLeadManager(user) ||
+  this.isMarketingHead(user) ||
+  this.isTelecallingManager(user) ||
+  this.isTelecaller(user) ||
+  this.isLeadExecutive(user) ||
+  this.isMeetingManager(user) ||
+  this.isProjectExecutive(user) ||
+  this.isProjectManager(user) ||
+  this.isTelecallingAssistant(user) ||
+  this.isSolarStore(user);
+
+if (!canManageLead) {
+  throw new ForbiddenException(
+    'You can track this lead, but you cannot edit it',
+  );
+}
 
 // Solar Store attribution is permanent.
 // It cannot be changed through a normal lead update.
@@ -1838,7 +1915,13 @@ const phone = normalizePhone(rawPhone);
   };
 }
 
-  async getHotLeads(user: any) {
+    async getHotLeads(user: any) {
+    if (!this.canModifyLeadAsOperationalUser(user)) {
+      throw new ForbiddenException(
+        'Hot Leads is not available for tracking-only users',
+      );
+    }
+
     const query = this.leadRepository.createQueryBuilder('lead');
 
     query.andWhere('lead.status IN (:...statuses)', {
@@ -1868,7 +1951,13 @@ const phone = normalizePhone(rawPhone);
     return query.orderBy('lead.updatedAt', 'DESC').take(10).getMany();
   }
 
-  async getLeadsForAutoCall(user: any) {
+    async getLeadsForAutoCall(user: any) {
+  if (!this.canModifyLeadAsOperationalUser(user)) {
+    throw new ForbiddenException(
+      'Auto-calling is not available for tracking-only users',
+    );
+  }
+
   const currentUserId = this.getCurrentUserId(user);
 
   const qb = this.leadRepository.createQueryBuilder('lead');
@@ -2073,7 +2162,7 @@ async assignStorageLeadsByCount(
   };
 }
 
-    async quickCall(
+        async quickCall(
     id: number,
     body: {
       callStatus?: string;
@@ -2084,6 +2173,12 @@ async assignStorageLeadsByCount(
     user: any,
   ) {
     const lead = await this.getAccessibleLead(id, user);
+
+    if (!this.canModifyLeadAsOperationalUser(user)) {
+      throw new ForbiddenException(
+        'You can track this lead, but cannot record calls',
+      );
+    }
 
     const currentUserId = this.getCurrentUserId(user);
     const currentUserName = this.getCurrentUserName(user);
