@@ -145,7 +145,8 @@ export default function AnalyticsPage() {
   const [toDate, setToDate] = useState('');
 
   const [role, setRole] = useState('');
-  const [userSearch, setUserSearch] = useState('');
+const [roleFilterMode, setRoleFilterMode] = useState<'CURRENT' | 'HISTORICAL'>('CURRENT');
+const [userSearch, setUserSearch] = useState('');
   const [userId, setUserId] = useState('');
   const [selectedEmployeeName, setSelectedEmployeeName] = useState('');
   const [userOptions, setUserOptions] = useState<UserOption[]>([]);
@@ -213,7 +214,10 @@ export default function AnalyticsPage() {
         const res = await axios.get(`${apiBaseUrl}/analytics/users/search`, {
           params: {
             q: search,
-            role: role || undefined,
+role:
+  roleFilterMode === 'CURRENT'
+    ? role || undefined
+    : undefined,
           },
           headers: getAuthHeaders(),
         });
@@ -228,7 +232,7 @@ export default function AnalyticsPage() {
     }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [userSearch, role]);
+  }, [userSearch, role, roleFilterMode]);
 
   const generateReport = async () => {
   if (mode === 'activity' && !userId) {
@@ -253,6 +257,7 @@ export default function AnalyticsPage() {
 if (mode === 'activity') {
   if (userId) activityParams.userId = userId;
   if (role) activityParams.role = role;
+  activityParams.roleFilterMode = roleFilterMode;
 
   if (month && !fromDate && !toDate) {
     const [year, selectedMonth] = month.split('-').map(Number);
@@ -480,6 +485,27 @@ const res = await axios.get(endpoint, {
               </option>
             ))}
           </select>
+
+                    {mode === 'activity' && (
+            <select
+              value={roleFilterMode}
+              onChange={(e) => {
+                setRoleFilterMode(
+                  e.target.value as 'CURRENT' | 'HISTORICAL',
+                );
+                setUserId('');
+                setSelectedEmployeeName('');
+                setUserSearch('');
+                setUserOptions([]);
+                clearActivityReport();
+              }}
+              className="rounded-2xl border px-3 py-2"
+              aria-label="Role filter mode"
+            >
+              <option value="CURRENT">Current Role</option>
+              <option value="HISTORICAL">Historical Role</option>
+            </select>
+          )}
 
           <input
             placeholder="Branch"
