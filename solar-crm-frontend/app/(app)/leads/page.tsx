@@ -37,6 +37,7 @@ type Lead = {
   solarMitraName?: string | null;
   solarMitraBusinessName?: string | null;
   solarMitraPhone?: string | null;
+  solarMitraCreatorName?: string | null;
 };
 
 type User = {
@@ -2704,6 +2705,13 @@ fetchStorageLeads(1);
         {lead.solarMitraPhone}
       </p>
     )}
+
+    <p className="mt-2 break-words border-t border-orange-200 pt-2">
+  <span className="font-semibold text-orange-800">
+    Solar Mitra Creator:
+  </span>{' '}
+  {lead.solarMitraCreatorName || 'Not available'}
+</p>
   </div>
 )}
                                     <p className="break-words">
