@@ -1431,10 +1431,34 @@ if (printingStatus) {
     );
   }
 
-  const mitra = await this.getSolarMitra(mitraId);
+  const reason = String(
+  body?.interestReason || '',
+).trim();
 
-  mitra.interestStatus =
-    status as SolarMitraInterestStatus;
+if (
+  status === SolarMitraInterestStatus.NOT_INTERESTED &&
+  !reason
+) {
+  throw new BadRequestException(
+    'Reason is required when marking a Solar Mitra as Not Interested',
+  );
+}
+
+if (reason.length > 2000) {
+  throw new BadRequestException(
+    'Calling verification reason cannot exceed 2000 characters',
+  );
+}
+
+const mitra = await this.getSolarMitra(mitraId);
+
+mitra.interestStatus =
+  status as SolarMitraInterestStatus;
+
+mitra.interestReason =
+  status === SolarMitraInterestStatus.NOT_INTERESTED
+    ? reason
+    : null;
 
   mitra.interestUpdatedAt = new Date();
 
@@ -1449,7 +1473,8 @@ if (printingStatus) {
     message: 'Solar Mitra interest status updated successfully',
     id: mitra.id,
     interestStatus: mitra.interestStatus,
-    interestUpdatedAt: mitra.interestUpdatedAt,
+interestReason: mitra.interestReason,
+interestUpdatedAt: mitra.interestUpdatedAt,
     interestUpdatedBy: mitra.interestUpdatedBy,
     interestUpdatedByName: mitra.interestUpdatedByName,
   };

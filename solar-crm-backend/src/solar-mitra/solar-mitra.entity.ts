@@ -127,6 +127,9 @@ interestUpdatedBy: number;
 @Column({ type: 'text', nullable: true })
 interestUpdatedByName: string;
 
+@Column({ type: 'text', nullable: true })
+interestReason: string | null;
+
 @Column({
   type: 'text',
   default: SolarMitraPrintingStatus.UNPRINTED,
