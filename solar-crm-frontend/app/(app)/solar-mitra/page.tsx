@@ -93,6 +93,8 @@ franchiseManagerName?: string | null;
     | 'INTERESTED'
     | 'NOT_INTERESTED';
 
+    interestReason?: string | null;
+
   interestUpdatedAt?: string | null;
   interestUpdatedBy?: number | null;
   interestUpdatedByName?: string | null;
@@ -1290,14 +1292,50 @@ const updateMitraVerificationStatus = async (
 
   if (!confirmed) return;
 
-  try {
-    setUpdatingMitraStatusId(item.id);
+let interestReason = '';
+
+if (
+  field === 'interestStatus' &&
+  value === 'NOT_INTERESTED'
+) {
+  const enteredReason = window.prompt(
+    'Please enter the reason for Not Interested:',
+    item.interestStatus === 'NOT_INTERESTED'
+      ? item.interestReason || ''
+      : '',
+  );
+
+  if (enteredReason === null) return;
+
+  interestReason = enteredReason.trim();
+
+  if (!interestReason) {
+    alert(
+      'Reason is mandatory when marking a Solar Mitra as Not Interested.',
+    );
+    return;
+  }
+
+  if (interestReason.length > 2000) {
+    alert('Reason cannot exceed 2000 characters.');
+    return;
+  }
+}
+
+try {
+  setUpdatingMitraStatusId(item.id);
 
     await axios.patch(
       `${API_BASE_URL}/solar-mitra/${item.id}/${
         isInterest ? 'interest-status' : 'printing-status'
       }`,
-      { [field]: value },
+      {
+  [field]: value,
+  ...(field === 'interestStatus' &&
+  value === 'NOT_INTERESTED'
+    ? { interestReason }
+    : {}),
+},
       { headers: getAuthHeaders() },
     );
 
@@ -1833,6 +1871,32 @@ const posterCreatorPerformance = useMemo(() => {
       b.total - a.total ||
       a.name.localeCompare(b.name),
   );
+}, [posterSummaryMitras]);
+
+const callingVerificationCounts = useMemo(() => {
+  const counts = {
+    total: posterSummaryMitras.length,
+    pending: 0,
+    interested: 0,
+    notInterested: 0,
+  };
+
+  for (const item of posterSummaryMitras) {
+    switch (item.interestStatus || 'PENDING') {
+      case 'INTERESTED':
+        counts.interested++;
+        break;
+
+      case 'NOT_INTERESTED':
+        counts.notInterested++;
+        break;
+
+      default:
+        counts.pending++;
+    }
+  }
+
+  return counts;
 }, [posterSummaryMitras]);
 
 const posterVerificationCounts = useMemo(() => {
@@ -5666,6 +5730,67 @@ const exportSolarReferralsCsv = async (
             </button>
           </div>
 
+
+<div className="mt-5">
+  <h3 className="mb-3 text-sm font-black text-gray-900">
+    Calling Verification Summary
+  </h3>
+
+  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    {[
+      {
+        label: 'Total Calling Records',
+        count: callingVerificationCounts.total,
+        status: '',
+        color: 'border-gray-200 bg-gray-50 text-gray-900',
+      },
+      {
+        label: 'Calling Pending',
+        count: callingVerificationCounts.pending,
+        status: 'PENDING',
+        color: 'border-amber-200 bg-amber-50 text-amber-800',
+      },
+      {
+        label: 'Calling Interested',
+        count: callingVerificationCounts.interested,
+        status: 'INTERESTED',
+        color: 'border-green-200 bg-green-50 text-green-800',
+      },
+      {
+        label: 'Calling Not Interested',
+        count: callingVerificationCounts.notInterested,
+        status: 'NOT_INTERESTED',
+        color: 'border-red-200 bg-red-50 text-red-800',
+      },
+    ].map((summary) => (
+      <button
+        key={summary.label}
+        type="button"
+        onClick={() =>
+          setMitraInterestStatus(summary.status)
+        }
+        aria-pressed={
+          mitraInterestStatus === summary.status
+        }
+        className={`min-w-0 rounded-xl border p-4 text-left transition hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+          mitraInterestStatus === summary.status
+            ? 'ring-2 ring-blue-500 ring-offset-2'
+            : ''
+        } ${summary.color}`}
+      >
+        <p className="text-xs font-semibold">
+          {summary.label}
+        </p>
+
+        <p className="mt-2 text-2xl font-black">
+          {summary.count}
+        </p>
+      </button>
+    ))}
+  </div>
+</div>
+
+
           <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
   {[
   {
@@ -6353,6 +6478,19 @@ const exportSolarReferralsCsv = async (
         Not Interested
       </option>
     </select>
+
+    {item.interestStatus === 'NOT_INTERESTED' && (
+  <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3">
+    <p className="text-xs font-bold text-red-700">
+      Reason for Not Interested
+    </p>
+
+    <p className="mt-1 whitespace-pre-wrap break-words text-sm text-red-900">
+      {item.interestReason?.trim() ||
+        'Reason not recorded (older verification).'}
+    </p>
+  </div>
+)}
 
     {item.interestUpdatedAt && (
       <p className="mt-2 text-xs text-gray-500">
@@ -9150,15 +9288,17 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
     </p>
   )}
 
-  {mitraForm.shopPhotoUrl && (
-    <div className="mt-3">
+  
+{mitraForm.shopPhotoUrl && (
+  <div className="mt-3">
+    <div className="max-h-80 w-full max-w-sm overflow-auto rounded-xl border border-gray-200 bg-gray-50">
       <img
-        src={
-          mitraForm.shopPhotoUrl
-        }
+        src={mitraForm.shopPhotoUrl}
         alt="Solar Mitra shop"
-        className="h-40 w-full max-w-sm rounded-xl border border-gray-200 object-cover"
+        className="block h-auto w-full object-contain"
       />
+    </div>
+
 
       <button
         type="button"

@@ -883,29 +883,95 @@ setBankIfscCode(
       }
     };
 
-  const downloadQr = () => {
-    if (!qrDataUrl) {
+  
+const handleQrFile = async (
+  action: 'download' | 'share',
+) => {
+  if (!qrDataUrl) {
+    alert('QR is unavailable.');
+    return;
+  }
+
+  try {
+    const { Capacitor } = await import('@capacitor/core');
+
+    const safeName = (profile?.name || 'referral')
+      .replace(/[^a-zA-Z0-9_-]/g, '-')
+      .slice(0, 60);
+
+    const fileName = `solar-mitra-${safeName}-qr.png`;
+
+    if (Capacitor.isNativePlatform()) {
+      const { Filesystem, Directory } =
+        await import('@capacitor/filesystem');
+
+      const { Share } =
+        await import('@capacitor/share');
+
+      const base64Data = qrDataUrl.split(',')[1];
+
+      if (!base64Data) {
+        throw new Error('Invalid QR image data.');
+      }
+
+      const saved = await Filesystem.writeFile({
+        path: fileName,
+        data: base64Data,
+        directory: Directory.Cache,
+        recursive: true,
+      });
+
+      await Share.share({
+        title: 'Solar Mitra Referral QR',
+        text: 'Solar Mitra Referral QR',
+        files: [saved.uri],
+        dialogTitle:
+          action === 'download'
+            ? 'Save Solar Mitra QR'
+            : 'Share Solar Mitra QR',
+      });
+
       return;
     }
 
-    const anchor =
-      document.createElement('a');
+    // Browser sharing
+    if (action === 'share') {
+      const response = await fetch(qrDataUrl);
+      const blob = await response.blob();
 
+      const file = new File([blob], fileName, {
+        type: 'image/png',
+      });
+
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: 'Solar Mitra Referral QR',
+            files: [file],
+          });
+          return;
+        } catch (error: any) {
+          if (error?.name === 'AbortError') return;
+          console.error('QR sharing failed:', error);
+        }
+      }
+
+      // Fallback to normal browser download
+    }
+
+    const anchor = document.createElement('a');
     anchor.href = qrDataUrl;
+    anchor.download = fileName;
 
-    anchor.download =
-      `solar-mitra-${profile?.name || 'referral'}-qr.png`;
-
-    document.body.appendChild(
-      anchor,
-    );
-
+    document.body.appendChild(anchor);
     anchor.click();
+    anchor.remove();
+  } catch (error) {
+    console.error('Solar Mitra QR file error:', error);
+    alert('Unable to prepare QR. Please try again.');
+  }
+};
 
-    document.body.removeChild(
-      anchor,
-    );
-  };
 
   const formatMoney = (
     value: any,
@@ -1856,12 +1922,23 @@ setBankIfscCode(
 
             <button
               type="button"
-              onClick={downloadQr}
+              onClick={() => void handleQrFile('download')}
               disabled={!qrDataUrl}
               className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
             >
               Download QR
             </button>
+
+
+<button
+  type="button"
+  onClick={() => void handleQrFile('share')}
+  disabled={!qrDataUrl}
+  className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+>
+  Share QR
+</button>
+
           </div>
         </section>
       )}
