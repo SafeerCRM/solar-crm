@@ -987,9 +987,12 @@ if (solarMitraLeadIds.length) {
         smr."linkedLeadId" AS "leadId",
         smr."solarMitraId" AS "solarMitraId",
         smr."solarMitraName" AS "solarMitraName",
-        smr."solarMitraBusinessName" AS "solarMitraBusinessName",
-        smr."solarMitraPhone" AS "solarMitraPhone"
-      FROM solar_mitra_referral smr
+       smr."solarMitraBusinessName" AS "solarMitraBusinessName",
+smr."solarMitraPhone" AS "solarMitraPhone",
+sm."createdByName" AS "solarMitraCreatorName"
+FROM solar_mitra_referral smr
+LEFT JOIN solar_mitra sm
+  ON sm.id = smr."solarMitraId"
       WHERE
         smr."linkedLeadId" = ANY($1::int[])
         AND COALESCE(
@@ -1020,7 +1023,9 @@ if (solarMitraLeadIds.length) {
             row.solarMitraBusinessName ||
             null,
           solarMitraPhone:
-            row.solarMitraPhone || null,
+  row.solarMitraPhone || null,
+solarMitraCreatorName:
+  row.solarMitraCreatorName || null,
         },
       );
     }
