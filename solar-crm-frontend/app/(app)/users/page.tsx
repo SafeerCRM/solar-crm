@@ -537,10 +537,10 @@ const handleRestoreUser = async (userId: number) => {
     {allRoles
   .filter((role) => isCurrentOwner || role !== 'OWNER')
   .map((role) => (
-      <option key={role} value={role}>
-        {role}
-      </option>
-    ))}
+    <option key={role} value={role}>
+      {getRoleDisplayName(role)}
+    </option>
+  ))}
   </select>
 </div>
 

@@ -30,6 +30,8 @@ import dayjs, {
   Dayjs,
 } from 'dayjs';
 
+import { getRoleDisplayName } from '@/lib/roleDisplay';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 type Tab =
@@ -5690,11 +5692,11 @@ const exportSolarReferralsCsv = async (
           value={creator.id}
         >
           {creator.name}
-          {creator.role
-            ? ` — ${cleanLabel(
-                creator.role,
-              )}`
-            : ''}
+{creator.role
+  ? ` — ${getRoleDisplayName(
+      creator.role,
+    )}`
+  : ''}
         </option>
       ),
     )}
@@ -6367,12 +6369,12 @@ const exportSolarReferralsCsv = async (
     </p>
 
     {item.createdByRole && (
-      <p className="mt-0.5 text-xs text-gray-500">
-        {cleanLabel(
-          item.createdByRole,
-        )}
-      </p>
+  <p className="mt-0.5 text-xs text-gray-500">
+    {getRoleDisplayName(
+      item.createdByRole,
     )}
+  </p>
+)}
 
     {item.createdAt && (
       <p className="mt-0.5 text-xs text-gray-400">
