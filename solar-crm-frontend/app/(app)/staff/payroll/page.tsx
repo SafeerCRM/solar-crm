@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { getRoleDisplayName } from '@/lib/roleDisplay';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -1529,9 +1530,9 @@ item.ruleSnapshot ? (
         </p>
 
         <p className="mt-1 font-semibold text-blue-950">
-          {payrollLabel(
-            viewPayroll.ruleSnapshot.role,
-          ) || '-'}
+          {getRoleDisplayName(
+           viewPayroll.ruleSnapshot.role,
+           ) || '-'}
         </p>
       </div>
 

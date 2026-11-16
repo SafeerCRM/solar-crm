@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { uploadPreparedFile } from '@/app/utils/fileUpload';
 import TextField from '@mui/material/TextField';
+import { getRoleDisplayName } from '@/lib/roleDisplay';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -612,7 +613,7 @@ const filteredUsers = users.filter((user) => {
             onClick={() => {
   setForm({
     ...form,
-    designation: role.replaceAll('_', ' '),
+    designation: getRoleDisplayName(role),
     staffRole: role,
   });
 
@@ -621,7 +622,7 @@ const filteredUsers = users.filter((user) => {
 }}
             className="block w-full border-b p-3 text-left text-sm hover:bg-blue-50"
           >
-            {role.replaceAll('_', ' ')}
+            {getRoleDisplayName(role)}
           </button>
         ))
       )}

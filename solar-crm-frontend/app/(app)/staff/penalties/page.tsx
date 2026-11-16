@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { getRoleDisplayName } from '@/lib/roleDisplay';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -1134,9 +1135,11 @@ const hideRestorePenaltyCase =
                     {item.employeeCode ||
                       '-'}{' '}
                     |{' '}
-                    {item.staffRole ||
-                      item.designation ||
-                      '-'}{' '}
+                    {getRoleDisplayName(
+                     item.staffRole ||
+                     item.designation ||
+                    '-',
+                    )}{' '}
                     |{' '}
                     {item.department ||
                       '-'}{' '}
@@ -1703,7 +1706,7 @@ const hideRestorePenaltyCase =
                     : 'bg-white text-gray-700'
                 }`}
               >
-                {role.replaceAll('_', ' ')}
+                {getRoleDisplayName(role)}
               </button>
             ))}
           </div>
@@ -2159,8 +2162,9 @@ const hideRestorePenaltyCase =
                     {penalty.employeeCode ||
                       '-'}{' '}
                     |{' '}
-                    {penalty.staffRole ||
-                      '-'}{' '}
+                    {getRoleDisplayName(
+                     penalty.staffRole || '-',
+                     )}{' '}
                     |{' '}
                     {penalty.department ||
                       '-'}

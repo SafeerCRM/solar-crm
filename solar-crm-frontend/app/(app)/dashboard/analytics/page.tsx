@@ -14,6 +14,7 @@ import {
   YAxis,
 } from 'recharts';
 import { getAuthHeaders } from '@/lib/authHeaders';
+import { getRoleDisplayName } from '@/lib/roleDisplay';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -490,9 +491,9 @@ const res = await axios.get(endpoint, {
           >
             <option value="">All Roles</option>
             {roles.map((item) => (
-              <option key={item} value={item}>
-                {item.replaceAll('_', ' ')}
-              </option>
+             <option key={item} value={item}>
+             {getRoleDisplayName(item)}
+            </option>
             ))}
           </select>
 

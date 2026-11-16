@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
+import { getRoleDisplayName } from '@/lib/roleDisplay';
 
 type User = {
   id: number;
@@ -63,6 +64,7 @@ const allRoles = [
   'SOLAR_FRANCHISE',
   'SOLAR_STORE',
 ];
+
 
 export default function UsersPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -453,7 +455,7 @@ const handleRestoreUser = async (userId: number) => {
           key={role}
           className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700"
         >
-          {role.replace(/_/g, ' ')}
+          {getRoleDisplayName(role)}
         </span>
       ))
     ) : (
@@ -480,7 +482,7 @@ const handleRestoreUser = async (userId: number) => {
                   : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
               }`}
             >
-              {role.replace(/_/g, ' ')}
+              {getRoleDisplayName(role)}
             </button>
           ))}
       </div>
@@ -579,7 +581,7 @@ const canManageThisUser = isCurrentOwner || !isOwnerUser;
             key={role}
             className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700"
           >
-            {role.replace(/_/g, ' ')}
+            {getRoleDisplayName(role)}
           </span>
         ))
       ) : (
@@ -639,7 +641,7 @@ const canManageThisUser = isCurrentOwner || !isOwnerUser;
                     : ''
                 }`}
               >
-                {role.replace(/_/g, ' ')}
+                {getRoleDisplayName(role)}
               </button>
             ))}
         </div>

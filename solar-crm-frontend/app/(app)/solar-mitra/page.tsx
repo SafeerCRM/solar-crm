@@ -953,7 +953,8 @@ const canManagePayoutPayments =
   isOwner || isAccountManager;
 
 const isFranchiseHead =
-  userRoles.includes('FRANCHISE_HEAD');
+  userRoles.includes('FRANCHISE_HEAD') ||
+  userRoles.includes('MARKETING_HEAD');
 
 const canAssignFranchiseManager =
   isOwner || isFranchiseHead;
@@ -4931,7 +4932,7 @@ const rows = filteredMitras.map((item) => [
       'Solar Mitra Name',
       'Contact Number',
       'City',
-      'Franchise Manager Name',
+      'Solar Mitra Manager Name',
       'Meeting Status',
     ];
 
@@ -6346,7 +6347,7 @@ const exportSolarReferralsCsv = async (
 
                     <div>
                       <p className="text-xs font-semibold text-gray-400">
-                        Franchise Manager
+                        Solar Mitra Manager
                       </p>
                       <p className="font-semibold text-gray-800">
                         {item.franchiseManagerName ||
@@ -6458,7 +6459,7 @@ const exportSolarReferralsCsv = async (
       </select>
     ) : (
       <p className="mt-3 text-xs text-gray-500">
-        Managed by Franchise Head
+        Managed by Solar Mitra Head
       </p>
     )}
   </div>
@@ -6559,7 +6560,7 @@ const exportSolarReferralsCsv = async (
       </select>
     ) : (
       <p className="mt-3 text-xs text-gray-500">
-        Managed by Franchise Head
+        Managed by Solar Mitra Head
       </p>
     )}
 
@@ -6859,7 +6860,7 @@ const exportSolarReferralsCsv = async (
 
               <div>
                 <p className="text-xs font-bold uppercase text-gray-400">
-                  Franchise Manager
+                  Solar Mitra Manager
                 </p>
 
                 <p className="mt-1 font-semibold text-gray-700">
@@ -9574,7 +9575,7 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
                   {canAssignFranchiseManager && (
   <div className="relative">
                     <label className="mb-1 block text-sm font-bold text-gray-700">
-                      Franchise Manager
+                      Solar Mitra Manager
                     </label>
 
                     <div className="flex gap-2">
