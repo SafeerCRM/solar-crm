@@ -4,11 +4,11 @@ export function getRoleDisplayName(
   const value = String(role || '').trim();
 
   if (value === 'FRANCHISE_MANAGER') {
-    return 'Solar Mitra Manager';
+    return 'SOLAR MITRA MANAGER';
   }
 
   if (value === 'FRANCHISE_HEAD') {
-    return 'Solar Mitra Head';
+    return 'SOLAR MITRA HEAD';
   }
 
   return value.replace(/_/g, ' ');
