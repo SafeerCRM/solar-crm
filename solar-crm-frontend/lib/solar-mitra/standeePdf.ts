@@ -4,6 +4,7 @@ import 'regenerator-runtime/runtime';
 import {
   PDFDocument,
   rgb,
+  degrees,
 } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import QRCode from 'qrcode';
@@ -11,6 +12,7 @@ import QRCode from 'qrcode';
 export type StandeeMitra = {
   id: number;
   name: string;
+  createdByName?: string | null;
   publicReferralToken?: string | null;
 };
 
@@ -420,6 +422,63 @@ labelLines.forEach((line, index) => {
     color: rgb(0, 0, 0),
   });
 });
+
+const creatorName =
+  mitra.createdByName?.trim();
+
+if (creatorName) {
+  const creatorText =
+    `Created By: ${creatorName}`;
+
+  // Keep the creator label inside the white
+  // QR panel, along its right-hand edge.
+  const sidePadding = isQrInsert
+    ? 8
+    : 5 * standeeScale;
+
+  const availableHeight =
+    contentHeight - 2 * sidePadding;
+
+  let creatorFontSize = isQrInsert
+    ? 11
+    : 11 * standeeScale;
+
+  while (
+    creatorFontSize > (isQrInsert ? 5 : 5 * standeeScale) &&
+    hindiFont.widthOfTextAtSize(
+      creatorText,
+      creatorFontSize,
+    ) > availableHeight
+  ) {
+    creatorFontSize -= isQrInsert
+      ? 0.5
+      : 0.5 * standeeScale;
+  }
+
+  const textLength =
+    hindiFont.widthOfTextAtSize(
+      creatorText,
+      creatorFontSize,
+    );
+
+  if (textLength <= availableHeight) {
+    page.drawText(creatorText, {
+      x:
+        contentX +
+        contentWidth -
+        (isQrInsert ? 7 : 7 * standeeScale),
+
+      y:
+        contentY +
+        (contentHeight - textLength) / 2,
+
+      size: creatorFontSize,
+      font: hindiFont,
+      rotate: degrees(90),
+      color: rgb(0.25, 0.25, 0.25),
+    });
+  }
+}
   }
 
     console.time(

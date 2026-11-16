@@ -4375,10 +4375,31 @@ const downloadSelectedStandeePdfs = async (
     const { generateSolarMitraStandeePdf } =
       await import('@/lib/solar-mitra/standeePdf');
 
-    const pdfBytes = await generateSolarMitraStandeePdf(
-  selectedMitras.map((item) => ({
+    const sortedMitras = [...selectedMitras].sort(
+  (a, b) => {
+    const nameA =
+      a.businessName?.trim() || '';
+
+    const nameB =
+      b.businessName?.trim() || '';
+
+    const comparison = nameA.localeCompare(
+      nameB,
+      'en',
+      { sensitivity: 'base' },
+    );
+
+    return comparison !== 0
+      ? comparison
+      : a.id - b.id;
+  },
+);
+
+const pdfBytes = await generateSolarMitraStandeePdf(
+  sortedMitras.map((item) => ({
     id: item.id,
     name: item.businessName?.trim() || '',
+    createdByName: item.createdByName,
     publicReferralToken: item.publicReferralToken,
   })),
   format,
@@ -4517,10 +4538,11 @@ const downloadStandeePdf = async (
   await generateSolarMitraStandeePdf(
     [
       {
-        id: item.id,
-        name: item.businessName?.trim() || '',
-        publicReferralToken: item.publicReferralToken,
-      },
+  id: item.id,
+  name: item.businessName?.trim() || '',
+  createdByName: item.createdByName,
+  publicReferralToken: item.publicReferralToken,
+},
     ],
     format,
   );
