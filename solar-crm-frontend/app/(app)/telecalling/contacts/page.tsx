@@ -737,64 +737,60 @@ const fetchReassignmentContacts = async (
     setTransferLoading(true);
     setHistoryMessage('');
 
-    const res =
-      await axios.get<ContactHistoryResponse>(
-        `${backendUrl}/telecalling/contacts/recycle-preview`,
-        {
-          params: {
-            page: requestedPage,
-            limit: historyLimit,
+    const isManualSelection =
+  transferMode === 'SELECTED';
 
-            fromTelecallerId:
-              Number(
-                fromTelecallerId,
-              ),
+const res =
+  await axios.get<ContactHistoryResponse>(
+    isManualSelection
+      ? `${backendUrl}/telecalling/contacts/history`
+      : `${backendUrl}/telecalling/contacts/recycle-preview`,
+    {
+      params: {
+        page: requestedPage,
+        limit: historyLimit,
 
-            name:
-              reassignmentName
-                .trim() ||
-              undefined,
+        ...(isManualSelection
+          ? {
+              mode: 'reassignment',
+              telecallerId: Number(fromTelecallerId),
+            }
+          : {
+              fromTelecallerId: Number(fromTelecallerId),
+              recycleDays: reassignmentRecycleDays,
+            }),
 
-            phone:
-              reassignmentPhone
-                .trim() ||
-              undefined,
+        name: reassignmentName.trim() || undefined,
+        phone: reassignmentPhone.trim() || undefined,
+        city: reassignmentCity.trim() || undefined,
+        zone: reassignmentZone.trim() || undefined,
 
-            city:
-              reassignmentCity
-                .trim() ||
-              undefined,
+        contactStatus:
+          reassignmentContactStatus || undefined,
 
-            zone:
-              reassignmentZone
-                .trim() ||
-              undefined,
+        callStatus:
+          reassignmentCallStatus || undefined,
 
-            contactStatus:
-              reassignmentContactStatus ||
-              undefined,
+        sourceModule:
+          reassignmentSourceModule.trim() || undefined,
 
-            callStatus:
-              reassignmentCallStatus ||
-              undefined,
+        hasCalled:
+          reassignmentHasCalled || undefined,
 
-            sourceModule:
-              reassignmentSourceModule
-                .trim() ||
-              undefined,
+        ...(isManualSelection
+          ? {
+              stage: reassignmentStage || undefined,
+              convertedToLead:
+                reassignmentConverted || undefined,
+              storageState:
+                reassignmentStorageState || undefined,
+            }
+          : {}),
+      },
 
-            hasCalled:
-              reassignmentHasCalled ||
-              undefined,
-
-            recycleDays:
-              reassignmentRecycleDays,
-          },
-
-          headers:
-            getAuthHeaders(),
-        },
-      );
+      headers: getAuthHeaders(),
+    },
+  );
 
     const loadedContacts =
       Array.isArray(
@@ -2162,24 +2158,33 @@ const resetReassignmentFilters =
        * State updates are asynchronous, so the reset
        * values are supplied explicitly in this request.
        */
-      const res =
-        await axios.get<ContactHistoryResponse>(
-          `${backendUrl}/telecalling/contacts/recycle-preview`,
-          {
-            params: {
-              page: 1,
-              limit: historyLimit,
+      const isManualSelection =
+  transferMode === 'SELECTED';
 
-              fromTelecallerId:
-                Number(fromTelecallerId),
+const res =
+  await axios.get<ContactHistoryResponse>(
+    isManualSelection
+      ? `${backendUrl}/telecalling/contacts/history`
+      : `${backendUrl}/telecalling/contacts/recycle-preview`,
+    {
+      params: {
+        page: 1,
+        limit: historyLimit,
 
+        ...(isManualSelection
+          ? {
+              mode: 'reassignment',
+              telecallerId: Number(fromTelecallerId),
+            }
+          : {
+              fromTelecallerId: Number(fromTelecallerId),
               recycleDays: 30,
-            },
+            }),
+      },
 
-            headers:
-              getAuthHeaders(),
-          },
-        );
+      headers: getAuthHeaders(),
+    },
+  );
 
       setReassignmentContacts(
         Array.isArray(res.data?.data)
@@ -5758,11 +5763,14 @@ const transferContacts = async () => {
   <div className="grid grid-cols-2 gap-2">
     <button
       type="button"
-      onClick={() =>
-        setTransferMode(
-          'FILTERED',
-        )
-      }
+      onClick={() => {
+  setTransferMode('FILTERED');
+  setSelectedHistoryContactIds([]);
+  setReassignmentContacts([]);
+  setReassignmentTotal(0);
+  setReassignmentPage(1);
+  setReassignmentTotalPages(1);
+}}
       className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
         transferMode ===
         'FILTERED'
@@ -5775,11 +5783,14 @@ const transferContacts = async () => {
 
     <button
       type="button"
-      onClick={() =>
-        setTransferMode(
-          'SELECTED',
-        )
-      }
+      onClick={() => {
+  setTransferMode('SELECTED');
+  setSelectedHistoryContactIds([]);
+  setReassignmentContacts([]);
+  setReassignmentTotal(0);
+  setReassignmentPage(1);
+  setReassignmentTotalPages(1);
+}}
       className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
         transferMode ===
         'SELECTED'
