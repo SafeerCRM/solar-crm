@@ -19,6 +19,12 @@ export enum SolarMitraInterestStatus {
   NOT_INTERESTED = 'NOT_INTERESTED',
 }
 
+export enum SolarMitraApprovalStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
 export enum SolarMitraPrintingStatus {
   UNPRINTED = 'UNPRINTED',
   PRINTED = 'PRINTED',
@@ -129,6 +135,32 @@ interestUpdatedByName: string;
 
 @Column({ type: 'text', nullable: true })
 interestReason: string | null;
+
+/*
+ * Solar Mitra approval is separate from
+ * calling verification and account status.
+ */
+
+@Column({
+  type: 'text',
+  default: SolarMitraApprovalStatus.PENDING,
+})
+approvalStatus: SolarMitraApprovalStatus;
+
+@Column({ type: 'text', nullable: true })
+approvalReason: string | null;
+
+@Column({ type: 'timestamp', nullable: true })
+approvalUpdatedAt: Date | null;
+
+@Column({ type: 'integer', nullable: true })
+approvalUpdatedBy: number | null;
+
+@Column({ type: 'text', nullable: true })
+approvalUpdatedByName: string | null;
+
+@Column({ type: 'timestamp', nullable: true })
+approvalResubmittedAt: Date | null;
 
 @Column({
   type: 'text',

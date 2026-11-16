@@ -32,6 +32,7 @@ import {
   SolarMitraPrintingStatus,
   SolarMitraPosterVerificationStatus,
   SolarMitraShopStatus,
+  SolarMitraApprovalStatus,
 } from './solar-mitra.entity';
 
 import {
@@ -1335,6 +1336,32 @@ if (interestStatus) {
   );
 }
 
+const approvalStatus =
+  String(query?.approvalStatus || '')
+    .trim()
+    .toUpperCase();
+
+if (approvalStatus) {
+  if (
+    ![
+      SolarMitraApprovalStatus.PENDING,
+      SolarMitraApprovalStatus.APPROVED,
+      SolarMitraApprovalStatus.REJECTED,
+    ].includes(
+      approvalStatus as SolarMitraApprovalStatus,
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid Solar Mitra approval status filter',
+    );
+  }
+
+  qb.andWhere(
+    'mitra."approvalStatus" = :approvalStatus',
+    { approvalStatus },
+  );
+}
+
 const printingStatus =
   String(query?.printingStatus || '')
     .trim()
@@ -1481,6 +1508,111 @@ interestUpdatedAt: mitra.interestUpdatedAt,
     interestUpdatedBy: mitra.interestUpdatedBy,
     interestUpdatedByName: mitra.interestUpdatedByName,
   };
+}
+
+async updateSolarMitraApprovalStatus(
+  mitraId: number,
+  body: any,
+  user: any,
+) {
+  const status = String(
+    body?.approvalStatus || '',
+  ).trim().toUpperCase();
+
+  if (
+    ![
+      SolarMitraApprovalStatus.APPROVED,
+      SolarMitraApprovalStatus.REJECTED,
+    ].includes(status as SolarMitraApprovalStatus)
+  ) {
+    throw new BadRequestException(
+      'Approval status must be APPROVED or REJECTED',
+    );
+  }
+
+  const reason = String(
+    body?.approvalReason || '',
+  ).trim();
+
+  if (
+    status === SolarMitraApprovalStatus.REJECTED &&
+    !reason
+  ) {
+    throw new BadRequestException(
+      'Rejection reason is required',
+    );
+  }
+
+  if (reason.length > 2000) {
+    throw new BadRequestException(
+      'Approval reason cannot exceed 2000 characters',
+    );
+  }
+
+  return this.dataSource.transaction(
+    async (manager) => {
+      const repository =
+        manager.getRepository(SolarMitra);
+
+      const mitra = await repository.findOne({
+        where: { id: mitraId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!mitra) {
+        throw new NotFoundException(
+          'Solar Mitra not found',
+        );
+      }
+
+      if (
+        mitra.interestStatus !==
+        SolarMitraInterestStatus.INTERESTED
+      ) {
+        throw new BadRequestException(
+          'Only interested Solar Mitras can be approved or rejected',
+        );
+      }
+
+      if (
+        mitra.approvalStatus !==
+        SolarMitraApprovalStatus.PENDING
+      ) {
+        throw new BadRequestException(
+          'Only pending Solar Mitras can be reviewed',
+        );
+      }
+
+      mitra.approvalStatus =
+        status as SolarMitraApprovalStatus;
+
+      mitra.approvalReason =
+        status === SolarMitraApprovalStatus.REJECTED
+          ? reason
+          : null;
+
+      mitra.approvalUpdatedAt = new Date();
+      mitra.approvalUpdatedBy = Number(user.id);
+      mitra.approvalUpdatedByName =
+        String(user?.name || '').trim();
+
+      const saved = await repository.save(mitra);
+
+      return {
+        message:
+          status === SolarMitraApprovalStatus.APPROVED
+            ? 'Solar Mitra approved successfully'
+            : 'Solar Mitra rejected successfully',
+        id: saved.id,
+        approvalStatus: saved.approvalStatus,
+        approvalReason: saved.approvalReason,
+        approvalUpdatedAt: saved.approvalUpdatedAt,
+        approvalUpdatedBy: saved.approvalUpdatedBy,
+        approvalUpdatedByName:
+          saved.approvalUpdatedByName,
+      };
+    },
+  );
 }
 
 private async isCreatorPayoutEligible(
@@ -2586,6 +2718,66 @@ transactionalMitra.primaryPhone =
                 body.franchiseManagerId,
               )
             : null;
+      }
+
+            /*
+       * A rejected Solar Mitra can be submitted
+       * for another review after correcting
+       * relevant profile details.
+       *
+       * Do not reset approval for ordinary
+       * updates or approved Solar Mitras.
+       */
+      const reviewFields = [
+        'name',
+        'businessName',
+        'primaryPhone',
+        'secondaryPhone',
+        'address',
+        'area',
+        'city',
+        'state',
+        'shopStatus',
+        'shopPhotoUrl',
+        'gpsLatitude',
+        'gpsLongitude',
+        'gpsAddress',
+      ];
+
+      const hasCorrectedReviewDetails =
+        reviewFields.some((field) => {
+          if (body?.[field] === undefined) {
+            return false;
+          }
+
+          const previousValue =
+            (mitra as any)[field];
+
+          const updatedValue =
+            (transactionalMitra as any)[field];
+
+          return String(previousValue ?? '') !==
+            String(updatedValue ?? '');
+        });
+
+      if (
+        transactionalMitra.approvalStatus ===
+          SolarMitraApprovalStatus.REJECTED &&
+        transactionalMitra.interestStatus ===
+          SolarMitraInterestStatus.INTERESTED &&
+        hasCorrectedReviewDetails
+      ) {
+        transactionalMitra.approvalStatus =
+          SolarMitraApprovalStatus.PENDING;
+
+        transactionalMitra.approvalResubmittedAt =
+          new Date();
+
+        /*
+         * Preserve the previous rejection
+         * reason and reviewer information
+         * until a new decision is made.
+         */
       }
 
       transactionalMitra.status =

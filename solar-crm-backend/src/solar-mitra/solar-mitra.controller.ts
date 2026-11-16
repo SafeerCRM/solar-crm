@@ -1127,6 +1127,36 @@ async updateInterestStatus(
   );
 }
 
+@Patch(':id/approval-status')
+async updateApprovalStatus(
+  @Req() req: any,
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  this.assertManagementAccess(req.user);
+
+  const roles: UserRole[] =
+    Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+
+  if (
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.FRANCHISE_HEAD) &&
+    !roles.includes(UserRole.MARKETING_HEAD)
+  ) {
+    throw new ForbiddenException(
+      'Only Owner, Solar Mitra Head or Marketing Head can approve or reject Solar Mitras',
+    );
+  }
+
+  return this.service.updateSolarMitraApprovalStatus(
+    id,
+    body,
+    req.user,
+  );
+}
+
 @Post(':id/poster-installation/upload')
 @UseInterceptors(
   FileInterceptor('file', {
