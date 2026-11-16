@@ -94,9 +94,10 @@ private isFranchiseHead(
       ? user.roles
       : [];
 
-  return roles.includes(
-    UserRole.FRANCHISE_HEAD,
-  );
+  return (
+  roles.includes(UserRole.FRANCHISE_HEAD) ||
+  roles.includes(UserRole.MARKETING_HEAD)
+);
 }
 
 private hasFullSolarMitraVisibility(
@@ -976,10 +977,11 @@ async updatePosterVerification(
 
   if (
     !roles.includes(UserRole.OWNER) &&
-    !roles.includes(UserRole.FRANCHISE_HEAD)
+!roles.includes(UserRole.FRANCHISE_HEAD) &&
+!roles.includes(UserRole.MARKETING_HEAD)
   ) {
     throw new ForbiddenException(
-      'Only Owner or Franchise Head can verify QR poster installation',
+      'Only Owner, Solar Mitra Head or Marketing Head can verify QR poster installation',
     );
   }
 
@@ -1003,10 +1005,11 @@ async updateBulkPrintingStatus(
 
   if (
     !roles.includes(UserRole.OWNER) &&
-    !roles.includes(UserRole.FRANCHISE_HEAD)
+!roles.includes(UserRole.FRANCHISE_HEAD) &&
+!roles.includes(UserRole.MARKETING_HEAD)
   ) {
     throw new ForbiddenException(
-      'Only Owner or Franchise Head can update bulk printing status',
+      'Only Owner, Solar Mitra Head or Marketing Head can update bulk printing status',
     );
   }
 
@@ -1030,10 +1033,11 @@ async updatePrintingStatus(
 
   if (
     !roles.includes(UserRole.OWNER) &&
-    !roles.includes(UserRole.FRANCHISE_HEAD)
+!roles.includes(UserRole.FRANCHISE_HEAD) &&
+!roles.includes(UserRole.MARKETING_HEAD)
   ) {
     throw new ForbiddenException(
-      'Only Owner or Franchise Head can update QR poster printing status',
+      'Only Owner, Solar Mitra Head or Marketing Head can update QR poster printing status',
     );
   }
 
@@ -1059,10 +1063,11 @@ async updateShopStatus(
 
   if (
     !roles.includes(UserRole.OWNER) &&
-    !roles.includes(UserRole.FRANCHISE_HEAD)
+!roles.includes(UserRole.FRANCHISE_HEAD) &&
+!roles.includes(UserRole.MARKETING_HEAD)
   ) {
     throw new ForbiddenException(
-      'Only Owner or Franchise Head can update Solar Mitra Shop Status',
+      'Only Owner, Solar Mitra Head or Marketing Head can update Solar Mitra Shop Status',
     );
   }
 
@@ -1087,10 +1092,11 @@ async updateInterestStatus(
 
   if (
     !roles.includes(UserRole.OWNER) &&
-    !roles.includes(UserRole.FRANCHISE_HEAD)
+!roles.includes(UserRole.FRANCHISE_HEAD) &&
+!roles.includes(UserRole.MARKETING_HEAD)
   ) {
     throw new ForbiddenException(
-      'Only Owner or Franchise Head can update Solar Mitra calling verification status',
+      'Only Owner, Solar Mitra Head or Marketing Head can update Solar Mitra calling verification status',
     );
   }
 

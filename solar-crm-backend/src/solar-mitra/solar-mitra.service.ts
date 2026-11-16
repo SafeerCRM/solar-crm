@@ -905,11 +905,12 @@ async getSolarMitraPortalReferral(
       : [];
 
   const isSolarMitraAssistant =
-    roles.includes(
-      UserRole.SOLAR_MITRA_ASSISTANT,
-    ) &&
-    !roles.includes(UserRole.OWNER) &&
-    !roles.includes(UserRole.FRANCHISE_HEAD);
+  roles.includes(
+    UserRole.SOLAR_MITRA_ASSISTANT,
+  ) &&
+  !roles.includes(UserRole.OWNER) &&
+  !roles.includes(UserRole.FRANCHISE_HEAD) &&
+  !roles.includes(UserRole.MARKETING_HEAD);
 
   if (isSolarMitraAssistant) {
     body = { ...body };
@@ -921,13 +922,15 @@ async getSolarMitraPortalReferral(
   }
 
     const canAssignFranchiseManager =
-    roles.includes(UserRole.OWNER) ||
-    roles.includes(UserRole.FRANCHISE_HEAD);
+  roles.includes(UserRole.OWNER) ||
+  roles.includes(UserRole.FRANCHISE_HEAD) ||
+  roles.includes(UserRole.MARKETING_HEAD);
 
   const isFranchiseManager =
-    roles.includes(UserRole.FRANCHISE_MANAGER) &&
-    !roles.includes(UserRole.OWNER) &&
-    !roles.includes(UserRole.FRANCHISE_HEAD);
+  roles.includes(UserRole.FRANCHISE_MANAGER) &&
+  !roles.includes(UserRole.OWNER) &&
+  !roles.includes(UserRole.FRANCHISE_HEAD) &&
+  !roles.includes(UserRole.MARKETING_HEAD);
 
   if (!canAssignFranchiseManager) {
     body = { ...body };
@@ -2048,11 +2051,12 @@ async getMySolarMitraProfile(
       : [];
 
   const isSolarMitraAssistant =
-    roles.includes(
-      UserRole.SOLAR_MITRA_ASSISTANT,
-    ) &&
-    !roles.includes(UserRole.OWNER) &&
-    !roles.includes(UserRole.FRANCHISE_HEAD);
+  roles.includes(
+    UserRole.SOLAR_MITRA_ASSISTANT,
+  ) &&
+  !roles.includes(UserRole.OWNER) &&
+  !roles.includes(UserRole.FRANCHISE_HEAD) &&
+  !roles.includes(UserRole.MARKETING_HEAD);
 
   if (isSolarMitraAssistant) {
     body = { ...body };
@@ -2064,8 +2068,9 @@ async getMySolarMitraProfile(
   }
 
     const canAssignFranchiseManager =
-    roles.includes(UserRole.OWNER) ||
-    roles.includes(UserRole.FRANCHISE_HEAD);
+  roles.includes(UserRole.OWNER) ||
+  roles.includes(UserRole.FRANCHISE_HEAD) ||
+  roles.includes(UserRole.MARKETING_HEAD);
 
   if (!canAssignFranchiseManager) {
     body = { ...body };
