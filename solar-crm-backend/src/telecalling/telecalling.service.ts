@@ -550,7 +550,14 @@ customerPhone: (data as any).customerPhone || undefined,
     'contact.address',
     'contact.location',
   ])
-  .where('call.telecallerId = :telecallerId', { telecallerId })
+  .where(
+  `(
+    (call.contactId IS NOT NULL AND contact.assignedTo = :telecallerId)
+    OR
+    (call.contactId IS NULL AND call.telecallerId = :telecallerId)
+  )`,
+  { telecallerId },
+)
 .andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
   stage: 'TELECALLING',
 })
