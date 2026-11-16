@@ -101,6 +101,13 @@ franchiseManagerName?: string | null;
   interestUpdatedBy?: number | null;
   interestUpdatedByName?: string | null;
 
+  approvalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+approvalReason?: string | null;
+approvalUpdatedAt?: string | null;
+approvalUpdatedBy?: number | null;
+approvalUpdatedByName?: string | null;
+approvalResubmittedAt?: string | null;
+
   printingStatus?:
     | 'UNPRINTED'
     | 'PRINTED';
@@ -671,6 +678,11 @@ const [uploadingShopPhoto, setUploadingShopPhoto] =
   const [
   mitraInterestStatus,
   setMitraInterestStatus,
+] = useState('');
+
+const [
+  mitraApprovalStatus,
+  setMitraApprovalStatus,
 ] = useState('');
 
 const [
@@ -1276,7 +1288,78 @@ const updateBulkPrintingStatus = async (
   }
 };
 
+const updateMitraApprovalStatus = async (
+  item: SolarMitra,
+  status: 'APPROVED' | 'REJECTED',
+) => {
+  if (updatingMitraStatusId !== null) return;
 
+  if (
+    item.interestStatus !== 'INTERESTED' ||
+    (item.approvalStatus || 'PENDING') !== 'PENDING'
+  ) {
+    alert('Only Interested Solar Mitras pending approval can be reviewed.');
+    return;
+  }
+
+  let approvalReason = '';
+
+  if (status === 'REJECTED') {
+    const enteredReason = window.prompt(
+      `Enter rejection reason for ${item.name}:`,
+      '',
+    );
+
+    if (enteredReason === null) return;
+
+    approvalReason = enteredReason.trim();
+
+    if (!approvalReason) {
+      alert('Rejection reason is mandatory.');
+      return;
+    }
+
+    if (approvalReason.length > 2000) {
+      alert('Rejection reason cannot exceed 2000 characters.');
+      return;
+    }
+  }
+
+  const confirmed = window.confirm(
+    status === 'APPROVED'
+      ? `Approve Solar Mitra ${item.name}?`
+      : `Reject Solar Mitra ${item.name}?\n\nReason: ${approvalReason}`,
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setUpdatingMitraStatusId(item.id);
+
+    await axios.patch(
+      `${API_BASE_URL}/solar-mitra/${item.id}/approval-status`,
+      {
+        approvalStatus: status,
+        approvalReason:
+          status === 'REJECTED' ? approvalReason : '',
+      },
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    await loadMitras();
+  } catch (error) {
+    alert(
+      getErrorMessage(
+        error,
+        'Failed to update Solar Mitra approval status',
+      ),
+    );
+  } finally {
+    setUpdatingMitraStatusId(null);
+  }
+};
 
 const updateMitraVerificationStatus = async (
   item: SolarMitra,
@@ -1350,10 +1433,11 @@ try {
         'Failed to update Solar Mitra status',
       ),
     );
-  } finally {
+    } finally {
     setUpdatingMitraStatusId(null);
   }
 };
+
 
   const loadReferrals = async () => {
     const res = await axios.get(
@@ -1902,6 +1986,38 @@ const callingVerificationCounts = useMemo(() => {
   return counts;
 }, [posterSummaryMitras]);
 
+const approvalVerificationCounts = useMemo(() => {
+  const counts = {
+    total: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  };
+
+  for (const item of posterSummaryMitras) {
+    if (item.interestStatus !== 'INTERESTED') {
+      continue;
+    }
+
+    counts.total++;
+
+    switch (item.approvalStatus || 'PENDING') {
+      case 'APPROVED':
+        counts.approved++;
+        break;
+
+      case 'REJECTED':
+        counts.rejected++;
+        break;
+
+      default:
+        counts.pending++;
+    }
+  }
+
+  return counts;
+}, [posterSummaryMitras]);
+
 const posterVerificationCounts = useMemo(() => {
   const counts = {
     total: posterSummaryMitras.length,
@@ -1956,6 +2072,19 @@ const posterVerificationCounts = useMemo(() => {
     mitraInterestStatus
 ) {
   return false;
+}
+
+if (mitraApprovalStatus) {
+  if (item.interestStatus !== 'INTERESTED') {
+    return false;
+  }
+
+  if (
+    (item.approvalStatus || 'PENDING') !==
+    mitraApprovalStatus
+  ) {
+    return false;
+  }
 }
 
 if (
@@ -2055,6 +2184,7 @@ if (mitraDateFilterType !== 'ALL') {
   mitraExactId,
   mitraStatus,
   mitraInterestStatus,
+  mitraApprovalStatus,
   mitraPrintingStatus,
   mitraShopStatus,
   mitraPosterVerificationStatus,
@@ -5551,6 +5681,33 @@ const exportSolarReferralsCsv = async (
             </select>
 
             <select
+  value={mitraApprovalStatus}
+  onChange={(event) => {
+    const value = event.target.value;
+
+    setMitraApprovalStatus(value);
+
+    if (value) {
+      setMitraInterestStatus('INTERESTED');
+    }
+  }}
+  className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
+>
+  <option value="">
+    All Approval Statuses
+  </option>
+  <option value="PENDING">
+    Interested – Pending Approval
+  </option>
+  <option value="APPROVED">
+    Solar Mitra Approved
+  </option>
+  <option value="REJECTED">
+    Solar Mitra Rejected
+  </option>
+</select>
+
+            <select
   value={mitraDateFilterType}
   onChange={(event) =>
     setMitraDateFilterType(
@@ -5711,6 +5868,7 @@ const exportSolarReferralsCsv = async (
     setMitraStatus('');
     setMitraCreatedBy('');
     setMitraInterestStatus('');
+    setMitraApprovalStatus('');
     setMitraPrintingStatus('');
     setMitraShopStatus('');
     setMitraPosterVerificationStatus('');
@@ -5754,6 +5912,68 @@ const exportSolarReferralsCsv = async (
               + Add Mitra
             </button>
           </div>
+
+          <div className="mt-5">
+  <h3 className="mb-3 text-sm font-bold text-gray-800">
+    Solar Mitra Approval Summary
+  </h3>
+
+  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    {[
+      {
+        label: 'Total Interested Mitras',
+        count: approvalVerificationCounts.total,
+        status: '',
+        color: 'border-gray-200 bg-gray-50 text-gray-900',
+      },
+      {
+        label: 'Interested – Pending Approval',
+        count: approvalVerificationCounts.pending,
+        status: 'PENDING',
+        color: 'border-amber-200 bg-amber-50 text-amber-800',
+      },
+      {
+        label: 'Solar Mitra Approved',
+        count: approvalVerificationCounts.approved,
+        status: 'APPROVED',
+        color: 'border-green-200 bg-green-50 text-green-800',
+      },
+      {
+        label: 'Solar Mitra Rejected',
+        count: approvalVerificationCounts.rejected,
+        status: 'REJECTED',
+        color: 'border-red-200 bg-red-50 text-red-800',
+      },
+    ].map((summary) => (
+      <button
+        key={summary.label}
+        type="button"
+        onClick={() => {
+          setMitraInterestStatus('INTERESTED');
+          setMitraApprovalStatus(summary.status);
+        }}
+        aria-pressed={
+          mitraInterestStatus === 'INTERESTED' &&
+          mitraApprovalStatus === summary.status
+        }
+        className={`min-w-0 rounded-xl border p-4 text-left transition hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+          mitraInterestStatus === 'INTERESTED' &&
+          mitraApprovalStatus === summary.status
+            ? 'ring-2 ring-blue-500 ring-offset-2'
+            : ''
+        } ${summary.color}`}
+      >
+        <p className="text-xs font-semibold">
+          {summary.label}
+        </p>
+
+        <p className="mt-2 text-2xl font-black">
+          {summary.count}
+        </p>
+      </button>
+    ))}
+  </div>
+</div>
 
 
 <div className="mt-5">
@@ -6517,7 +6737,7 @@ const exportSolarReferralsCsv = async (
   </div>
 )}
 
-    {item.interestUpdatedAt && (
+        {item.interestUpdatedAt && (
       <p className="mt-2 text-xs text-gray-500">
         Updated by{' '}
         {item.interestUpdatedByName ||
@@ -6527,6 +6747,91 @@ const exportSolarReferralsCsv = async (
       </p>
     )}
   </div>
+
+  {/* Solar Mitra Approval */}
+  {item.interestStatus === 'INTERESTED' && (
+    <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-3">
+      <p className="text-xs font-bold text-gray-700">
+        Solar Mitra Approval
+      </p>
+
+      <div className="mt-2">
+        <StatusBadge value={item.approvalStatus || 'PENDING'} />
+      </div>
+
+      {(isOwner || isFranchiseHead) &&
+        (item.approvalStatus || 'PENDING') === 'PENDING' && (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={updatingMitraStatusId !== null}
+              onClick={() =>
+                updateMitraApprovalStatus(item, 'APPROVED')
+              }
+              className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              Approve
+            </button>
+
+            <button
+              type="button"
+              disabled={updatingMitraStatusId !== null}
+              onClick={() =>
+                updateMitraApprovalStatus(item, 'REJECTED')
+              }
+              className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              Reject
+            </button>
+          </div>
+        )}
+
+      {(item.approvalStatus === 'REJECTED' ||
+  (item.approvalStatus === 'PENDING' &&
+    !!item.approvalResubmittedAt)) &&
+  !!item.approvalReason?.trim() && (
+    <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3">
+      <p className="text-xs font-bold text-red-700">
+        {item.approvalStatus === 'REJECTED'
+          ? 'Rejection Reason'
+          : 'Previous Rejection Reason'}
+      </p>
+
+      <p className="mt-1 whitespace-pre-wrap break-words text-sm text-red-900">
+        {item.approvalReason}
+      </p>
+
+      {item.approvalStatus === 'REJECTED' ? (
+        <p className="mt-2 text-xs text-red-700">
+          Correct the Solar Mitra details and save to resubmit for approval.
+        </p>
+      ) : (
+        <p className="mt-2 text-xs text-indigo-700">
+          Corrected details submitted. Awaiting approval review.
+        </p>
+      )}
+    </div>
+)}
+
+      {item.approvalUpdatedAt && (
+        <p className="mt-2 text-xs text-gray-500">
+          Reviewed by{' '}
+          {item.approvalUpdatedByName ||
+            `User #${item.approvalUpdatedBy || '—'}`}
+          {' • '}
+          {formatDate(item.approvalUpdatedAt)}
+        </p>
+      )}
+
+      {item.approvalResubmittedAt &&
+        item.approvalStatus === 'PENDING' && (
+          <p className="mt-2 text-xs text-indigo-700">
+            Corrected and resubmitted on{' '}
+            {formatDate(item.approvalResubmittedAt)}
+          </p>
+        )}
+    </div>
+  )}
 
   {/* QR Poster Printing */}
   <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-3">
