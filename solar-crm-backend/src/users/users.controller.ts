@@ -95,6 +95,7 @@ findLeadManagers() {
   'TRADING_MANAGER',
   'MEETING_MANAGER',
   'TRADING_HEAD',
+  'MARKETING_HEAD',
 )
 @Get()
 findAllUsers(

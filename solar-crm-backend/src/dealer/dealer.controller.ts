@@ -152,7 +152,7 @@ createDealerAnnouncement(
   JwtAuthGuard,
   RolesGuard,
 )
-@Roles('OWNER')
+@Roles('OWNER', 'TRADING_HEAD', 'MARKETING_HEAD')
 @Get('announcements')
 listDealerAnnouncements(
   @Query() query: any,

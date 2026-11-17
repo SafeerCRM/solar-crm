@@ -264,6 +264,35 @@ const emptyDealerForm = {
 };
 
 export default function TradingAccountPage() {
+  const [canManageDealerAnnouncements, setCanManageDealerAnnouncements] =
+    useState(false);
+
+  useEffect(() => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const payload = JSON.parse(
+        atob(
+          (token.split('.')[1] || '')
+            .replace(/-/g, '+')
+            .replace(/_/g, '/')
+        )
+      );
+
+      const rawRoles = payload.roles ?? payload.role ?? [];
+      const roles = Array.isArray(rawRoles)
+        ? rawRoles
+        : String(rawRoles).split(',');
+
+      setCanManageDealerAnnouncements(
+        roles.some((role: string) => role.trim() === 'OWNER')
+      );
+    } catch {
+      setCanManageDealerAnnouncements(false);
+    }
+  }, []);
+
   const [activeTab, setActiveTab] =
     useState<
       | 'dealers'
@@ -6452,6 +6481,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
       <Pagination page={notificationPage} totalPages={notificationTotalPages} setPage={setNotificationPage} />
     </div>
 
+    {canManageDealerAnnouncements && (
     <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5 xl:col-span-2">
   <h2 className="text-lg font-bold text-gray-800">
     {editingDealerAnnouncementId
@@ -6843,6 +6873,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
     )}
   </div>
 </div>
+    )}
 
     <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5 xl:col-span-2">
   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -6993,7 +7024,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
               </div>
 
               <div className="flex shrink-0 flex-wrap gap-2">
-  {!announcement.isHidden &&
+  {canManageDealerAnnouncements && !announcement.isHidden &&
     !announcement.publishedAt &&
     announcement.publishType ===
       'SCHEDULED' && (
@@ -7010,7 +7041,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
       </button>
     )}
 
-  {!announcement.isHidden && (
+  {canManageDealerAnnouncements && !announcement.isHidden && (
     <button
       type="button"
       onClick={() =>
