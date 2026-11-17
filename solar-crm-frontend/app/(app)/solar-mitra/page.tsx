@@ -673,7 +673,11 @@ const [uploadingShopPhoto, setUploadingShopPhoto] =
 
   const [mitraSearch, setMitraSearch] = useState('');
  const [mitraExactId, setMitraExactId] = useState('');
-  const [mitraStatus, setMitraStatus] = useState('');
+
+const [mitraIdFrom, setMitraIdFrom] = useState('');
+const [mitraIdTo, setMitraIdTo] = useState('');
+
+const [mitraStatus, setMitraStatus] = useState('');
 
   const [
   mitraInterestStatus,
@@ -1802,14 +1806,22 @@ try {
   const search = mitraSearch.trim().toLowerCase();
 
   return mitras.filter((item) => {
-    if (
-      mitraExactId &&
-      Number(item.id) !== Number(mitraExactId)
-    ) {
-      return false;
-    }
+  if (
+    mitraExactId &&
+    Number(item.id) !== Number(mitraExactId)
+  ) {
+    return false;
+  }
 
-    if (mitraStatus && item.status !== mitraStatus) {
+  if (mitraIdFrom && item.id < Number(mitraIdFrom)) {
+    return false;
+  }
+
+  if (mitraIdTo && item.id > Number(mitraIdTo)) {
+    return false;
+  }
+
+  if (mitraStatus && item.status !== mitraStatus) {
       return false;
     }
 
@@ -1885,9 +1897,11 @@ try {
     );
   });
 }, [
-  mitras,
+    mitras,
   mitraSearch,
   mitraExactId,
+  mitraIdFrom,
+  mitraIdTo,
   mitraStatus,
   mitraInterestStatus,
   mitraPrintingStatus,
@@ -2052,17 +2066,25 @@ const posterVerificationCounts = useMemo(() => {
         mitraSearch.trim().toLowerCase();
 
       return mitras.filter((item) => {
-        if (
-          mitraExactId &&
-          Number(item.id) !== Number(mitraExactId)
-        ) {
-          return false;
-        }
+  if (
+    mitraExactId &&
+    Number(item.id) !== Number(mitraExactId)
+  ) {
+    return false;
+  }
 
-        if (
-          mitraStatus &&
-          item.status !== mitraStatus
-        ) {
+  if (mitraIdFrom && item.id < Number(mitraIdFrom)) {
+    return false;
+  }
+
+  if (mitraIdTo && item.id > Number(mitraIdTo)) {
+    return false;
+  }
+
+  if (
+    mitraStatus &&
+    item.status !== mitraStatus
+  ) {
           return false;
         }
 
@@ -2179,9 +2201,11 @@ if (mitraDateFilterType !== 'ALL') {
         );
       });
     }, [
-  mitras,
+    mitras,
   mitraSearch,
   mitraExactId,
+  mitraIdFrom,
+  mitraIdTo,
   mitraStatus,
   mitraInterestStatus,
   mitraApprovalStatus,
@@ -5634,6 +5658,28 @@ const exportSolarReferralsCsv = async (
   className="w-full min-w-[160px] flex-[1_1_180px] rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-orange-500"
 />
 
+<input
+  type="text"
+  inputMode="numeric"
+  value={mitraIdFrom}
+  onChange={(event) =>
+    setMitraIdFrom(event.target.value.replace(/\D/g, ''))
+  }
+  placeholder="From Solar Mitra ID"
+  className="w-full min-w-[150px] flex-[1_1_160px] rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-orange-500"
+/>
+
+<input
+  type="text"
+  inputMode="numeric"
+  value={mitraIdTo}
+  onChange={(event) =>
+    setMitraIdTo(event.target.value.replace(/\D/g, ''))
+  }
+  placeholder="To Solar Mitra ID"
+  className="w-full min-w-[150px] flex-[1_1_160px] rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-orange-500"
+/>
+
             <select
               value={mitraStatus}
               onChange={(event) =>
@@ -5863,9 +5909,11 @@ const exportSolarReferralsCsv = async (
 <button
   type="button"
   onClick={() => {
-    setMitraSearch('');
-    setMitraExactId('');
-    setMitraStatus('');
+  setMitraSearch('');
+  setMitraExactId('');
+  setMitraIdFrom('');
+  setMitraIdTo('');
+  setMitraStatus('');
     setMitraCreatedBy('');
     setMitraInterestStatus('');
     setMitraApprovalStatus('');

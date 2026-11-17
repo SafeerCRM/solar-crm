@@ -306,7 +306,6 @@ const navItems = [
   href: '/solar-mitra',
   roles: [
     'OWNER',
-    'SOLAR_MITRA',
     'TELECALLING_MANAGER',
     'TELECALLING_ASSISTANT',
     'LEAD_MANAGER',
