@@ -10791,6 +10791,135 @@ async getProjectOwners() {
   return rows;
 }
 
+async getProjectOwnerMonthlySummary(
+  fromDate: string,
+  toDate: string,
+  user?: any,
+) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(toDate || '') ||
+    !Number.isFinite(Date.parse(`${fromDate}T00:00:00Z`)) ||
+    !Number.isFinite(Date.parse(`${toDate}T00:00:00Z`)) ||
+    fromDate > toDate
+  ) {
+    throw new BadRequestException(
+      'Valid fromDate and toDate are required',
+    );
+  }
+
+  const query = this.projectRepository
+    .createQueryBuilder('project')
+    .select(
+      'project.projectOwnerId',
+      'projectOwnerId',
+    )
+    .addSelect(
+      `MAX(NULLIF(TRIM(project.projectOwnerName), ''))`,
+      'projectOwnerName',
+    )
+    .addSelect(
+      'COUNT(project.id)',
+      'totalCreated',
+    )
+    .addSelect(
+      `COUNT(project.id) FILTER (
+        WHERE project.projectWorkState = 'IN_PROCESS'
+      )`,
+      'inProcess',
+    )
+    .addSelect(
+      `COUNT(project.id) FILTER (
+        WHERE project.projectWorkState = 'RUNNING'
+      )`,
+      'running',
+    )
+    .where('project.isHidden = false')
+.andWhere(
+  'project.createdAt >= :fromDate',
+  {
+    fromDate: new Date(`${fromDate}T00:00:00`),
+  },
+)
+    .andWhere(
+      'project.createdAt < :toDateExclusive',
+      {
+        toDateExclusive: new Date(
+          new Date(`${toDate}T00:00:00`).getTime() +
+            24 * 60 * 60 * 1000,
+        ),
+      },
+    );
+
+  const currentUserId = Number(
+    user?.id || user?.sub,
+  );
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const canViewAll =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('PROJECT_EXECUTIVE') ||
+    roles.includes('LOAN_MANAGER') ||
+    roles.includes('SUBSIDY_MANAGER') ||
+    roles.includes('ELECTRICITY_MANAGER') ||
+    roles.includes('PAYMENT_COLLECTION_EXECUTIVE') ||
+    roles.includes('PAYMENT_MANAGER') ||
+    roles.includes('ACCOUNT_MANAGER') ||
+    roles.includes('STOCK_MANAGER') ||
+    roles.includes('INSPECTION_MANAGER') ||
+    roles.includes('MAINTENANCE_MANAGER') ||
+    roles.includes('CUSTOMER_MANAGER');
+
+  if (
+    roles.includes('SOLAR_FRANCHISE') ||
+    !canViewAll
+  ) {
+    query.andWhere(
+      'project.projectOwnerId = :currentUserId',
+      { currentUserId },
+    );
+  }
+
+  const rows = await query
+    .groupBy('project.projectOwnerId')
+    .orderBy('totalCreated', 'DESC')
+    .getRawMany();
+
+  const owners = rows.map((row) => ({
+    projectOwnerId: row.projectOwnerId,
+    projectOwnerName:
+      row.projectOwnerName || 'Unknown Owner',
+    totalCreated: Number(row.totalCreated || 0),
+    inProcess: Number(row.inProcess || 0),
+    running: Number(row.running || 0),
+  }));
+
+  return {
+    fromDate,
+    toDate,
+    owners,
+    totals: {
+      totalCreated: owners.reduce(
+        (sum, row) => sum + row.totalCreated,
+        0,
+      ),
+      inProcess: owners.reduce(
+        (sum, row) => sum + row.inProcess,
+        0,
+      ),
+      running: owners.reduce(
+        (sum, row) => sum + row.running,
+        0,
+      ),
+    },
+  };
+}
+
   async addComment(
   data: Partial<ProjectComment>,
   user?: any,

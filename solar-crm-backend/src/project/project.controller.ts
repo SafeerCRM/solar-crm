@@ -4261,6 +4261,19 @@ updateProjectSolarExtension(
   );
 }
 
+@Get('owners/monthly-summary')
+getProjectOwnerMonthlySummary(
+  @Query('fromDate') fromDate: string,
+  @Query('toDate') toDate: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getProjectOwnerMonthlySummary(
+    fromDate,
+    toDate,
+    user,
+  );
+}
+
 @Get('owners/list')
 getProjectOwners() {
   return this.projectService.getProjectOwners();
