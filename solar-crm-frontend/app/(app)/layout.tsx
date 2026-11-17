@@ -201,7 +201,7 @@ const navItems = [
 {
   name: 'Trading Meetings',
   href: '/trading-meeting',
-  roles: ['OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER', 'MEETING_MANAGER', 'TRADING_HEAD'],
+  roles: ['OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER', 'MEETING_MANAGER', 'TRADING_HEAD', 'MARKETING_HEAD'],
 },
 
 {
@@ -679,7 +679,7 @@ const navItems = [
     'STOCK_MANAGER',
     'TRADING_MANAGER',
     'MEETING_MANAGER',
-    'TRADING_HEAD',
+    'TRADING_HEAD', 'MARKETING_HEAD',
     'SUBSIDY_MANAGER',
   ],
 },
@@ -733,7 +733,7 @@ const navItems = [
     'PAYMENT_MANAGER',
     'STOCK_MANAGER',
     'TRADING_MANAGER',
- 'TRADING_HEAD',
+ 'TRADING_HEAD', 'MARKETING_HEAD',
  'SUBSIDY_MANAGER',
   ],
 },
@@ -745,7 +745,7 @@ const navItems = [
     'OWNER',
     'PROJECT_MANAGER',
     'TRADING_MANAGER',
-    'TRADING_HEAD',
+    'TRADING_HEAD', 'MARKETING_HEAD',
     'MEETING_MANAGER',
     'STOCK_MANAGER',
     'ACCOUNT_MANAGER',

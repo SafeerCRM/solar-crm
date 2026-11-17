@@ -575,7 +575,7 @@ getVendors(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -594,7 +594,7 @@ searchTradingDealers(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -1151,7 +1151,7 @@ materialSpec:
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'SUBSIDY_MANAGER',
   'MEETING_MANAGER',
 )
@@ -1182,7 +1182,7 @@ getPurchaseOrderById(
   'STOCK_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
 )
 @Post('proforma-invoice')
 createProformaInvoice(
@@ -1236,7 +1236,7 @@ getProformaInvoiceById(
   'STOCK_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
 )
 @Post('proforma-invoice/manual')
 createManualProformaInvoice(
@@ -1266,7 +1266,7 @@ generateProformaInvoicePdf(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
 )
 @Patch('proforma-invoice/:id/hide')
 hideProformaInvoice(
@@ -1288,7 +1288,7 @@ hideProformaInvoice(
   'STOCK_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
 )
 @Post('final-invoice')
 createFinalInvoice(
@@ -1342,7 +1342,7 @@ getFinalInvoiceById(
   'STOCK_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD'
+  'TRADING_HEAD', 'MARKETING_HEAD'
 )
 @Post('proforma-invoice/:id/final-invoice')
 createFinalInvoiceFromProforma(
@@ -1374,7 +1374,7 @@ generateFinalInvoicePdf(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD'
+  'TRADING_HEAD', 'MARKETING_HEAD'
 )
 @Patch('final-invoice/:id/hide')
 hideFinalInvoice(
@@ -1396,7 +1396,7 @@ hideFinalInvoice(
   'STOCK_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD'
+  'TRADING_HEAD', 'MARKETING_HEAD'
 )
 @Post('final-invoice/manual')
 createManualFinalInvoice(
@@ -1560,7 +1560,7 @@ getMyContractorProjects(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD'
+  'TRADING_HEAD', 'MARKETING_HEAD'
 )
 @Get('accounts/finance-hub')
 getFinanceHubSummary() {
@@ -1627,7 +1627,7 @@ getLedgerOutstandingSummary() {
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD'
+  'TRADING_HEAD', 'MARKETING_HEAD'
 )
 @Get('accounts/outstanding-summary')
 getFinanceOutstandingSummary() {
@@ -2406,7 +2406,7 @@ uploadVendorManagementPaymentReceipts(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
 )
 @Get('billing-entities')
@@ -2421,7 +2421,7 @@ listBillingEntities() {
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
 )
 @Get(
@@ -3471,7 +3471,7 @@ getMaterialWiseStockSummary(
   'PAYMENT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'SUBSIDY_MANAGER',
 )
 @Get('stock/items')
@@ -3524,7 +3524,7 @@ issueProjectStock(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-'TRADING_HEAD',
+'TRADING_HEAD', 'MARKETING_HEAD',
 'SUBSIDY_MANAGER',
 )
 @Get('stock/movements')
@@ -3610,7 +3610,7 @@ createProjectOtherExpenditure(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'SUBSIDY_MANAGER',
 )
 @Get('stock/files')
@@ -3708,7 +3708,7 @@ restoreProjectStockFile(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'SUBSIDY_MANAGER',
 )
 @Get('stock/file-options/dealers')
@@ -3733,7 +3733,7 @@ searchProjectStockFileDealers(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'SUBSIDY_MANAGER',
 )
 @Get('stock/file-options/self-projects')
@@ -3758,7 +3758,7 @@ searchProjectStockFileSelfProjects(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'SUBSIDY_MANAGER',
 )
 @Get('stock/files/:id/access')
@@ -3779,7 +3779,7 @@ getProjectStockFileAccess(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'SUBSIDY_MANAGER',
 )
 @Get('stock/files/:id/download')
@@ -3883,7 +3883,7 @@ restoreProjectStockItem(
   'PAYMENT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'SUBSIDY_MANAGER',
 )
 @Get('stock/branch-wise')
@@ -3918,7 +3918,7 @@ issueStockToProject(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-'TRADING_HEAD',
+'TRADING_HEAD', 'MARKETING_HEAD',
 )
 @Get('consumptions')
 listProjectConsumptions(@Query() query: any) {
@@ -4003,7 +4003,7 @@ generatePurchaseOrderPdf(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'SUBSIDY_MANAGER',
 )
 @Patch('purchase-order/:id/hide')
@@ -4026,7 +4026,7 @@ hidePurchaseOrder(
   'STOCK_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'SUBSIDY_MANAGER',
 )
 @Post('purchase-order/manual')
@@ -4055,7 +4055,7 @@ buyMaterialRequestItem(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD',)
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD', 'MARKETING_HEAD',)
 @Get('material-requests/approved-for-issue')
 listApprovedMaterialRequestsForIssue(
   @Query() query: any,
@@ -5299,7 +5299,7 @@ restoreCustomerUpdate(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -5314,7 +5314,7 @@ getDealerCatalog(@Query() query: any) {
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -5328,7 +5328,7 @@ getDealers(@Query() query: any) {
   'ACCOUNT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
 )
 @Post('dealer/sync-portal')
@@ -5343,7 +5343,7 @@ syncDealersToPortal() {
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
 )
 @Post('dealer')
@@ -5357,7 +5357,7 @@ createDealer(@Body() body: any) {
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -5382,7 +5382,7 @@ updateDealerOrderReferral(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -5403,7 +5403,7 @@ createDealerOrder(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -5418,7 +5418,7 @@ getDealerOrders(@Query() query: any) {
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -5436,7 +5436,7 @@ getDealerOrderById(@Param('id') id: string) {
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
 )
 @Patch('dealer-order/:id/status')
@@ -5458,7 +5458,7 @@ updateDealerOrderStatus(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -5479,7 +5479,7 @@ addDealerOrderPayment(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -5500,7 +5500,7 @@ addDealerOrderComment(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -5515,7 +5515,7 @@ getDealerAnalytics() {
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
   'MEETING_MANAGER',
 )
@@ -5538,7 +5538,7 @@ hideDealerOrder(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
   'MEETING_MANAGER',
 )
@@ -5562,7 +5562,7 @@ restoreDealerOrder(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
 )
 @Post('dealer-order/:id/proforma-invoice')
@@ -5585,7 +5585,7 @@ createDealerOrderProformaInvoice(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
 )
 @Post('dealer-order/:id/final-invoice')
@@ -5607,7 +5607,7 @@ createDealerOrderFinalInvoice(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -5627,7 +5627,7 @@ getDealerOrderInvoices(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
 )
 @Post('dealer-order/:id/documents/upload')
@@ -5684,7 +5684,7 @@ uploadDealerOrderDocument(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
 )
 @Get('dealer-order/:id/documents')
@@ -5712,7 +5712,7 @@ getDealerOrderDocuments(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
 )
 @Get(
@@ -5735,7 +5735,7 @@ getDealerOrderDocumentSuggestions(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
 )
 @Patch(
@@ -5768,7 +5768,7 @@ updateDealerOrderDocumentMetadata(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
   'MEETING_MANAGER',
 )
@@ -5802,7 +5802,7 @@ hideDealerOrderDocument(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
   'MEETING_MANAGER',
 )
@@ -5958,7 +5958,7 @@ restoreTaxInvoice(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
 )
 @Post('dealer-notification')
@@ -5978,7 +5978,7 @@ createDealerNotification(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -5995,7 +5995,7 @@ getDealerNotifications(@Query() query: any) {
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -6014,7 +6014,7 @@ markDealerNotificationRead(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -6035,7 +6035,7 @@ createDealerMonthlyRequirement(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -6052,7 +6052,7 @@ getDealerMonthlyRequirements(@Query() query: any) {
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
   'MEETING_MANAGER',
 )
@@ -6075,7 +6075,7 @@ hideDealerMonthlyRequirement(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
   'MEETING_MANAGER',
 )
@@ -6099,7 +6099,7 @@ restoreDealerMonthlyRequirement(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'STOCK_MANAGER',
 )
 @Get('dealer-credit-reminders')
@@ -6113,7 +6113,7 @@ getDealerCreditReminders() {
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
 )
@@ -6140,7 +6140,7 @@ async uploadDealerPaymentReceipt(
   'ACCOUNT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
 )
 @Post('trading-meeting')
 createTradingMeeting(
@@ -6156,7 +6156,7 @@ createTradingMeeting(
   'ACCOUNT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
 )
 @Get('trading-meetings')
 getTradingMeetings(
@@ -6172,7 +6172,7 @@ getTradingMeetings(
   'ACCOUNT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
 )
 @Get('trading-meeting-analytics')
 getTradingMeetingAnalytics(@CurrentUser() user: any) {
@@ -6185,7 +6185,7 @@ getTradingMeetingAnalytics(@CurrentUser() user: any) {
   'ACCOUNT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
 )
 @Get('trading-meeting/:id')
 getTradingMeetingDetail(
@@ -6204,7 +6204,7 @@ getTradingMeetingDetail(
   'ACCOUNT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
 )
 @Patch('trading-meeting/:id/status')
 updateTradingMeetingStatus(
@@ -6225,7 +6225,7 @@ updateTradingMeetingStatus(
   'ACCOUNT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
 )
 @Patch('trading-meeting/:id/hide')
 hideTradingMeeting(
@@ -6246,7 +6246,7 @@ hideTradingMeeting(
   'ACCOUNT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
 )
 @Patch('trading-meeting/:id/restore')
 restoreTradingMeeting(
@@ -6267,7 +6267,7 @@ restoreTradingMeeting(
   'ACCOUNT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
 )
 @Post('trading-meeting/:id/followup')
 createTradingMeetingFollowup(
@@ -6288,7 +6288,7 @@ createTradingMeetingFollowup(
   'ACCOUNT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD',
+  'TRADING_HEAD', 'MARKETING_HEAD',
 )
 @Get('trading-meeting/:id/followups')
 getTradingMeetingFollowups(
@@ -6307,7 +6307,7 @@ getTradingMeetingFollowups(
   'ACCOUNT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
-  'TRADING_HEAD'
+  'TRADING_HEAD', 'MARKETING_HEAD'
 )
 @Get('trading-meeting/:id/convert-data')
 getTradingMeetingConversionData(

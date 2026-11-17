@@ -59088,7 +59088,8 @@ private canSeeAllTradingMeetings(user: any): boolean {
     roles.includes('OWNER') ||
     roles.includes('ACCOUNT_MANAGER') ||
     roles.includes('PROJECT_MANAGER') ||
-    roles.includes('TRADING_HEAD')
+    roles.includes('TRADING_HEAD') ||
+    roles.includes('MARKETING_HEAD')
   );
 }
 
