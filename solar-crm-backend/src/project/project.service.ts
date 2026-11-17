@@ -10886,9 +10886,9 @@ async getProjectOwnerMonthlySummary(
   }
 
   const rows = await query
-    .groupBy('project.projectOwnerId')
-    .orderBy('totalCreated', 'DESC')
-    .getRawMany();
+  .groupBy('project.projectOwnerId')
+  .orderBy('COUNT(project.id)', 'DESC')
+  .getRawMany();
 
   const owners = rows.map((row) => ({
     projectOwnerId: row.projectOwnerId,
