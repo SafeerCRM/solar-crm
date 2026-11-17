@@ -177,6 +177,25 @@ type ProjectOwner = {
   projectOwnerRole?: string;
 };
 
+type ProjectOwnerMonthlySummaryRow = {
+  projectOwnerId: number | null;
+  projectOwnerName: string;
+  totalCreated: number;
+  inProcess: number;
+  running: number;
+};
+
+type ProjectOwnerMonthlySummary = {
+  fromDate: string;
+  toDate: string;
+  owners: ProjectOwnerMonthlySummaryRow[];
+  totals: {
+    totalCreated: number;
+    inProcess: number;
+    running: number;
+  };
+};
+
 type ProjectProfitabilitySummary = {
   filters?: {
     fromDate?: string | null;
@@ -232,6 +251,24 @@ export default function ProjectPage() {
   const [currentUserRoles, setCurrentUserRoles] =
   useState<string[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [
+  ownerMonthlySummary,
+  setOwnerMonthlySummary,
+] = useState<ProjectOwnerMonthlySummary | null>(null);
+
+const [
+  ownerMonthlySummaryLoading,
+  setOwnerMonthlySummaryLoading,
+] = useState(false);
+
+const [
+  ownerMonthlySummaryError,
+  setOwnerMonthlySummaryError,
+] = useState('');
+const [
+  showOwnerMonthlySummary,
+  setShowOwnerMonthlySummary,
+] = useState(false);
   const [loading, setLoading] = useState(true);
   const [exportLoading, setExportLoading] =
   useState(false);
@@ -1035,6 +1072,120 @@ activityMatchMode,
   } catch (error) {
     console.error('Failed to load project owners:', error);
   }
+};
+
+const fetchOwnerMonthlySummary = async (
+  selectedFromDate: string,
+  selectedToDate: string,
+) => {
+  if (!selectedFromDate || !selectedToDate) {
+    setOwnerMonthlySummary(null);
+    setOwnerMonthlySummaryError('');
+    return;
+  }
+
+  setOwnerMonthlySummaryLoading(true);
+  setOwnerMonthlySummaryError('');
+
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/owners/monthly-summary`,
+      {
+        params: {
+          fromDate: selectedFromDate,
+          toDate: selectedToDate,
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    setOwnerMonthlySummary(res.data);
+  } catch (error) {
+    console.error(
+      'Failed to fetch Project Owner monthly summary:',
+      error,
+    );
+
+    setOwnerMonthlySummary(null);
+    setOwnerMonthlySummaryError(
+      'Unable to load Project Owner summary.',
+    );
+  } finally {
+    setOwnerMonthlySummaryLoading(false);
+  }
+};
+
+useEffect(() => {
+  if (!showOwnerMonthlySummary) return;
+
+  if (!fromDate || !toDate) {
+    setOwnerMonthlySummary(null);
+    setOwnerMonthlySummaryError(
+      'Please select a month or date range to view the report.',
+    );
+    return;
+  }
+
+  fetchOwnerMonthlySummary(fromDate, toDate);
+
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [
+  showOwnerMonthlySummary,
+  fromDate,
+  toDate,
+]);
+
+const downloadOwnerMonthlySummaryCSV = () => {
+  if (!ownerMonthlySummary) return;
+
+  const escapeCSV = (value: string | number) =>
+    `"${String(value).replace(/"/g, '""')}"`;
+
+  const rows: (string | number)[][] = [
+    [
+      'Project Owner',
+      'Total Created',
+      'In Process',
+      'Running',
+    ],
+    ...ownerMonthlySummary.owners.map((owner) => [
+      owner.projectOwnerName,
+      owner.totalCreated,
+      owner.inProcess,
+      owner.running,
+    ]),
+    [
+      'GRAND TOTAL',
+      ownerMonthlySummary.totals.totalCreated,
+      ownerMonthlySummary.totals.inProcess,
+      ownerMonthlySummary.totals.running,
+    ],
+  ];
+
+  const csv = rows
+    .map((row) => row.map(escapeCSV).join(','))
+    .join('\r\n');
+
+  const blob = new Blob(['\uFEFF', csv], {
+    type: 'text/csv;charset=utf-8;',
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download =
+    `project-owner-summary-${ownerMonthlySummary.fromDate}-to-${ownerMonthlySummary.toDate}.csv`;
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
 };
 
 const hideProject = async (projectId: number) => {
@@ -2105,6 +2256,166 @@ setPage(1);
     : 'Download Filtered Project List'}
 </button>
 </div>
+</div>
+
+
+{/* Project Owner-wise Monthly Summary */}
+<div className="mb-6 rounded-xl border border-gray-300 bg-white shadow-sm">
+  <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+    <div>
+      <h3 className="text-base font-semibold text-gray-900">
+        Project Owner-wise Monthly Summary
+      </h3>
+
+      <p className="mt-1 text-sm text-gray-500">
+        View projects created by each Project Owner
+        during the selected month or date range.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={() => {
+  setShowOwnerMonthlySummary((previous) => !previous);
+}}
+      className="rounded-lg border border-blue-600 bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+    >
+      {showOwnerMonthlySummary
+        ? 'Hide Report ▲'
+        : 'View Report ▼'}
+    </button>
+  </div>
+
+  {showOwnerMonthlySummary && (
+  <div className="border-t border-gray-200 p-4">
+
+    {ownerMonthlySummaryLoading ? (
+      <p className="py-6 text-center text-sm text-gray-500">
+        Loading Project Owner summary...
+      </p>
+    ) : ownerMonthlySummaryError ? (
+      <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        {ownerMonthlySummaryError}
+      </p>
+    ) : ownerMonthlySummary ? (
+      <>
+        {/* Report period */}
+        <p className="mb-4 text-sm text-gray-600">
+          Projects created from{' '}
+          <span className="font-semibold">
+            {ownerMonthlySummary.fromDate}
+          </span>
+          {' '}to{' '}
+          <span className="font-semibold">
+            {ownerMonthlySummary.toDate}
+          </span>
+        </p>
+
+        <div className="mb-4 flex justify-end">
+  <button
+    type="button"
+    onClick={downloadOwnerMonthlySummaryCSV}
+    className="rounded-lg border border-green-700 bg-green-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-800"
+  >
+    Download CSV
+  </button>
+</div>
+
+        {/* Summary cards */}
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <p className="text-sm font-medium text-blue-700">
+              Total Created
+            </p>
+            <p className="mt-1 text-2xl font-bold text-blue-900">
+              {ownerMonthlySummary.totals.totalCreated}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-medium text-amber-700">
+              In Process
+            </p>
+            <p className="mt-1 text-2xl font-bold text-amber-900">
+              {ownerMonthlySummary.totals.inProcess}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+            <p className="text-sm font-medium text-green-700">
+              Running
+            </p>
+            <p className="mt-1 text-2xl font-bold text-green-900">
+              {ownerMonthlySummary.totals.running}
+            </p>
+          </div>
+        </div>
+
+        {/* Scrollable owner table */}
+        <div className="max-h-[380px] overflow-auto rounded-lg border border-gray-200">
+          <table className="min-w-[600px] w-full border-collapse text-sm">
+            <thead className="sticky top-0 z-10 bg-gray-100">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold text-gray-700">
+                  Project Owner
+                </th>
+                <th className="px-4 py-3 text-center font-semibold text-gray-700">
+                  Total Created
+                </th>
+                <th className="px-4 py-3 text-center font-semibold text-gray-700">
+                  In Process
+                </th>
+                <th className="px-4 py-3 text-center font-semibold text-gray-700">
+                  Running
+                </th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-gray-100">
+              {ownerMonthlySummary.owners.map((owner) => (
+                <tr
+                  key={owner.projectOwnerId ?? owner.projectOwnerName}
+                  className="hover:bg-gray-50"
+                >
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    {owner.projectOwnerName}
+                  </td>
+
+                  <td className="px-4 py-3 text-center font-semibold">
+                    {owner.totalCreated}
+                  </td>
+
+                  <td className="px-4 py-3 text-center text-amber-700">
+                    {owner.inProcess}
+                  </td>
+
+                  <td className="px-4 py-3 text-center text-green-700">
+                    {owner.running}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {ownerMonthlySummary.owners.length === 0 && (
+          <p className="py-4 text-center text-sm text-gray-500">
+            No projects found for the selected period.
+          </p>
+        )}
+
+        <p className="mt-2 text-xs text-gray-500">
+          Scroll inside the table to view more Project Owners.
+        </p>
+      </>
+    ) : (
+      <p className="text-sm text-gray-500">
+        Select a month or date range to view the report.
+      </p>
+    )}
+
+  </div>
+)}
 </div>
 
 {canViewProfitability && (
