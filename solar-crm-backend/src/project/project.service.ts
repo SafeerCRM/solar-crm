@@ -43783,7 +43783,8 @@ async getProjectTimelineFilterOptions(
     roles.includes('ACCOUNT_MANAGER') ||
     roles.includes('LOAN_MANAGER') ||
     roles.includes('SUBSIDY_MANAGER') ||
-    roles.includes('ELECTRICITY_MANAGER');
+    roles.includes('ELECTRICITY_MANAGER') ||
+    roles.includes('INSPECTION_MANAGER');
 
   const branchQb =
     this.projectRepository
@@ -44382,8 +44383,11 @@ async getProjectTimelineTracking(
     roles.includes(
       'SUBSIDY_MANAGER',
     ) ||
-    roles.includes(
+        roles.includes(
       'ELECTRICITY_MANAGER',
+    ) ||
+    roles.includes(
+      'INSPECTION_MANAGER',
     );
 
   if (
@@ -47308,7 +47312,8 @@ async searchProjectTimelinePerformanceProjects(
     roles.includes('ACCOUNT_MANAGER') ||
     roles.includes('LOAN_MANAGER') ||
     roles.includes('SUBSIDY_MANAGER') ||
-    roles.includes('ELECTRICITY_MANAGER');
+    roles.includes('ELECTRICITY_MANAGER') ||
+    roles.includes('INSPECTION_MANAGER');
 
   if (
     !canSeeAll &&
