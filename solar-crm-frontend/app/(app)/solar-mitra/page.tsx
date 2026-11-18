@@ -9618,26 +9618,28 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
   </label>
 
   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-  <label className="flex cursor-pointer items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700">
+  <div>
+  <label className="mb-1 block text-sm font-bold text-gray-700">
     📷 Take Photo
-
-    <input
-      type="file"
-      accept="image/*"
-      capture="environment"
-      disabled={uploadingShopPhoto}
-      className="hidden"
-      onChange={async (event) => {
-        const file = event.target.files?.[0];
-
-        if (file) {
-          await uploadShopPhoto(file);
-        }
-
-        event.target.value = '';
-      }}
-    />
   </label>
+
+  <input
+    type="file"
+    accept="image/*"
+    capture="environment"
+    disabled={uploadingShopPhoto}
+    className="w-full rounded-xl border border-blue-300 bg-blue-50 p-3 text-sm"
+    onChange={async (event) => {
+      const file = event.target.files?.[0];
+
+      if (file) {
+        await uploadShopPhoto(file);
+      }
+
+      event.target.value = '';
+    }}
+  />
+</div>
 
   <label className="flex cursor-pointer items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50">
     🖼️ Upload from Gallery
