@@ -6572,6 +6572,10 @@ const exportSolarReferralsCsv = async (
                           }
                         </p>
                       )}
+
+                      <p className="mt-1 text-sm font-bold text-blue-700">
+  Solar Mitra ID: #{item.id}
+</p>
                     </div>
 
                     <button
