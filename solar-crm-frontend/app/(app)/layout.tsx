@@ -644,6 +644,7 @@ const navItems = [
     'PAYMENT_COLLECTION_EXECUTIVE',
     'PAYMENT_MANAGER',
     'ACCOUNT_MANAGER',
+    'INSPECTION_MANAGER',
   ],
 },
 
