@@ -181,8 +181,7 @@ type ProjectOwnerMonthlySummaryRow = {
   projectOwnerId: number | null;
   projectOwnerName: string;
   totalCreated: number;
-  inProcess: number;
-  running: number;
+  reached20Percent: number;
 };
 
 type ProjectOwnerMonthlySummary = {
@@ -191,8 +190,7 @@ type ProjectOwnerMonthlySummary = {
   owners: ProjectOwnerMonthlySummaryRow[];
   totals: {
     totalCreated: number;
-    inProcess: number;
-    running: number;
+    reached20Percent: number;
   };
 };
 
@@ -1145,26 +1143,25 @@ const downloadOwnerMonthlySummaryCSV = () => {
   const escapeCSV = (value: string | number) =>
     `"${String(value).replace(/"/g, '""')}"`;
 
-  const rows: (string | number)[][] = [
-    [
-      'Project Owner',
-      'Total Created',
-      'In Process',
-      'Running',
-    ],
-    ...ownerMonthlySummary.owners.map((owner) => [
-      owner.projectOwnerName,
-      owner.totalCreated,
-      owner.inProcess,
-      owner.running,
-    ]),
-    [
-      'GRAND TOTAL',
-      ownerMonthlySummary.totals.totalCreated,
-      ownerMonthlySummary.totals.inProcess,
-      ownerMonthlySummary.totals.running,
-    ],
-  ];
+  
+const rows: (string | number)[][] = [
+  [
+    'Project Owner',
+    'Total Projects Created',
+    'Projects Reached 20% Payment',
+  ],
+  ...ownerMonthlySummary.owners.map((owner) => [
+    owner.projectOwnerName,
+    owner.totalCreated,
+    owner.reached20Percent,
+  ]),
+  [
+    'GRAND TOTAL',
+    ownerMonthlySummary.totals.totalCreated,
+    ownerMonthlySummary.totals.reached20Percent,
+  ],
+];
+
 
   const csv = rows
     .map((row) => row.map(escapeCSV).join(','))
@@ -2321,82 +2318,68 @@ setPage(1);
   </button>
 </div>
 
-        {/* Summary cards */}
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-            <p className="text-sm font-medium text-blue-700">
-              Total Created
-            </p>
-            <p className="mt-1 text-2xl font-bold text-blue-900">
-              {ownerMonthlySummary.totals.totalCreated}
-            </p>
-          </div>
+        
+{/* Summary cards */}
+<div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+    <p className="text-sm font-medium text-blue-700">
+      Total Projects Created
+    </p>
+    <p className="mt-1 text-2xl font-bold text-blue-900">
+      {ownerMonthlySummary.totals.totalCreated}
+    </p>
+  </div>
 
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-medium text-amber-700">
-              In Process
-            </p>
-            <p className="mt-1 text-2xl font-bold text-amber-900">
-              {ownerMonthlySummary.totals.inProcess}
-            </p>
-          </div>
+  <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+    <p className="text-sm font-medium text-green-700">
+      Projects Reached 20% Payment
+    </p>
+    <p className="mt-1 text-2xl font-bold text-green-900">
+      {ownerMonthlySummary.totals.reached20Percent}
+    </p>
+  </div>
+</div>
 
-          <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-            <p className="text-sm font-medium text-green-700">
-              Running
-            </p>
-            <p className="mt-1 text-2xl font-bold text-green-900">
-              {ownerMonthlySummary.totals.running}
-            </p>
-          </div>
-        </div>
+{/* Scrollable owner table */}
+<div className="max-h-[380px] overflow-auto rounded-lg border border-gray-200">
+  <table className="min-w-[600px] w-full border-collapse text-sm">
+    <thead className="sticky top-0 z-10 bg-gray-100">
+      <tr>
+        <th className="px-4 py-3 text-left font-semibold text-gray-700">
+          Project Owner
+        </th>
+        <th className="px-4 py-3 text-center font-semibold text-gray-700">
+          Total Projects Created
+        </th>
+        <th className="px-4 py-3 text-center font-semibold text-gray-700">
+          Projects Reached 20% Payment
+        </th>
+      </tr>
+    </thead>
 
-        {/* Scrollable owner table */}
-        <div className="max-h-[380px] overflow-auto rounded-lg border border-gray-200">
-          <table className="min-w-[600px] w-full border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-gray-100">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                  Project Owner
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-700">
-                  Total Created
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-700">
-                  In Process
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-700">
-                  Running
-                </th>
-              </tr>
-            </thead>
+    <tbody className="divide-y divide-gray-100">
+      {ownerMonthlySummary.owners.map((owner) => (
+        <tr
+          key={owner.projectOwnerId ?? owner.projectOwnerName}
+          className="hover:bg-gray-50"
+        >
+          <td className="px-4 py-3 font-medium text-gray-900">
+            {owner.projectOwnerName}
+          </td>
 
-            <tbody className="divide-y divide-gray-100">
-              {ownerMonthlySummary.owners.map((owner) => (
-                <tr
-                  key={owner.projectOwnerId ?? owner.projectOwnerName}
-                  className="hover:bg-gray-50"
-                >
-                  <td className="px-4 py-3 font-medium text-gray-900">
-                    {owner.projectOwnerName}
-                  </td>
+          <td className="px-4 py-3 text-center font-semibold">
+            {owner.totalCreated}
+          </td>
 
-                  <td className="px-4 py-3 text-center font-semibold">
-                    {owner.totalCreated}
-                  </td>
+          <td className="px-4 py-3 text-center font-semibold text-green-700">
+            {owner.reached20Percent}
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
 
-                  <td className="px-4 py-3 text-center text-amber-700">
-                    {owner.inProcess}
-                  </td>
-
-                  <td className="px-4 py-3 text-center text-green-700">
-                    {owner.running}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
 
         {ownerMonthlySummary.owners.length === 0 && (
           <p className="py-4 text-center text-sm text-gray-500">

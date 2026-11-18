@@ -10791,16 +10791,28 @@ async getProjectOwners() {
   return rows;
 }
 
+
 async getProjectOwnerMonthlySummary(
   fromDate: string,
   toDate: string,
   user?: any,
 ) {
+  const isValidDate = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) {
+      return false;
+    }
+
+    const date = new Date(`${value}T00:00:00Z`);
+
+    return (
+      !Number.isNaN(date.getTime()) &&
+      date.toISOString().slice(0, 10) === value
+    );
+  };
+
   if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(toDate || '') ||
-    !Number.isFinite(Date.parse(`${fromDate}T00:00:00Z`)) ||
-    !Number.isFinite(Date.parse(`${toDate}T00:00:00Z`)) ||
+    !isValidDate(fromDate) ||
+    !isValidDate(toDate) ||
     fromDate > toDate
   ) {
     throw new BadRequestException(
@@ -10808,47 +10820,32 @@ async getProjectOwnerMonthlySummary(
     );
   }
 
+  const startDate = new Date(`${fromDate}T00:00:00Z`);
+
+  const endDateExclusive = new Date(
+    new Date(`${toDate}T00:00:00Z`).getTime() +
+      24 * 60 * 60 * 1000,
+  );
+
   const query = this.projectRepository
     .createQueryBuilder('project')
-    .select(
+    .select('project.id', 'projectId')
+    .addSelect(
       'project.projectOwnerId',
       'projectOwnerId',
     )
     .addSelect(
-      `MAX(NULLIF(TRIM(project.projectOwnerName), ''))`,
+      'project.projectOwnerName',
       'projectOwnerName',
     )
-    .addSelect(
-      'COUNT(project.id)',
-      'totalCreated',
-    )
-    .addSelect(
-      `COUNT(project.id) FILTER (
-        WHERE project.projectWorkState = 'IN_PROCESS'
-      )`,
-      'inProcess',
-    )
-    .addSelect(
-      `COUNT(project.id) FILTER (
-        WHERE project.projectWorkState = 'RUNNING'
-      )`,
-      'running',
-    )
     .where('project.isHidden = false')
-.andWhere(
-  'project.createdAt >= :fromDate',
-  {
-    fromDate: new Date(`${fromDate}T00:00:00`),
-  },
-)
     .andWhere(
-      'project.createdAt < :toDateExclusive',
-      {
-        toDateExclusive: new Date(
-          new Date(`${toDate}T00:00:00`).getTime() +
-            24 * 60 * 60 * 1000,
-        ),
-      },
+      'project.createdAt >= :startDate',
+      { startDate },
+    )
+    .andWhere(
+      'project.createdAt < :endDateExclusive',
+      { endDateExclusive },
     );
 
   const currentUserId = Number(
@@ -10885,19 +10882,120 @@ async getProjectOwnerMonthlySummary(
     );
   }
 
-  const rows = await query
-  .groupBy('project.projectOwnerId')
-  .orderBy('COUNT(project.id)', 'DESC')
-  .getRawMany();
+  const projects = await query.getRawMany<{
+    projectId: string | number;
+    projectOwnerId: string | number | null;
+    projectOwnerName: string | null;
+  }>();
 
-  const owners = rows.map((row) => ({
-    projectOwnerId: row.projectOwnerId,
-    projectOwnerName:
-      row.projectOwnerName || 'Unknown Owner',
-    totalCreated: Number(row.totalCreated || 0),
-    inProcess: Number(row.inProcess || 0),
-    running: Number(row.running || 0),
-  }));
+  const ownerMap = new Map<
+    string,
+    {
+      projectOwnerId: number | null;
+      projectOwnerName: string;
+      totalCreated: number;
+      reached20Percent: number;
+    }
+  >();
+
+  for (const project of projects) {
+    const ownerId =
+      project.projectOwnerId == null
+        ? null
+        : Number(project.projectOwnerId);
+
+    const ownerKey =
+      ownerId === null
+        ? 'unassigned'
+        : String(ownerId);
+
+    let owner = ownerMap.get(ownerKey);
+
+    if (!owner) {
+      owner = {
+        projectOwnerId: ownerId,
+        projectOwnerName:
+          project.projectOwnerName?.trim() ||
+          'Unknown Owner',
+        totalCreated: 0,
+        reached20Percent: 0,
+      };
+
+      ownerMap.set(ownerKey, owner);
+    } else if (
+      project.projectOwnerName?.trim()
+    ) {
+      owner.projectOwnerName =
+        project.projectOwnerName.trim();
+    }
+
+    owner.totalCreated += 1;
+  }
+
+  // Reuse the existing approved-payment threshold logic.
+  // Process in batches to avoid excessive concurrent DB queries.
+  const batchSize = 10;
+
+  for (
+    let index = 0;
+    index < projects.length;
+    index += batchSize
+  ) {
+    const batch = projects.slice(
+      index,
+      index + batchSize,
+    );
+
+    const results = await Promise.all(
+      batch.map(async (project) => {
+        const paymentResult =
+          await this.getProjectPaymentThresholdReachedDate(
+            Number(project.projectId),
+            20,
+          );
+
+        return {
+          project,
+          paymentResult,
+        };
+      }),
+    );
+
+    for (const { project, paymentResult } of results) {
+      if (
+        !paymentResult.reached ||
+        !paymentResult.reachedAt
+      ) {
+        continue;
+      }
+
+      const reachedAt = new Date(
+        paymentResult.reachedAt,
+      );
+
+      if (
+        reachedAt < startDate ||
+        reachedAt >= endDateExclusive
+      ) {
+        continue;
+      }
+
+      const ownerKey =
+        project.projectOwnerId == null
+          ? 'unassigned'
+          : String(Number(project.projectOwnerId));
+
+      const owner = ownerMap.get(ownerKey);
+
+      if (owner) {
+        owner.reached20Percent += 1;
+      }
+    }
+  }
+
+  const owners = Array.from(ownerMap.values()).sort(
+    (a, b) => b.totalCreated - a.totalCreated,
+  );
 
   return {
     fromDate,
@@ -10905,20 +11003,17 @@ async getProjectOwnerMonthlySummary(
     owners,
     totals: {
       totalCreated: owners.reduce(
-        (sum, row) => sum + row.totalCreated,
+        (sum, owner) => sum + owner.totalCreated,
         0,
       ),
-      inProcess: owners.reduce(
-        (sum, row) => sum + row.inProcess,
-        0,
-      ),
-      running: owners.reduce(
-        (sum, row) => sum + row.running,
+      reached20Percent: owners.reduce(
+        (sum, owner) => sum + owner.reached20Percent,
         0,
       ),
     },
   };
 }
+
 
   async addComment(
   data: Partial<ProjectComment>,
