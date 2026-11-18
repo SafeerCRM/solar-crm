@@ -1022,13 +1022,17 @@ const canAssignFranchiseManager =
 
   const mitra = viewingPosterMitra;
 
-  if (
-    !mitra.qrPosterInstallationPhotoUrl &&
-    !mitra.qrPosterInstallationPhotoUrl2
-  ) {
-    alert('Upload at least one poster installation photo first.');
-    return;
-  }
+  const hasBothPosterPhotos = Boolean(
+  mitra.qrPosterInstallationPhotoUrl?.trim() &&
+  mitra.qrPosterInstallationPhotoUrl2?.trim(),
+);
+
+if (!hasBothPosterPhotos) {
+  alert(
+    'Both Poster Photo and QR Photo must be uploaded before verification.',
+  );
+  return;
+}
 
   const remarks = posterRejectionRemarks.trim();
 
@@ -2042,16 +2046,32 @@ const posterVerificationCounts = useMemo(() => {
   };
 
   for (const item of posterSummaryMitras) {
-    switch (item.posterVerificationStatus || 'NOT_ATTACHED') {
+    const hasBothPosterPhotos = Boolean(
+      item.qrPosterInstallationPhotoUrl?.trim() &&
+      item.qrPosterInstallationPhotoUrl2?.trim(),
+    );
+
+    const status =
+      item.posterVerificationStatus || 'NOT_ATTACHED';
+
+    if (!hasBothPosterPhotos) {
+      counts.notAttached++;
+      continue;
+    }
+
+    switch (status) {
       case 'ATTACHED':
         counts.attached++;
         break;
+
       case 'PENDING_VERIFICATION':
         counts.pending++;
         break;
+
       case 'REJECTED':
         counts.rejected++;
         break;
+
       default:
         counts.notAttached++;
     }
@@ -2125,12 +2145,19 @@ if (
   return false;
 }
 
-if (
-  mitraPosterVerificationStatus &&
-  (item.posterVerificationStatus || 'NOT_ATTACHED') !==
-    mitraPosterVerificationStatus
-) {
-  return false;
+if (mitraPosterVerificationStatus) {
+  const hasBothPosterPhotos = Boolean(
+    item.qrPosterInstallationPhotoUrl?.trim() &&
+    item.qrPosterInstallationPhotoUrl2?.trim(),
+  );
+
+  const actualPosterStatus = hasBothPosterPhotos
+    ? (item.posterVerificationStatus || 'NOT_ATTACHED')
+    : 'NOT_ATTACHED';
+
+  if (actualPosterStatus !== mitraPosterVerificationStatus) {
+    return false;
+  }
 }
 
 if (mitraDateFilterType !== 'ALL') {
