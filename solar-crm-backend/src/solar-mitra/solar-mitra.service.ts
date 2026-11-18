@@ -252,9 +252,16 @@ async uploadPosterInstallationPhoto(
     fileUrl;
 }
 
-// Any new or replacement photo requires fresh verification.
-mitra.posterVerificationStatus =
-  SolarMitraPosterVerificationStatus.PENDING_VERIFICATION;
+// Both required photos must exist before verification can begin.
+const hasBothPosterPhotos = Boolean(
+  mitra.qrPosterInstallationPhotoUrl?.trim() &&
+  mitra.qrPosterInstallationPhotoUrl2?.trim(),
+);
+
+// Any new or replacement photo invalidates previous verification.
+mitra.posterVerificationStatus = hasBothPosterPhotos
+  ? SolarMitraPosterVerificationStatus.PENDING_VERIFICATION
+  : SolarMitraPosterVerificationStatus.NOT_ATTACHED;
 
 // Clear previous verification details.
 mitra.posterVerifiedAt = null;
@@ -1776,16 +1783,16 @@ if (
   );
 }
 
-const hasPhoto = Boolean(
-    mitra.qrPosterInstallationPhotoUrl?.trim() ||
-    mitra.qrPosterInstallationPhotoUrl2?.trim(),
-  );
+const hasBothPosterPhotos = Boolean(
+  mitra.qrPosterInstallationPhotoUrl?.trim() &&
+  mitra.qrPosterInstallationPhotoUrl2?.trim(),
+);
 
-  if (!hasPhoto) {
-    throw new BadRequestException(
-      'Upload at least one QR poster installation photo before verification',
-    );
-  }
+if (!hasBothPosterPhotos) {
+  throw new BadRequestException(
+    'Both Poster Photo and QR Photo must be uploaded before verification.',
+  );
+}
 
   const remarks = String(
     body?.remarks || '',
