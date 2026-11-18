@@ -5839,6 +5839,7 @@ const isLoanProcessCompleted =
     'OWNER',
     'SUBSIDY_MANAGER',
     'ACCOUNT_MANAGER',
+    'PROJECT_MANAGER',
   ].includes(role),
 ) && (
   <Link
