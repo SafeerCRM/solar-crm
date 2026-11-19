@@ -1264,7 +1264,15 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
   normalizedView !== 'storage' &&
   !this.hasAnyRole(user, ['TELECALLING_ASSISTANT' as any])
 ) {
-  qb.andWhere('contact.hasCalled = false');
+  qb.andWhere(
+  `(
+    contact.hasCalled = false
+    OR (
+      contact."reassignedForCallingAt" IS NOT NULL
+      AND contact."reassignedCallingCompletedAt" IS NULL
+    )
+  )`,
+);
 }
 
     const data = await qb.getMany();
@@ -2053,12 +2061,22 @@ if (
 await this.contactRepository.update(contact.id, {
   remarks: item.notes,
   hasCalled: true,
-} as any);
+
+  ...(contact.reassignedForCallingAt &&
+  !contact.reassignedCallingCompletedAt
+    ? {
+        reassignedCallingCompletedAt: new Date(),
+      }
+    : {}),
+});
 
   // ✅ Keep latest call_log synced with contact call history.
 // This makes status filters fast and consistent with displayed status.
 const latestCallLog = await this.callLogRepository.findOne({
-  where: { contactId: contact.id },
+  where: {
+    contactId: contact.id,
+    telecallerId: user.id,
+  },
   order: { createdAt: 'DESC' },
 });
 
@@ -2068,9 +2086,32 @@ if (latestCallLog) {
     disposition: savedItem.callStatus,
     callNotes: savedItem.notes,
     nextFollowUpDate: savedItem.nextFollowUpDate || null,
-    recordingUrl: body.recordingUrl || latestCallLog.recordingUrl || null,
+    recordingUrl:
+      body.recordingUrl ||
+      latestCallLog.recordingUrl ||
+      null,
     providerUpdatedAt: new Date(),
   });
+} else {
+  const newCallLog = this.callLogRepository.create({
+    contactId: contact.id,
+    telecallerId: user.id,
+    callStatus: savedItem.callStatus,
+    disposition: savedItem.callStatus,
+    callNotes: savedItem.notes,
+    nextFollowUpDate: savedItem.nextFollowUpDate || null,
+    recordingUrl: body.recordingUrl || null,
+    providerName: CallProvider.MANUAL,
+    callDirection: CallDirection.OUTBOUND,
+    reviewStatus: CallReviewStatus.PENDING,
+    reviewAssignedTo: contact.reviewAssignedTo || null,
+    reviewAssignedToName:
+      contact.reviewAssignedToName || null,
+    receiverNumber: contact.phone || null,
+    providerUpdatedAt: new Date(),
+  });
+
+  await this.callLogRepository.save(newCallLog);
 }
 
   return savedItem;
@@ -2350,7 +2391,14 @@ const updatedRemarks = existingRemarks
 await this.contactRepository.update(contact.id, {
   remarks: updatedRemarks,
   hasCalled: true,
-} as any);
+
+  ...(contact.reassignedForCallingAt &&
+  !contact.reassignedCallingCompletedAt
+    ? {
+        reassignedCallingCompletedAt: new Date(),
+      }
+    : {}),
+});
 
     return {
       message:
@@ -4058,10 +4106,11 @@ async reassignSelectedContacts(
       .createQueryBuilder()
       .update(TelecallingContact)
       .set({
-        assignedTo: toTelecaller.id,
-        assignedToName:
-          toTelecaller.name,
-      })
+  assignedTo: toTelecaller.id,
+  assignedToName: toTelecaller.name,
+  reassignedForCallingAt: () => 'CURRENT_TIMESTAMP',
+  reassignedCallingCompletedAt: null,
+})
       .where(
         'id IN (:...eligibleContactIds)',
         {
@@ -4147,12 +4196,14 @@ async reassignSelectedContacts(
   }
 
   await this.telecallingContactRepository.update(
-    contacts.map((c) => c.id),
-    {
-      assignedTo: toUserId,
-      assignedToName: toUser.name,
-    },
-  );
+  contacts.map((c) => c.id),
+  {
+    assignedTo: toUserId,
+    assignedToName: toUser.name,
+    reassignedForCallingAt: new Date(),
+    reassignedCallingCompletedAt: null,
+  },
+);
 
   return {
     message: `Transferred ${contacts.length} filtered contacts`,
@@ -4871,11 +4922,12 @@ async reassignFilteredRecycleContacts(
       .createQueryBuilder()
       .update(TelecallingContact)
       .set({
-        assignedTo:
-          toTelecaller.id,
-        assignedToName:
-          toTelecaller.name,
-      })
+  assignedTo: toTelecaller.id,
+  assignedToName: toTelecaller.name,
+
+  reassignedForCallingAt: () => 'CURRENT_TIMESTAMP',
+  reassignedCallingCompletedAt: null,
+})
       .where(
         'id IN (:...contactIds)',
         {

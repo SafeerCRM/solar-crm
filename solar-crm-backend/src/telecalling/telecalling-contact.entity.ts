@@ -71,6 +71,12 @@ stage: string;
   @Column({ default: false })
 hasCalled: boolean;
 
+@Column({ type: 'timestamp', nullable: true })
+reassignedForCallingAt: Date | null;
+
+@Column({ type: 'timestamp', nullable: true })
+reassignedCallingCompletedAt: Date | null;
+
   @Column({ default: false })
   convertedToLead: boolean;
 
