@@ -10957,18 +10957,20 @@ async getProjectOwnerMonthlySummary(
     getOwner(project).totalCreated += 1;
   }
 
+  
   /*
-   * Payment candidates are independent of
-   * project creation date.
+   * Bulk payment milestone calculation.
    *
-   * Include projects with qualifying receipts
-   * dated before the end of the selected period.
+   * Independent of project creation date.
+   * Find the first date cumulative qualifying
+   * approved payments reached 20%.
+   *
+   * This replaces the previous per-project
+   * database queries.
    */
-  const paymentCandidates = await applyVisibility(
-    selectProjectFields(
-      this.projectRepository
-        .createQueryBuilder('project'),
-    )
+  const paymentQuery = applyVisibility(
+    this.projectRepository
+      .createQueryBuilder('project')
       .innerJoin(
         ProjectPaymentReceipt,
         'receipt',
@@ -10978,6 +10980,38 @@ async getProjectOwnerMonthlySummary(
         ProjectPaymentInstallment,
         'installment',
         'installment.id = receipt."installmentId"',
+      )
+      .select('project.id', 'projectId')
+      .addSelect(
+        'project.projectOwnerId',
+        'projectOwnerId',
+      )
+      .addSelect(
+        'project.projectOwnerName',
+        'projectOwnerName',
+      )
+      .addSelect(
+        `COALESCE(
+          NULLIF(project.finalCost, 0),
+          NULLIF(project.netAmount, 0),
+          project.projectCost,
+          0
+        )`,
+        'projectAmount',
+      )
+      .addSelect('receipt.id', 'receiptId')
+      .addSelect(
+        'COALESCE(receipt."receivedAmount", 0)',
+        'receivedAmount',
+      )
+      .addSelect(
+        `COALESCE(
+          receipt."approvedAt",
+          installment."approvedAt",
+          receipt."paymentDate",
+          receipt."createdAt"
+        )`,
+        'eligibilityDate',
       )
       .where('project.isHidden = false')
       .andWhere(
@@ -11001,63 +11035,107 @@ async getProjectOwnerMonthlySummary(
           approvedStatus: 'APPROVED',
           pendingStatus: 'PENDING',
         },
-      )
-      .andWhere(
-        `COALESCE(
-          receipt."approvedAt",
-          installment."approvedAt",
-          receipt."paymentDate",
-          receipt."createdAt"
-        ) < :endDateExclusive`,
-        { endDateExclusive },
-      )
-      .distinct(true),
-  ).getRawMany() as SummaryProject[];
+      ),
+  );
 
-  // Reuse the CRM's existing payment threshold logic.
-  const batchSize = 10;
+  const paymentRows = await paymentQuery.getRawMany();
 
-  for (
-    let index = 0;
-    index < paymentCandidates.length;
-    index += batchSize
-  ) {
-    const batch = paymentCandidates.slice(
-      index,
-      index + batchSize,
+  type PaymentRow = {
+    projectId: string | number;
+    projectOwnerId: string | number | null;
+    projectOwnerName: string | null;
+    projectAmount: string | number | null;
+    receiptId: string | number;
+    receivedAmount: string | number | null;
+    eligibilityDate: string | Date | null;
+  };
+
+  const paymentRowsByProject = new Map<
+    number,
+    PaymentRow[]
+  >();
+
+  for (const rawRow of paymentRows) {
+    const row = rawRow as PaymentRow;
+    const projectId = Number(row.projectId);
+
+    if (!paymentRowsByProject.has(projectId)) {
+      paymentRowsByProject.set(projectId, []);
+    }
+
+    paymentRowsByProject.get(projectId)!.push(row);
+  }
+
+  for (const rows of paymentRowsByProject.values()) {
+    rows.sort((a, b) => {
+      const dateA = a.eligibilityDate
+        ? new Date(a.eligibilityDate).getTime()
+        : Number.POSITIVE_INFINITY;
+
+      const dateB = b.eligibilityDate
+        ? new Date(b.eligibilityDate).getTime()
+        : Number.POSITIVE_INFINITY;
+
+      if (dateA !== dateB) {
+        return dateA - dateB;
+      }
+
+      return Number(a.receiptId) - Number(b.receiptId);
+    });
+
+    const project = rows[0];
+
+    const projectAmount = Number(
+      project.projectAmount || 0,
     );
 
-    const results = await Promise.all(
-      batch.map(async (project) => ({
-        project,
-        paymentResult:
-          await this.getProjectPaymentThresholdReachedDate(
-            Number(project.projectId),
-            20,
-          ),
-      })),
-    );
+    if (
+      !Number.isFinite(projectAmount) ||
+      projectAmount <= 0
+    ) {
+      continue;
+    }
 
-    for (const { project, paymentResult } of results) {
+    const thresholdAmount = projectAmount * 0.2;
+    let cumulativeAmount = 0;
+
+    for (const receipt of rows) {
+      const receivedAmount = Number(
+        receipt.receivedAmount || 0,
+      );
+
       if (
-        !paymentResult.reached ||
-        !paymentResult.reachedAt
+        !Number.isFinite(receivedAmount) ||
+        receivedAmount <= 0
       ) {
         continue;
       }
 
-      const reachedAt = new Date(
-        paymentResult.reachedAt,
-      );
+      cumulativeAmount += receivedAmount;
 
-      if (
-        reachedAt >= startDate &&
-        reachedAt < endDateExclusive
-      ) {
-        getOwner(project).reached20Percent += 1;
+      if (cumulativeAmount >= thresholdAmount) {
+        const reachedAt = receipt.eligibilityDate
+          ? new Date(receipt.eligibilityDate)
+          : null;
+
+        if (
+          reachedAt &&
+          !Number.isNaN(reachedAt.getTime()) &&
+          reachedAt >= startDate &&
+          reachedAt < endDateExclusive
+        ) {
+          getOwner({
+            projectId: project.projectId,
+            projectOwnerId: project.projectOwnerId,
+            projectOwnerName: project.projectOwnerName,
+          }).reached20Percent += 1;
+        }
+
+        break;
       }
     }
   }
+
 
   const owners = Array.from(ownerMap.values()).sort(
     (a, b) =>
