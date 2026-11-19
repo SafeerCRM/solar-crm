@@ -10802,6 +10802,7 @@ async getProjectOwners() {
 }
 
 
+
 async getProjectOwnerMonthlySummary(
   fromDate: string,
   toDate: string,
@@ -10837,27 +10838,6 @@ async getProjectOwnerMonthlySummary(
       24 * 60 * 60 * 1000,
   );
 
-  const query = this.projectRepository
-    .createQueryBuilder('project')
-    .select('project.id', 'projectId')
-    .addSelect(
-      'project.projectOwnerId',
-      'projectOwnerId',
-    )
-    .addSelect(
-      'project.projectOwnerName',
-      'projectOwnerName',
-    )
-    .where('project.isHidden = false')
-    .andWhere(
-      'project.createdAt >= :startDate',
-      { startDate },
-    )
-    .andWhere(
-      'project.createdAt < :endDateExclusive',
-      { endDateExclusive },
-    );
-
   const currentUserId = Number(
     user?.id || user?.sub,
   );
@@ -10882,21 +10862,54 @@ async getProjectOwnerMonthlySummary(
     roles.includes('MAINTENANCE_MANAGER') ||
     roles.includes('CUSTOMER_MANAGER');
 
-  if (
-    roles.includes('SOLAR_FRANCHISE') ||
-    !canViewAll
-  ) {
-    query.andWhere(
-      'project.projectOwnerId = :currentUserId',
-      { currentUserId },
-    );
-  }
+  const applyVisibility = (query: any) => {
+    if (
+      roles.includes('SOLAR_FRANCHISE') ||
+      !canViewAll
+    ) {
+      query.andWhere(
+        'project.projectOwnerId = :currentUserId',
+        { currentUserId },
+      );
+    }
 
-  const projects = await query.getRawMany<{
+    return query;
+  };
+
+  type SummaryProject = {
     projectId: string | number;
     projectOwnerId: string | number | null;
     projectOwnerName: string | null;
-  }>();
+  };
+
+  const selectProjectFields = (query: any) =>
+    query
+      .select('project.id', 'projectId')
+      .addSelect(
+        'project.projectOwnerId',
+        'projectOwnerId',
+      )
+      .addSelect(
+        'project.projectOwnerName',
+        'projectOwnerName',
+      );
+
+  // Projects created during the selected period.
+  const createdProjects = await applyVisibility(
+    selectProjectFields(
+      this.projectRepository
+        .createQueryBuilder('project'),
+    )
+      .where('project.isHidden = false')
+      .andWhere(
+        'project.createdAt >= :startDate',
+        { startDate },
+      )
+      .andWhere(
+        'project.createdAt < :endDateExclusive',
+        { endDateExclusive },
+      ),
+  ).getRawMany() as SummaryProject[];
 
   const ownerMap = new Map<
     string,
@@ -10908,7 +10921,7 @@ async getProjectOwnerMonthlySummary(
     }
   >();
 
-  for (const project of projects) {
+  const getOwner = (project: SummaryProject) => {
     const ownerId =
       project.projectOwnerId == null
         ? null
@@ -10932,43 +10945,97 @@ async getProjectOwnerMonthlySummary(
       };
 
       ownerMap.set(ownerKey, owner);
-    } else if (
-      project.projectOwnerName?.trim()
-    ) {
+    } else if (project.projectOwnerName?.trim()) {
       owner.projectOwnerName =
         project.projectOwnerName.trim();
     }
 
-    owner.totalCreated += 1;
+    return owner;
+  };
+
+  for (const project of createdProjects) {
+    getOwner(project).totalCreated += 1;
   }
 
-  // Reuse the existing approved-payment threshold logic.
-  // Process in batches to avoid excessive concurrent DB queries.
+  /*
+   * Payment candidates are independent of
+   * project creation date.
+   *
+   * Include projects with qualifying receipts
+   * dated before the end of the selected period.
+   */
+  const paymentCandidates = await applyVisibility(
+    selectProjectFields(
+      this.projectRepository
+        .createQueryBuilder('project'),
+    )
+      .innerJoin(
+        ProjectPaymentReceipt,
+        'receipt',
+        'receipt."projectId" = project.id',
+      )
+      .innerJoin(
+        ProjectPaymentInstallment,
+        'installment',
+        'installment.id = receipt."installmentId"',
+      )
+      .where('project.isHidden = false')
+      .andWhere(
+        'COALESCE(receipt."isHidden", false) = false',
+      )
+      .andWhere(
+        'COALESCE(installment."isHidden", false) = false',
+      )
+      .andWhere(
+        'COALESCE(receipt."receivedAmount", 0) > 0',
+      )
+      .andWhere(
+        `(
+          receipt."approvalStatus" = :approvedStatus
+          OR (
+            receipt."approvalStatus" = :pendingStatus
+            AND installment."approvalStatus" = :approvedStatus
+          )
+        )`,
+        {
+          approvedStatus: 'APPROVED',
+          pendingStatus: 'PENDING',
+        },
+      )
+      .andWhere(
+        `COALESCE(
+          receipt."approvedAt",
+          installment."approvedAt",
+          receipt."paymentDate",
+          receipt."createdAt"
+        ) < :endDateExclusive`,
+        { endDateExclusive },
+      )
+      .distinct(true),
+  ).getRawMany() as SummaryProject[];
+
+  // Reuse the CRM's existing payment threshold logic.
   const batchSize = 10;
 
   for (
     let index = 0;
-    index < projects.length;
+    index < paymentCandidates.length;
     index += batchSize
   ) {
-    const batch = projects.slice(
+    const batch = paymentCandidates.slice(
       index,
       index + batchSize,
     );
 
     const results = await Promise.all(
-      batch.map(async (project) => {
-        const paymentResult =
+      batch.map(async (project) => ({
+        project,
+        paymentResult:
           await this.getProjectPaymentThresholdReachedDate(
             Number(project.projectId),
             20,
-          );
-
-        return {
-          project,
-          paymentResult,
-        };
-      }),
+          ),
+      })),
     );
 
     for (const { project, paymentResult } of results) {
@@ -10984,27 +11051,18 @@ async getProjectOwnerMonthlySummary(
       );
 
       if (
-        reachedAt < startDate ||
-        reachedAt >= endDateExclusive
+        reachedAt >= startDate &&
+        reachedAt < endDateExclusive
       ) {
-        continue;
-      }
-
-      const ownerKey =
-        project.projectOwnerId == null
-          ? 'unassigned'
-          : String(Number(project.projectOwnerId));
-
-      const owner = ownerMap.get(ownerKey);
-
-      if (owner) {
-        owner.reached20Percent += 1;
+        getOwner(project).reached20Percent += 1;
       }
     }
   }
 
   const owners = Array.from(ownerMap.values()).sort(
-    (a, b) => b.totalCreated - a.totalCreated,
+    (a, b) =>
+      b.totalCreated - a.totalCreated ||
+      b.reached20Percent - a.reached20Percent,
   );
 
   return {
@@ -11023,6 +11081,7 @@ async getProjectOwnerMonthlySummary(
     },
   };
 }
+
 
 
   async addComment(
