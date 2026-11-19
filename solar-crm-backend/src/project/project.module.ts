@@ -143,6 +143,9 @@ import {
   ProjectContractorSlaPenalty,
   ProjectContractorSlaSetting,
 } from './project-contractor-sla.entity';
+import { ProjectContractorSlaPenaltyAdjustment } from './project-contractor-sla-penalty-adjustment.entity';
+import { ProjectContractorPaymentSettlement } from './project-contractor-payment-settlement.entity';
+import { ProjectContractorPenaltyAllocation } from './project-contractor-penalty-allocation.entity';
 import { ProjectCustomerConfirmation } from './project-customer-confirmation.entity';
 import { ProjectCustomerConfirmationHistory } from './project-customer-confirmation-history.entity';
 
@@ -183,6 +186,9 @@ ProjectEpcCustomerInvoiceItem, ProjectPartyLedger, ProjectContractorAssignment, 
 ProjectContractorSlaWork,
 ProjectContractorSlaDelay,
 ProjectContractorSlaPenalty,
+ProjectContractorSlaPenaltyAdjustment,
+ProjectContractorPaymentSettlement,
+ProjectContractorPenaltyAllocation,
 ProjectContractorSlaSetting,
 ProjectContractorProof, ProjectContractorRemainingMaterial, ProjectCleaningAssignment, ProjectContractor, ProjectContractorComment, ProjectContractorRescheduleRequest, ProjectLoanCoApplicant, ProjectAccountExpense, ProjectConsumption, ProjectCustomerUpdate, ProjectDealerOrder,
 ProjectDealerOrderItem,

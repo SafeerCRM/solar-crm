@@ -183,6 +183,14 @@ import {
 import { ProjectContractor } from './project-contractor.entity';
 import { ProjectContractorRemainingMaterial } from './project-contractor-remaining-material.entity';
 import { ProjectContractorComment } from './project-contractor-comment.entity';
+import {
+  ProjectContractorPaymentSettlement,
+  ContractorPaymentSettlementStatus,
+} from './project-contractor-payment-settlement.entity';
+
+import {
+  ProjectContractorPenaltyAllocation,
+} from './project-contractor-penalty-allocation.entity';
 import { ProjectLoanCoApplicant } from './project-loan-co-applicant.entity';
 
 import { ProjectStockItem } from './project-stock-item.entity';
@@ -367,6 +375,8 @@ import {
   ContractorSlaDelayStatus,
   ProjectContractorSlaPenalty,
 } from './project-contractor-sla.entity';
+
+import { ProjectContractorSlaPenaltyAdjustment } from './project-contractor-sla-penalty-adjustment.entity';
 
 import {
   ProjectCustomerConfirmation,
@@ -22343,6 +22353,597 @@ private getComputedPaymentStatus(
   return status;
 }
 
+private validateContractorSettlementActivationDate(
+  expense: ProjectAccountExpense,
+) {
+  const startDate = String(
+    process.env.CONTRACTOR_PENALTY_RECOVERY_START_DATE || '',
+  ).trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+    throw new BadRequestException(
+      'Contractor payment settlement activation date is not configured',
+    );
+  }
+
+  const activationTime = new Date(
+    `${startDate}T00:00:00+05:30`,
+  ).getTime();
+
+  if (!Number.isFinite(activationTime)) {
+    throw new BadRequestException(
+      'Invalid contractor payment settlement activation date',
+    );
+  }
+
+  if (Date.now() < activationTime) {
+  throw new BadRequestException(
+    'Contractor payment settlement is not active yet',
+  );
+}
+
+  const expenseCreatedTime = new Date(
+    expense.createdAt,
+  ).getTime();
+
+  if (
+    !Number.isFinite(expenseCreatedTime) ||
+    expenseCreatedTime < activationTime
+  ) {
+    throw new BadRequestException(
+      'Historical contractor payment expenses cannot be settled automatically. Reconciliation is required.',
+    );
+  }
+}
+
+async confirmContractorPaymentSettlement(
+  expenseId: number,
+  body: {
+  paymentMode?: string;
+  paymentReference?: string;
+  proofUrl?: string;
+  netPaidAmount?: number;
+},
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const allowedRoles = [
+    'OWNER',
+    'PAYMENT_MANAGER',
+    'ACCOUNT_MANAGER',
+  ];
+
+  if (
+    !roles.some((role: string) =>
+      allowedRoles.includes(role),
+    )
+  ) {
+    throw new ForbiddenException(
+      'You cannot confirm contractor payments',
+    );
+  }
+
+  if (
+    !Number.isSafeInteger(expenseId) ||
+    expenseId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid expense ID',
+    );
+  }
+
+  const manager =
+    this.projectContractorAssignmentRepository.manager;
+
+  return manager.transaction(async (tx) => {
+    const expense = await tx.findOne(
+      ProjectAccountExpense,
+      {
+        where: { id: expenseId },
+        lock: {
+          mode: 'pessimistic_write',
+        },
+      },
+    );
+
+    if (!expense) {
+      throw new NotFoundException(
+        'Contractor payment expense not found',
+      );
+    }
+
+    if (
+      expense.expenseType !==
+      ProjectAccountExpenseType.CONTRACTOR_PAYMENT
+    ) {
+      throw new BadRequestException(
+        'Expense is not a contractor payment',
+      );
+    }
+
+    this.validateContractorSettlementActivationDate(expense);
+
+    if (
+      expense.approvalStatus !==
+      ProjectAccountExpenseApprovalStatus.APPROVED
+    ) {
+      throw new BadRequestException(
+        'Expense must be approved before payment confirmation',
+      );
+    }
+
+    const expensePaymentStatus = String(
+  expense.expenseStatus || '',
+).trim().toUpperCase();
+
+if (expensePaymentStatus !== 'UNPAID') {
+  throw new BadRequestException(
+    'Only expenses explicitly marked UNPAID can be confirmed. Verify the payment history before proceeding.',
+  );
+}
+
+    const assignmentId = Number(
+      expense.contractorAssignmentId,
+    );
+
+    if (
+      !Number.isSafeInteger(assignmentId) ||
+      assignmentId <= 0
+    ) {
+      throw new BadRequestException(
+        'Contractor assignment is missing',
+      );
+    }
+
+    const assignment = await tx.findOne(
+      ProjectContractorAssignment,
+      {
+        where: { id: assignmentId },
+      },
+    );
+
+    if (!assignment) {
+      throw new NotFoundException(
+        'Contractor assignment not found',
+      );
+    }
+
+    if (
+      Number(assignment.projectId) !==
+      Number(expense.projectId)
+    ) {
+      throw new BadRequestException(
+        'Expense and assignment project mismatch',
+      );
+    }
+
+    await this.lockContractorPenaltyRecovery(
+  Number(assignment.contractorId),
+  tx,
+);
+
+const existingSettlement = await tx.findOne(
+  ProjectContractorPaymentSettlement,
+  {
+    where: { expenseId },
+  },
+);
+
+if (existingSettlement) {
+  throw new BadRequestException(
+    existingSettlement.status ===
+      ContractorPaymentSettlementStatus.CONFIRMED
+      ? 'This contractor payment has already been confirmed'
+      : 'This expense has a reversed settlement and requires manual reconciliation',
+  );
+}
+
+const grossAmount = Number(
+  expense.totalAmount ?? expense.amount ?? 0,
+);
+
+if (
+  !Number.isFinite(grossAmount) ||
+  grossAmount <= 0 ||
+  Math.round(grossAmount * 100) !== grossAmount * 100
+) {
+  throw new BadRequestException(
+    'Invalid contractor payment amount',
+  );
+}
+
+const outstanding =
+  await this.calculateContractorOutstandingPenalties(
+    Number(assignment.contractorId),
+    tx,
+  );
+
+const grossPaise = Math.round(grossAmount * 100);
+
+const outstandingPaise = Math.round(
+  outstanding.totalOutstanding * 100,
+);
+
+const deductionPaise = Math.min(
+  grossPaise,
+  outstandingPaise,
+);
+
+const netPayablePaise =
+  grossPaise - deductionPaise;
+
+const penaltyDeduction = Number(
+  (deductionPaise / 100).toFixed(2),
+);
+
+const netPayable = Number(
+  (netPayablePaise / 100).toFixed(2),
+);
+
+const eligiblePenalties = outstanding.penalties.filter(
+  (penalty) => penalty.outstandingAmount > 0,
+);
+
+let remainingDeductionPaise = deductionPaise;
+
+const penaltyAllocations: {
+  penaltyId: number;
+  assignmentId: number;
+  contractorId: number;
+  projectId: number;
+  allocatedAmount: string;
+}[] = [];
+
+for (const penalty of eligiblePenalties) {
+  if (remainingDeductionPaise <= 0) {
+    break;
+  }
+
+  const penaltyOutstandingPaise = Math.round(
+    penalty.outstandingAmount * 100,
+  );
+
+  const allocatedPaise = Math.min(
+    remainingDeductionPaise,
+    penaltyOutstandingPaise,
+  );
+
+  if (allocatedPaise <= 0) {
+    continue;
+  }
+
+  penaltyAllocations.push({
+    penaltyId: penalty.penaltyId,
+    assignmentId: penalty.assignmentId,
+    contractorId: Number(assignment.contractorId),
+    projectId: penalty.projectId,
+    allocatedAmount: (allocatedPaise / 100).toFixed(2),
+  });
+
+  remainingDeductionPaise -= allocatedPaise;
+}
+
+if (remainingDeductionPaise !== 0) {
+  throw new BadRequestException(
+    'Unable to allocate the complete penalty deduction',
+  );
+}
+
+const actualNetPaid = Number(body?.netPaidAmount);
+
+if (
+  body?.netPaidAmount === undefined ||
+  body?.netPaidAmount === null ||
+  !Number.isFinite(actualNetPaid) ||
+  actualNetPaid < 0 ||
+  !Number.isSafeInteger(
+    Math.round(actualNetPaid * 100),
+  ) ||
+  Math.abs(
+    actualNetPaid * 100 -
+    Math.round(actualNetPaid * 100)
+  ) > 0.000001
+) {
+  throw new BadRequestException(
+    'A valid net paid amount is required',
+  );
+}
+
+const actualNetPaidPaise = Math.round(
+  actualNetPaid * 100,
+);
+
+if (actualNetPaidPaise !== netPayablePaise) {
+  throw new BadRequestException(
+    `Net payment mismatch. Expected ₹${netPayable.toFixed(2)}, received ₹${actualNetPaid.toFixed(2)}`,
+  );
+}
+
+const paymentMode = String(
+  body?.paymentMode || '',
+).trim();
+
+const paymentReference = String(
+  body?.paymentReference || '',
+).trim();
+
+const proofUrl = String(
+  body?.proofUrl || '',
+).trim();
+
+if (!paymentMode) {
+  throw new BadRequestException(
+    'Payment mode is required',
+  );
+}
+
+if (
+  netPayablePaise > 0 &&
+  !paymentReference &&
+  !proofUrl
+) {
+  throw new BadRequestException(
+    'Payment reference or proof is required',
+  );
+}
+
+const settlement = tx.create(
+  ProjectContractorPaymentSettlement,
+  {
+    expenseId,
+    assignmentId,
+    contractorId: Number(assignment.contractorId),
+    projectId: Number(assignment.projectId),
+
+    grossAmount: grossAmount.toFixed(2),
+    penaltyDeduction: penaltyDeduction.toFixed(2),
+    netPaidAmount: netPayable.toFixed(2),
+
+    status: ContractorPaymentSettlementStatus.CONFIRMED,
+
+    paymentMode,
+    paymentReference: paymentReference || null,
+    proofUrl: proofUrl || null,
+
+    confirmedBy: Number(user.id),
+    confirmedAt: new Date(),
+  },
+);
+
+const savedSettlement = await tx.save(
+  ProjectContractorPaymentSettlement,
+  settlement,
+);
+
+if (penaltyAllocations.length > 0) {
+  const allocationEntities = penaltyAllocations.map(
+    (allocation) =>
+      tx.create(
+        ProjectContractorPenaltyAllocation,
+        {
+          settlementId: savedSettlement.id,
+          penaltyId: allocation.penaltyId,
+          assignmentId: allocation.assignmentId,
+          contractorId: allocation.contractorId,
+          projectId: allocation.projectId,
+          allocatedAmount: allocation.allocatedAmount,
+        },
+      ),
+  );
+
+  await tx.save(
+    ProjectContractorPenaltyAllocation,
+    allocationEntities,
+  );
+}
+
+expense.expenseStatus = 'PAID';
+
+await tx.save(
+  ProjectAccountExpense,
+  expense,
+);
+
+const totalAllocatedPaise = penaltyAllocations.reduce(
+  (sum, allocation) =>
+    sum +
+    Math.round(
+      Number(allocation.allocatedAmount) * 100,
+    ),
+  0,
+);
+
+if (totalAllocatedPaise !== deductionPaise) {
+  throw new BadRequestException(
+    'Settlement deduction does not match penalty allocations',
+  );
+}
+
+if (
+  grossPaise !==
+  deductionPaise + netPayablePaise
+) {
+  throw new BadRequestException(
+    'Contractor settlement amounts do not balance',
+  );
+}
+
+return {
+  success: true,
+  message: 'Contractor payment confirmed successfully',
+
+  settlementId: savedSettlement.id,
+  expenseId,
+  assignmentId,
+  contractorId: Number(assignment.contractorId),
+  projectId: Number(assignment.projectId),
+
+  grossAmount: grossAmount.toFixed(2),
+  penaltyDeduction: penaltyDeduction.toFixed(2),
+  netPaidAmount: netPayable.toFixed(2),
+
+  penaltyAllocations: penaltyAllocations.map(
+    (allocation) => ({
+      penaltyId: allocation.penaltyId,
+      allocatedAmount: allocation.allocatedAmount,
+    }),
+  ),
+
+  paymentStatus: 'PAID',
+  confirmedBy: Number(user.id),
+  confirmedAt: savedSettlement.confirmedAt,
+};
+  });
+}
+
+async previewContractorPaymentSettlement(
+  expenseId: number,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const allowedRoles = [
+    'OWNER',
+    'PROJECT_MANAGER',
+    'PAYMENT_MANAGER',
+    'ACCOUNT_MANAGER',
+  ];
+
+  if (!roles.some((role: string) => allowedRoles.includes(role))) {
+    throw new ForbiddenException(
+      'You cannot view contractor payment settlements',
+    );
+  }
+
+  if (!Number.isSafeInteger(expenseId) || expenseId <= 0) {
+    throw new BadRequestException('Invalid expense ID');
+  }
+
+  const manager =
+    this.projectContractorAssignmentRepository.manager;
+
+  const expense = await manager.findOne(
+    ProjectAccountExpense,
+    {
+      where: { id: expenseId },
+    },
+  );
+
+  if (!expense) {
+    throw new NotFoundException('Expense not found');
+  }
+
+  if (
+    expense.expenseType !==
+    ProjectAccountExpenseType.CONTRACTOR_PAYMENT
+  ) {
+    throw new BadRequestException(
+      'This expense is not a contractor payment',
+    );
+  }
+
+  this.validateContractorSettlementActivationDate(expense);
+
+  if (
+    expense.approvalStatus !==
+    ProjectAccountExpenseApprovalStatus.APPROVED
+  ) {
+    throw new BadRequestException(
+      'Contractor payment must be approved before settlement',
+    );
+  }
+
+  const assignmentId = Number(
+    expense.contractorAssignmentId,
+  );
+
+  if (!Number.isSafeInteger(assignmentId) || assignmentId <= 0) {
+    throw new BadRequestException(
+      'Contractor assignment is missing. Historical expenses require reconciliation.',
+    );
+  }
+
+  const assignment = await manager.findOne(
+    ProjectContractorAssignment,
+    {
+      where: { id: assignmentId },
+    },
+  );
+
+  if (!assignment) {
+    throw new NotFoundException(
+      'Contractor assignment not found',
+    );
+  }
+
+  if (Number(expense.projectId) !== Number(assignment.projectId)) {
+    throw new BadRequestException(
+      'Expense project does not match contractor assignment',
+    );
+  }
+
+  const existingSettlement = await manager.findOne(
+    ProjectContractorPaymentSettlement,
+    {
+      where: { expenseId },
+    },
+  );
+
+  if (existingSettlement) {
+    return {
+      expenseId,
+      alreadySettled: true,
+      settlement: existingSettlement,
+    };
+  }
+
+  const grossAmount = Number(
+    expense.totalAmount ?? expense.amount ?? 0,
+  );
+
+  if (!Number.isFinite(grossAmount) || grossAmount <= 0) {
+    throw new BadRequestException(
+      'Invalid contractor payment amount',
+    );
+  }
+
+  const outstanding =
+    await this.calculateContractorOutstandingPenalties(
+      Number(assignment.contractorId),
+      manager,
+    );
+
+  const penaltyDeduction = Math.min(
+    grossAmount,
+    outstanding.totalOutstanding,
+  );
+
+  const netPayable = Number(
+    (grossAmount - penaltyDeduction).toFixed(2),
+  );
+
+  return {
+    expenseId,
+    assignmentId,
+    contractorId: assignment.contractorId,
+    projectId: assignment.projectId,
+    alreadySettled: false,
+    grossAmount,
+    totalOutstandingPenalty: outstanding.totalOutstanding,
+    proposedPenaltyDeduction: penaltyDeduction,
+    netPayable,
+    penalties: outstanding.penalties.filter(
+      (penalty) => penalty.outstandingAmount > 0,
+    ),
+    requiresPaymentConfirmation: true,
+  };
+}
+
 async createAccountExpense(
   body: any,
   currentUser: any,
@@ -22410,6 +23011,43 @@ if (
   );
 }
 
+let contractorAssignmentId: number | null = null;
+
+if (
+  expenseType ===
+  ProjectAccountExpenseType.CONTRACTOR_PAYMENT
+) {
+  contractorAssignmentId = Number(
+    body?.contractorAssignmentId,
+  );
+
+  if (
+    !Number.isSafeInteger(contractorAssignmentId) ||
+    contractorAssignmentId <= 0
+  ) {
+    throw new BadRequestException(
+      'Please select a valid contractor assignment',
+    );
+  }
+
+  const assignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: { id: contractorAssignmentId },
+    });
+
+  if (!assignment) {
+    throw new BadRequestException(
+      'Selected contractor assignment does not exist',
+    );
+  }
+
+  if (Number(assignment.projectId) !== projectId) {
+    throw new BadRequestException(
+      'Contractor assignment does not belong to the selected project',
+    );
+  }
+}
+
   const expenseData: Partial<ProjectAccountExpense> = {
     expenseType,
     amount,
@@ -22438,11 +23076,7 @@ if (
     paidTo: body?.paidTo || null,
 
     projectId: projectId ?? undefined,
-        contractorAssignmentId:
-      expenseType === ProjectAccountExpenseType.CONTRACTOR_PAYMENT &&
-      body?.contractorAssignmentId
-        ? Number(body.contractorAssignmentId)
-        : null,
+        contractorAssignmentId,
     dealerId: body?.dealerId ? Number(body.dealerId) : undefined,
     dealerName: body?.dealerName || null,
     staffId: body?.staffId ? Number(body.staffId) : undefined,
@@ -22456,7 +23090,11 @@ if (
 
     projectOwnerName: body?.projectOwnerName || null,
 
-    expenseStatus: body?.expenseStatus || 'UNPAID',
+    expenseStatus:
+  body?.expenseType ===
+  ProjectAccountExpenseType.CONTRACTOR_PAYMENT
+    ? 'UNPAID'
+    : body?.expenseStatus || 'UNPAID',
     recurringExpense: body?.recurringExpense === true,
 
     approvalStatus:
@@ -22502,6 +23140,69 @@ async updateAccountExpense(
       'Approved expense cannot be edited because ledger entry is already created',
     );
   }
+
+  if (
+  expense.expenseType ===
+    ProjectAccountExpenseType.CONTRACTOR_PAYMENT &&
+  body?.expenseType !== undefined &&
+  body.expenseType !==
+    ProjectAccountExpenseType.CONTRACTOR_PAYMENT
+) {
+  throw new BadRequestException(
+    'Contractor payment expense type cannot be changed',
+  );
+}
+
+  const nextExpenseType =
+  Object.values(ProjectAccountExpenseType).includes(
+    body?.expenseType,
+  )
+    ? body.expenseType
+    : expense.expenseType;
+
+const nextProjectId =
+  body?.projectId !== undefined &&
+  body?.projectId !== ''
+    ? Number(body.projectId)
+    : expense.projectId;
+
+if (
+  nextExpenseType ===
+  ProjectAccountExpenseType.CONTRACTOR_PAYMENT
+) {
+  const assignmentId = Number(
+    expense.contractorAssignmentId,
+  );
+
+  if (
+    !Number.isSafeInteger(assignmentId) ||
+    assignmentId <= 0
+  ) {
+    throw new BadRequestException(
+      'Contractor payment requires a valid contractor assignment',
+    );
+  }
+
+  const assignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: { id: assignmentId },
+    });
+
+  if (!assignment) {
+    throw new BadRequestException(
+      'Contractor assignment not found',
+    );
+  }
+
+  if (
+    !Number.isSafeInteger(Number(nextProjectId)) ||
+    Number(assignment.projectId) !== Number(nextProjectId)
+  ) {
+    throw new BadRequestException(
+      'Contractor assignment does not belong to the selected project',
+    );
+  }
+}
 
   const amount = Number(body?.amount || expense.amount || 0);
 
@@ -22638,10 +23339,22 @@ async updateAccountExpense(
       ? body.projectOwnerName || null
       : expense.projectOwnerName;
 
-  expense.expenseStatus =
-    body?.expenseStatus !== undefined
-      ? body.expenseStatus || null
-      : expense.expenseStatus;
+  if (
+  expense.expenseType === 'CONTRACTOR_PAYMENT' &&
+  body?.expenseStatus !== undefined &&
+  String(body.expenseStatus).toUpperCase() !==
+    String(expense.expenseStatus).toUpperCase()
+) {
+  throw new BadRequestException(
+    'Contractor payment status cannot be changed directly. ' +
+      'Use the contractor payment settlement process.',
+  );
+}
+
+expense.expenseStatus =
+  body?.expenseStatus !== undefined
+    ? body.expenseStatus || null
+    : expense.expenseStatus;
 
   expense.recurringExpense =
     body?.recurringExpense !== undefined
@@ -24441,13 +25154,24 @@ async approveAccountExpense(
   }
 
   if (
-    expense.approvalStatus ===
-    ProjectAccountExpenseApprovalStatus.APPROVED
-  ) {
-    throw new BadRequestException(
-      'Expense already approved',
-    );
-  }
+  expense.approvalStatus !==
+  ProjectAccountExpenseApprovalStatus.PENDING
+) {
+  throw new BadRequestException(
+    'Only pending expenses can be approved',
+  );
+}
+
+if (
+  expense.expenseType ===
+    ProjectAccountExpenseType.CONTRACTOR_PAYMENT &&
+  String(expense.expenseStatus || '').toUpperCase() !==
+    'UNPAID'
+) {
+  throw new BadRequestException(
+    'Contractor payment must be UNPAID before approval',
+  );
+}
 
 
   expense.approvalStatus =
@@ -24517,6 +25241,15 @@ async rejectAccountExpense(
       'Expense not found',
     );
   }
+
+  if (
+  expense.approvalStatus !==
+  ProjectAccountExpenseApprovalStatus.PENDING
+) {
+  throw new BadRequestException(
+    'Only pending expenses can be rejected',
+  );
+}
 
   expense.approvalStatus =
     ProjectAccountExpenseApprovalStatus.REJECTED;
@@ -50060,6 +50793,169 @@ async handleContractorSlaPenaltyCron() {
   }
 }
 
+private async lockContractorPenaltyRecovery(
+  contractorId: number,
+  manager: EntityManager,
+): Promise<void> {
+  if (
+    !Number.isSafeInteger(contractorId) ||
+    contractorId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid contractor ID',
+    );
+  }
+
+  await manager.query(
+    `
+      SELECT pg_advisory_xact_lock(
+        728491,
+        $1::integer
+      )
+    `,
+    [contractorId],
+  );
+}
+
+private async calculateContractorOutstandingPenalties(
+  contractorId: number,
+  manager: EntityManager,
+) {
+  if (
+    !Number.isSafeInteger(contractorId) ||
+    contractorId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid contractor ID',
+    );
+  }
+
+  const recoveryStartDate =
+  process.env.CONTRACTOR_PENALTY_RECOVERY_START_DATE;
+
+if (
+  !recoveryStartDate ||
+  !/^\d{4}-\d{2}-\d{2}$/.test(recoveryStartDate) ||
+  Number.isNaN(
+    Date.parse(`${recoveryStartDate}T00:00:00+05:30`),
+  )
+) {
+  throw new BadRequestException(
+    'Contractor penalty recovery start date is not configured correctly',
+  );
+}
+
+const cutoff = new Date(
+  `${recoveryStartDate}T00:00:00+05:30`,
+);
+
+const penalties = await manager.find(
+  ProjectContractorSlaPenalty,
+  {
+    where: { contractorId },
+    order: {
+      chargeableAt: 'ASC',
+      id: 'ASC',
+    },
+  },
+);
+
+const eligiblePenalties = penalties.filter(
+  (penalty) =>
+    new Date(penalty.chargeableAt).getTime() >=
+    cutoff.getTime(),
+);
+
+  const allocations = await manager
+    .createQueryBuilder(
+      ProjectContractorPenaltyAllocation,
+      'allocation',
+    )
+    .innerJoin(
+      ProjectContractorPaymentSettlement,
+      'settlement',
+      'settlement.id = allocation.settlementId',
+    )
+    .select('allocation.penaltyId', 'penaltyId')
+    .addSelect(
+      'SUM(allocation.allocatedAmount)',
+      'recoveredAmount',
+    )
+    .where('allocation.contractorId = :contractorId', {
+      contractorId,
+    })
+    .andWhere('settlement.status = :status', {
+      status: ContractorPaymentSettlementStatus.CONFIRMED,
+    })
+    .groupBy('allocation.penaltyId')
+    .getRawMany<{
+      penaltyId: number;
+      recoveredAmount: string;
+    }>();
+
+  const recoveredByPenalty = new Map<number, number>();
+
+  for (const allocation of allocations) {
+    recoveredByPenalty.set(
+      Number(allocation.penaltyId),
+      Number(allocation.recoveredAmount || 0),
+    );
+  }
+
+  const items = eligiblePenalties.map((penalty) => {
+    const originalAmount = Number(penalty.amount || 0);
+
+    const effectiveAmount = penalty.isWaived
+      ? 0
+      : penalty.adjustedAmount != null
+        ? Number(penalty.adjustedAmount)
+        : originalAmount;
+
+    const recoveredAmount =
+      recoveredByPenalty.get(penalty.id) || 0;
+
+    const outstandingAmount = Math.max(
+      0,
+      Number(
+        (effectiveAmount - recoveredAmount).toFixed(2),
+      ),
+    );
+
+    return {
+      penaltyId: penalty.id,
+      assignmentId: penalty.assignmentId,
+      projectId: penalty.projectId,
+      originalAmount,
+      effectiveAmount,
+      recoveredAmount,
+      outstandingAmount,
+      isWaived: penalty.isWaived,
+      chargeableAt: penalty.chargeableAt,
+    };
+  });
+
+  return {
+    contractorId,
+    totalOriginal: items.reduce(
+      (sum, item) => sum + item.originalAmount,
+      0,
+    ),
+    totalEffective: items.reduce(
+      (sum, item) => sum + item.effectiveAmount,
+      0,
+    ),
+    totalRecovered: items.reduce(
+      (sum, item) => sum + item.recoveredAmount,
+      0,
+    ),
+    totalOutstanding: items.reduce(
+      (sum, item) => sum + item.outstandingAmount,
+      0,
+    ),
+    penalties: items,
+  };
+}
+
 async getContractorSlaPenalties(
   assignmentId: number,
   user: any,
@@ -50118,27 +51014,43 @@ async getContractorSlaPenalties(
   );
 
   const totalRecorded = penalties.reduce(
-    (sum, item) => sum + Number(item.amount),
-    0,
-  );
+  (sum, item) => sum + Number(item.amount || 0),
+  0,
+);
 
-  const totalWaived = penalties.reduce(
-    (sum, item) =>
-      sum + (item.isWaived ? Number(item.amount) : 0),
-    0,
-  );
+const totalWaived = penalties.reduce(
+  (sum, item) =>
+    sum + (item.isWaived ? Number(item.amount || 0) : 0),
+  0,
+);
+
+const totalAdjustedReduction = penalties.reduce(
+  (sum, item) => {
+    if (item.isWaived) return sum;
+
+    const original = Number(item.amount || 0);
+    const effective =
+      item.adjustedAmount != null
+        ? Number(item.adjustedAmount)
+        : original;
+
+    return sum + Math.max(0, original - effective);
+  },
+  0,
+);
 
   return {
     assignmentId,
     contractorId: assignment.contractorId,
     originalAmount: Number(assignment.amount || 0),
     totalRecorded,
-    totalWaived,
-    totalDeductible: Math.max(
-      0,
-      totalRecorded - totalWaived,
-    ),
-    penalties,
+totalWaived,
+totalAdjustedReduction,
+totalDeductible: Math.max(
+  0,
+  totalRecorded - totalWaived - totalAdjustedReduction,
+),
+penalties,
   };
 }
 
@@ -50204,12 +51116,44 @@ async waiveContractorSlaPenalty(
     }
 
     if (penalty.isWaived) {
-      throw new BadRequestException(
-        'This penalty has already been waived',
-      );
-    }
+  throw new BadRequestException(
+    'This penalty has already been waived',
+  );
+}
 
-    penalty.isWaived = true;
+const recovery = await tx
+  .createQueryBuilder(
+    ProjectContractorPenaltyAllocation,
+    'allocation',
+  )
+  .innerJoin(
+    ProjectContractorPaymentSettlement,
+    'settlement',
+    'settlement.id = allocation.settlementId',
+  )
+  .select(
+    'COALESCE(SUM(allocation.allocatedAmount), 0)',
+    'totalRecovered',
+  )
+  .where('allocation.penaltyId = :penaltyId', {
+    penaltyId: penalty.id,
+  })
+  .andWhere('settlement.status = :status', {
+    status: ContractorPaymentSettlementStatus.CONFIRMED,
+  })
+  .getRawOne<{ totalRecovered: string }>();
+
+const totalRecovered = Number(
+  recovery?.totalRecovered || 0,
+);
+
+if (totalRecovered > 0) {
+  throw new BadRequestException(
+    'This penalty has already been partially or fully recovered. Reverse the recovery before waiving it.',
+  );
+}
+
+penalty.isWaived = true;
     penalty.waivedBy = userId;
     penalty.waiverReason = reason;
     penalty.waivedAt = new Date();
@@ -50222,6 +51166,174 @@ async waiveContractorSlaPenalty(
     return {
       message: 'Contractor penalty waived successfully',
       penalty,
+    };
+  });
+}
+
+async adjustContractorSlaPenalty(
+  penaltyId: number,
+  body: any,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (!roles.includes('OWNER')) {
+    throw new ForbiddenException(
+      'Only Owner can adjust contractor penalties',
+    );
+  }
+
+  const userId = Number(
+    user?.id || user?.userId || user?.sub,
+  );
+
+  if (!Number.isSafeInteger(userId) || userId <= 0) {
+    throw new BadRequestException('Invalid Owner');
+  }
+
+  if (!Number.isSafeInteger(penaltyId) || penaltyId <= 0) {
+    throw new BadRequestException('Invalid penalty ID');
+  }
+
+  const reason = String(body?.reason || '').trim();
+
+  if (reason.length < 5) {
+    throw new BadRequestException(
+      'A meaningful adjustment reason is required',
+    );
+  }
+
+  if (
+    body?.adjustedAmount === undefined ||
+    body?.adjustedAmount === null ||
+    body?.adjustedAmount === '' ||
+    typeof body.adjustedAmount === 'boolean'
+  ) {
+    throw new BadRequestException(
+      'Adjusted penalty amount is required',
+    );
+  }
+
+  const adjustedAmount = Number(body.adjustedAmount);
+
+  if (
+    !Number.isFinite(adjustedAmount) ||
+    adjustedAmount < 0 ||
+    Math.round(adjustedAmount * 100) !==
+      adjustedAmount * 100
+  ) {
+    throw new BadRequestException(
+      'Adjusted amount must be a valid non-negative amount with at most 2 decimal places',
+    );
+  }
+
+  const manager =
+    this.projectContractorAssignmentRepository.manager;
+
+  return manager.transaction(async (tx) => {
+    const penalty = await tx.findOne(
+      ProjectContractorSlaPenalty,
+      {
+        where: { id: penaltyId },
+        lock: { mode: 'pessimistic_write' },
+      },
+    );
+
+    if (!penalty) {
+      throw new NotFoundException(
+        'Contractor penalty not found',
+      );
+    }
+
+    if (penalty.isWaived) {
+      throw new BadRequestException(
+        'Waived penalties cannot be adjusted',
+      );
+    }
+
+    const originalAmount = Number(penalty.amount);
+
+    if (adjustedAmount > originalAmount) {
+      throw new BadRequestException(
+        'Adjusted amount cannot exceed original penalty',
+      );
+    }
+
+    const recovery = await tx
+  .createQueryBuilder(
+    ProjectContractorPenaltyAllocation,
+    'allocation',
+  )
+  .innerJoin(
+    ProjectContractorPaymentSettlement,
+    'settlement',
+    'settlement.id = allocation.settlementId',
+  )
+  .select(
+    'COALESCE(SUM(allocation.allocatedAmount), 0)',
+    'totalRecovered',
+  )
+  .where('allocation.penaltyId = :penaltyId', {
+    penaltyId: penalty.id,
+  })
+  .andWhere('settlement.status = :status', {
+    status: ContractorPaymentSettlementStatus.CONFIRMED,
+  })
+  .getRawOne<{ totalRecovered: string }>();
+
+const totalRecovered = Number(
+  recovery?.totalRecovered || 0,
+);
+
+if (adjustedAmount < totalRecovered) {
+  throw new BadRequestException(
+    `Cannot reduce penalty below the already recovered amount of ₹${totalRecovered.toFixed(2)}. Reverse the relevant recovery first.`,
+  );
+}
+
+    const previousEffectiveAmount =
+  penalty.adjustedAmount != null
+    ? Number(penalty.adjustedAmount)
+    : originalAmount;
+
+penalty.adjustedAmount = adjustedAmount.toFixed(2);
+penalty.adjustedBy = userId;
+penalty.adjustmentReason = reason;
+penalty.adjustedAt = new Date();
+
+await tx.save(ProjectContractorSlaPenalty, penalty);
+
+const audit = tx.create(
+  ProjectContractorSlaPenaltyAdjustment,
+  {
+    penaltyId: penalty.id,
+    assignmentId: penalty.assignmentId,
+    contractorId: penalty.contractorId,
+    projectId: penalty.projectId,
+    originalAmount: originalAmount.toFixed(2),
+    previousEffectiveAmount:
+      previousEffectiveAmount.toFixed(2),
+    newEffectiveAmount: adjustedAmount.toFixed(2),
+    adjustedBy: userId,
+    reason,
+  },
+);
+
+await tx.save(
+  ProjectContractorSlaPenaltyAdjustment,
+  audit,
+);
+
+    return {
+      message: 'Contractor penalty adjusted successfully',
+      penalty,
+      originalAmount,
+      effectiveAmount: adjustedAmount,
+      reduction: Number(
+        (originalAmount - adjustedAmount).toFixed(2),
+      ),
     };
   });
 }
@@ -50490,21 +51602,46 @@ deductiblePenalty: number;
 );
 
 const recordedPenalty = recordedCharges.reduce(
-  (total, charge) => total + Number(charge.amount),
+  (total, charge) =>
+    total + Number(charge.amount || 0),
   0,
 );
 
 const waivedPenalty = recordedCharges.reduce(
   (total, charge) =>
-    total + (
-      charge.isWaived ? Number(charge.amount) : 0
-    ),
+    total +
+    (charge.isWaived
+      ? Number(charge.amount || 0)
+      : 0),
+  0,
+);
+
+const adjustedReduction = recordedCharges.reduce(
+  (total, charge) => {
+    if (charge.isWaived) {
+      return total;
+    }
+
+    const originalAmount = Number(charge.amount || 0);
+
+    const effectiveAmount =
+      charge.adjustedAmount != null
+        ? Number(charge.adjustedAmount)
+        : originalAmount;
+
+    return (
+      total +
+      Math.max(0, originalAmount - effectiveAmount)
+    );
+  },
   0,
 );
 
 const deductiblePenalty = Math.max(
   0,
-  recordedPenalty - waivedPenalty,
+  recordedPenalty -
+    waivedPenalty -
+    adjustedReduction,
 );
 
     results.push({
@@ -52337,7 +53474,9 @@ async getContractorAssignmentRegister(filters: any, user: any) {
   const canView =
   roles.includes('OWNER') ||
   roles.includes('PROJECT_MANAGER') ||
-  roles.includes('INSPECTION_MANAGER');
+  roles.includes('INSPECTION_MANAGER') ||
+  roles.includes('ACCOUNT_MANAGER') ||
+  roles.includes('PAYMENT_MANAGER');
 
   if (!canView) {
     throw new ForbiddenException(
@@ -52357,17 +53496,20 @@ async getContractorAssignmentRegister(filters: any, user: any) {
 
   const applyFilters = (query: any) => {
     if (filters?.search) {
-      query.andWhere(
-        `
-        LOWER(assignment.contractorName) LIKE :search
-        OR LOWER(assignment.contractorPhone) LIKE :search
-        OR CAST(assignment.projectId AS TEXT) LIKE :search
-        `,
-        {
-          search: `%${String(filters.search).toLowerCase()}%`,
-        },
-      );
-    }
+  query.andWhere(
+    `(
+      LOWER(assignment.contractorName) LIKE :search
+      OR LOWER(COALESCE(assignment.contractorPhone, '')) LIKE :search
+      OR CAST(assignment.projectId AS TEXT) LIKE :search
+      OR CAST(assignment.id AS TEXT) LIKE :search
+      OR LOWER(COALESCE(project.customerName, '')) LIKE :search
+      OR LOWER(COALESCE(project.electricityKNumber, '')) LIKE :search
+    )`,
+    {
+      search: `%${String(filters.search).trim().toLowerCase()}%`,
+    },
+  );
+}
 
     if (filters?.status) {
       query.andWhere('assignment.status = :status', {
@@ -52704,16 +53846,19 @@ const activityPercentage =
   ...assignment,
 
   project: project
-    ? {
-        id: project.id,
-        customerName:
-          project.customerName || '',
+  ? {
+      id: project.id,
+      customerName:
+        project.customerName || '',
 
-        customerPhone:
-          project.customerPhone || '',
+      customerPhone:
+        project.customerPhone || '',
 
-        branchName:
-          project.branchName || '',
+      electricityKNumber:
+        project.electricityKNumber || '',
+
+      branchName:
+        project.branchName || '',
 
         city:
           project.city || '',

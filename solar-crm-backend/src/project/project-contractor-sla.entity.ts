@@ -204,6 +204,23 @@ export class ProjectContractorSlaPenalty {
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   amount: string;
 
+  @Column({
+  type: 'decimal',
+  precision: 12,
+  scale: 2,
+  nullable: true,
+})
+adjustedAmount: string | null;
+
+@Column({ type: 'integer', nullable: true })
+adjustedBy: number | null;
+
+@Column({ type: 'text', nullable: true })
+adjustmentReason: string | null;
+
+@Column({ type: 'timestamp', nullable: true })
+adjustedAt: Date | null;
+
   @Column({ type: 'timestamp' })
   chargeableAt: Date;
 

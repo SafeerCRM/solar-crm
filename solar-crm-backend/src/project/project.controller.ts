@@ -938,7 +938,13 @@ getContractorRemainingMaterials(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'INSPECTION_MANAGER',)
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'INSPECTION_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+)
 @Get('contractor-assignments/register')
 getContractorAssignmentRegister(
   @Query('page') page?: string,
@@ -1524,6 +1530,20 @@ waiveContractorSlaPenalty(
   );
 }
 
+@Roles('OWNER')
+@Patch('contractor-sla/penalty/:id/adjust')
+adjustContractorSlaPenalty(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.adjustContractorSlaPenalty(
+    id,
+    body,
+    user,
+  );
+}
+
 @Roles('OWNER', 'PROJECT_MANAGER', 'SOLAR_FRANCHISE')
 @Post('contractor/assign')
 assignContractorToProject(
@@ -1675,6 +1695,46 @@ getFinanceSummary(
 @Get('account-expenses/summary')
 getAccountExpenseSummary() {
   return this.projectService.getAccountExpenseSummary();
+}
+
+@Roles(
+  'OWNER',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Post('account-expenses/:expenseId/confirm-contractor-payment')
+confirmContractorPaymentSettlement(
+  @Param('expenseId', ParseIntPipe) expenseId: number,
+  @Body() body: {
+    paymentMode?: string;
+    paymentReference?: string;
+    proofUrl?: string;
+    netPaidAmount?: number;
+  },
+  @Req() req: any,
+) {
+  return this.projectService.confirmContractorPaymentSettlement(
+    expenseId,
+    body,
+    req.user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Get('account-expenses/:expenseId/contractor-settlement-preview')
+previewContractorPaymentSettlement(
+  @Param('expenseId', ParseIntPipe) expenseId: number,
+  @Req() req: any,
+) {
+  return this.projectService.previewContractorPaymentSettlement(
+    expenseId,
+    req.user,
+  );
 }
 
 @Roles(
