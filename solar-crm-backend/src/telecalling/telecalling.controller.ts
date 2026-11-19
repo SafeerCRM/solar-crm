@@ -208,21 +208,25 @@ getCnrRecallContactIdsForAutoCall(
 
 
   @Get('contacts')
-  getContacts(
-    @CurrentUser() user: any,
-    @Query('page') page = '1',
-    @Query('limit') limit = '50',
-    @Query('view') view = 'active',
-    @Query('locationFilter') locationFilter = '',
-  ) {
-    return this.telecallingService.getContacts(
-      user,
-      Number(page),
-      Number(limit),
-      String(view || 'active'),
-      String(locationFilter || ''),
-    );
-  }
+getContacts(
+  @CurrentUser() user: any,
+  @Query('page') page = '1',
+  @Query('limit') limit = '50',
+  @Query('view') view = 'active',
+  @Query('locationFilter') locationFilter = '',
+  @Query('nameFilter') nameFilter = '',
+  @Query('phoneFilter') phoneFilter = '',
+) {
+  return this.telecallingService.getContacts(
+    user,
+    Number(page),
+    Number(limit),
+    String(view || 'active'),
+    String(locationFilter || ''),
+    String(nameFilter || ''),
+    String(phoneFilter || ''),
+  );
+}
 
   @Get('contacts/all-ids')
   getAllContactIdsForAutoCall(

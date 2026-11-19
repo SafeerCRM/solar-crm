@@ -1220,12 +1220,14 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
   }
 
     async getContacts(
-    user: any,
-    page = 1,
-    limit = 50,
-    view = 'active',
-    locationFilter = '',
-  ) {
+  user: any,
+  page = 1,
+  limit = 50,
+  view = 'active',
+  locationFilter = '',
+  nameFilter = '',
+  phoneFilter = '',
+) {
     const safePage =
       Number.isFinite(Number(page)) && Number(page) > 0 ? Number(page) : 1;
 
@@ -1236,7 +1238,9 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
 
     const skip = (safePage - 1) * safeLimit;
     const normalizedView = String(view || 'active').toLowerCase();
-    const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
+const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
+const normalizedNameFilter = String(nameFilter || '').trim().toLowerCase();
+const normalizedPhoneFilter = String(phoneFilter || '').trim();
 
     const qb = this.contactRepository
       .createQueryBuilder('contact')
@@ -1257,6 +1261,20 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
         { filter: `%${normalizedFilter}%` },
       );
     }
+
+    if (normalizedNameFilter) {
+  qb.andWhere(
+    `LOWER(COALESCE(contact.name, '')) LIKE :nameFilter`,
+    { nameFilter: `%${normalizedNameFilter}%` },
+  );
+}
+
+if (normalizedPhoneFilter) {
+  qb.andWhere(
+    `COALESCE(contact.phone, '') LIKE :phoneFilter`,
+    { phoneFilter: `%${normalizedPhoneFilter}%` },
+  );
+}
 
     // For active view only, exclude contacts that already have any saved outcome.
     // Keep contacts that only have INITIATED logs, because they are not completed yet.
