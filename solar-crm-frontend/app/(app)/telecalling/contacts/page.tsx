@@ -523,7 +523,16 @@ const canViewContactHistory =
   view: viewMode,
   locationFilter: cityFilter || undefined,
 
-  // Used only by the dedicated CNR endpoint.
+  nameFilter:
+    !showCnrRecall
+      ? nameFilter.trim() || undefined
+      : undefined,
+
+  phoneFilter:
+    !showCnrRecall
+      ? phoneFilter.trim() || undefined
+      : undefined,
+
   sortOrder: showCnrRecall
     ? cnrSortOrder
     : undefined,
@@ -2374,6 +2383,8 @@ const formatHistoryDate = (
   page,
   viewMode,
   cityFilter,
+  nameFilter,
+  phoneFilter,
   showCnrRecall,
   cnrSortOrder,
 ]);
@@ -3151,14 +3162,20 @@ const transferContacts = async () => {
             <input
               placeholder="Search by name"
               value={nameFilter}
-              onChange={(e) => setNameFilter(e.target.value)}
+              onChange={(e) => {
+  setNameFilter(e.target.value);
+  setPage(1);
+}}
               className="rounded-2xl border border-gray-200 bg-gray-50 p-3 outline-none transition focus:border-blue-500 focus:bg-white"
             />
 
             <input
               placeholder="Search by phone"
               value={phoneFilter}
-              onChange={(e) => setPhoneFilter(e.target.value)}
+              onChange={(e) => {
+  setPhoneFilter(e.target.value);
+  setPage(1);
+}}
               className="rounded-2xl border border-gray-200 bg-gray-50 p-3 outline-none transition focus:border-blue-500 focus:bg-white"
             />
 
