@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
 
@@ -50,12 +50,157 @@ const [expenseForm, setExpenseForm] = useState({
   paidTo: '',
   branchName: '',
   projectId: '',
+  contractorAssignmentId: '',
   proofUrl: '',
   remarks: '',
 });
 
 const [expenseLoading, setExpenseLoading] =
   useState(false);
+
+  type ContractorAssignmentOption = {
+  id: number;
+  projectId: number;
+  contractorId: number;
+  contractorName: string;
+  contractorPhone?: string;
+  workScope: string;
+  status: string;
+  amount: number;
+  project?: {
+    id: number;
+    customerName: string;
+    electricityKNumber: string;
+    branchName: string;
+    city: string;
+  } | null;
+};
+
+const [assignmentSearch, setAssignmentSearch] =
+  useState('');
+
+const [assignmentOptions, setAssignmentOptions] =
+  useState<ContractorAssignmentOption[]>([]);
+
+const [assignmentPage, setAssignmentPage] =
+  useState(1);
+
+const [assignmentTotal, setAssignmentTotal] =
+  useState(0);
+
+const [assignmentLoading, setAssignmentLoading] =
+  useState(false);
+
+const [assignmentDropdownOpen, setAssignmentDropdownOpen] =
+  useState(false);
+
+  const assignmentRequestIdRef = useRef(0);
+
+  const fetchContractorAssignments = async (
+  search: string,
+  page: number = 1,
+) => {
+  const requestId = ++assignmentRequestIdRef.current;
+
+try {
+  setAssignmentLoading(true);
+
+  const token = localStorage.getItem('token');
+
+    const response = await axios.get(
+      `${API_BASE_URL}/project/contractor-assignments/register`,
+      {
+        params: {
+          page,
+          limit: 20,
+          search: search.trim(),
+          ...(expenseForm.projectId
+            ? { projectId: Number(expenseForm.projectId) }
+            : {}),
+        },
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    if (requestId !== assignmentRequestIdRef.current) {
+  return;
+}
+
+    const records: ContractorAssignmentOption[] =
+      Array.isArray(response.data?.data)
+        ? response.data.data
+        : [];
+
+    const total = Number(response.data?.total || 0);
+
+    setAssignmentOptions((previous) => {
+      if (page === 1) {
+        return records;
+      }
+
+      const existingIds = new Set(
+        previous.map((item) => item.id),
+      );
+
+      return [
+        ...previous,
+        ...records.filter(
+          (item) => !existingIds.has(item.id),
+        ),
+      ];
+    });
+
+    setAssignmentTotal(total);
+    setAssignmentPage(page);
+  } catch (error) {
+    if (requestId !== assignmentRequestIdRef.current) {
+  return;
+}
+    console.error(
+      'Failed to fetch contractor assignments:',
+      error,
+    );
+
+    if (page === 1) {
+      setAssignmentOptions([]);
+      setAssignmentTotal(0);
+    }
+  } finally {
+  if (requestId === assignmentRequestIdRef.current) {
+    setAssignmentLoading(false);
+  }
+}
+};
+
+useEffect(() => {
+  if (
+    expenseForm.expenseType !== 'CONTRACTOR_PAYMENT' ||
+    !assignmentDropdownOpen
+  ) {
+    assignmentRequestIdRef.current += 1;
+    setAssignmentLoading(false);
+    return;
+  }
+
+  const timeout = setTimeout(() => {
+    fetchContractorAssignments(
+      assignmentSearch,
+      1,
+    );
+  }, 350);
+
+  return () => {
+  clearTimeout(timeout);
+  assignmentRequestIdRef.current += 1;
+};
+}, [
+  assignmentSearch,
+  assignmentDropdownOpen,
+  expenseForm.projectId,
+  expenseForm.expenseType,
+]);
 
   const [expenses, setExpenses] = useState<any[]>([]);
   const [selectedExpense, setSelectedExpense] = useState<any | null>(null);
@@ -89,6 +234,32 @@ const [expenseTypeFilter, setExpenseTypeFilter] =
 
   const [canApproveExpense, setCanApproveExpense] =
   useState(false);
+  const [
+  canConfirmContractorPayment,
+  setCanConfirmContractorPayment,
+] = useState(false);
+const [settlementPaymentMode, setSettlementPaymentMode] =
+  useState('BANK_TRANSFER');
+
+const [settlementPaymentReference, setSettlementPaymentReference] =
+  useState('');
+
+const [settlementProofUrl, setSettlementProofUrl] =
+  useState('');
+
+const [settlementConfirming, setSettlementConfirming] =
+  useState(false);
+const [settlementExpense, setSettlementExpense] =
+  useState<any | null>(null);
+
+const [settlementPreview, setSettlementPreview] =
+  useState<any | null>(null);
+
+const [settlementLoading, setSettlementLoading] =
+  useState(false);
+
+const [settlementError, setSettlementError] =
+  useState('');
   const [expenseProofUploading, setExpenseProofUploading] = useState(false);
 
 useEffect(() => {
@@ -119,6 +290,12 @@ loadFinanceSummary();
           'PAYMENT_MANAGER',
         ),
     );
+
+    setCanConfirmContractorPayment(
+  roles.includes('OWNER') ||
+    roles.includes('ACCOUNT_MANAGER') ||
+    roles.includes('PAYMENT_MANAGER'),
+);
   }
 } catch (error) {
   console.error(error);
@@ -311,6 +488,19 @@ const createExpense = async () => {
     return;
   }
 
+  if (
+  expenseForm.expenseType === 'CONTRACTOR_PAYMENT' &&
+  (
+    !expenseForm.projectId ||
+    !expenseForm.contractorAssignmentId
+  )
+) {
+  alert(
+    'Please select a project and contractor assignment',
+  );
+  return;
+}
+
   let finalRemarks = expenseForm.remarks;
 
   if (expenseForm.expenseType === 'OTHER') {
@@ -339,7 +529,13 @@ const createExpense = async () => {
       Number(expenseForm.gstAmount || 0),
   remarks: finalRemarks,
   projectId: expenseForm.projectId
-    ? Number(expenseForm.projectId)
+  ? Number(expenseForm.projectId)
+  : null,
+
+contractorAssignmentId:
+  expenseForm.expenseType === 'CONTRACTOR_PAYMENT' &&
+  expenseForm.contractorAssignmentId
+    ? Number(expenseForm.contractorAssignmentId)
     : null,
 },
       {
@@ -373,6 +569,7 @@ const createExpense = async () => {
   paidTo: '',
   branchName: '',
   projectId: '',
+  contractorAssignmentId: '',
   proofUrl: '',
   remarks: '',
 });
@@ -515,6 +712,114 @@ const rejectExpense = async (
       error?.response?.data?.message ||
         'Failed to reject expense',
     );
+  }
+};
+
+const previewContractorPayment = async (expense: any) => {
+  setSettlementExpense(expense);
+  setSettlementPreview(null);
+  setSettlementError('');
+  setSettlementLoading(true);
+
+  try {
+    const token = localStorage.getItem('token');
+
+    const response = await axios.get(
+      `${API_BASE_URL}/project/account-expenses/${expense.id}/contractor-settlement-preview`,
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    if (response.data?.alreadySettled) {
+  setSettlementError(
+    'This contractor payment has already been settled. Duplicate payment confirmation is not allowed.',
+  );
+  setSettlementPreview(null);
+  return;
+}
+
+setSettlementPreview(response.data);
+  } catch (error: any) {
+    setSettlementError(
+      error?.response?.data?.message ||
+        'Unable to calculate contractor payment settlement.',
+    );
+  } finally {
+    setSettlementLoading(false);
+  }
+};
+
+const confirmContractorPayment = async () => {
+  if (!settlementExpense || !settlementPreview) return;
+
+  const netAmount = Number(settlementPreview.netPayable);
+
+  if (!Number.isFinite(netAmount) || netAmount < 0) {
+    alert('Invalid net payment amount');
+    return;
+  }
+
+  if (
+    netAmount > 0 &&
+    (!settlementPaymentMode ||
+      (!settlementPaymentReference.trim() &&
+        !settlementProofUrl.trim()))
+  ) {
+    alert('Enter payment mode and payment reference or proof URL');
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Confirm contractor payment?\n\n` +
+      `Gross: ₹${Number(settlementPreview.grossAmount).toLocaleString('en-IN')}\n` +
+      `Penalty deduction: ₹${Number(settlementPreview.proposedPenaltyDeduction).toLocaleString('en-IN')}\n` +
+      `Net payment: ₹${netAmount.toLocaleString('en-IN')}\n\n` +
+      `This will record the payment and penalty recovery.`,
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setSettlementConfirming(true);
+    setSettlementError('');
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/account-expenses/${settlementExpense.id}/confirm-contractor-payment`,
+      {
+        paymentMode: settlementPaymentMode,
+        paymentReference: settlementPaymentReference.trim(),
+        proofUrl: settlementProofUrl.trim(),
+        netPaidAmount: netAmount,
+      },
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    setSettlementExpense(null);
+    setSettlementPreview(null);
+    setSettlementPaymentReference('');
+    setSettlementProofUrl('');
+
+    await loadExpenses();
+    await loadExpenseSummary();
+    await loadFinanceSummary();
+
+    alert('Contractor payment confirmed and penalty recovery recorded.');
+  } catch (error: any) {
+    setSettlementError(
+      error?.response?.data?.message ||
+        'Contractor payment confirmation failed.',
+    );
+  } finally {
+    setSettlementConfirming(false);
   }
 };
 
@@ -841,12 +1146,21 @@ const estimatedPendingPosition =
   <div className="mt-4 grid gap-3 md:grid-cols-3">
   <select
     value={expenseForm.expenseType}
-    onChange={(e) =>
-      setExpenseForm({
-        ...expenseForm,
-        expenseType: e.target.value,
-      })
-    }
+    onChange={(e) => {
+  const newExpenseType = e.target.value;
+
+  setExpenseForm((previous) => ({
+    ...previous,
+    expenseType: newExpenseType,
+    contractorAssignmentId: '',
+  }));
+
+  setAssignmentSearch('');
+  setAssignmentOptions([]);
+  setAssignmentTotal(0);
+  setAssignmentPage(1);
+  setAssignmentDropdownOpen(false);
+}}
     className="rounded-xl border p-3"
   >
     <option value="MARKET_PURCHASE">Market Purchase</option>
@@ -878,6 +1192,126 @@ const estimatedPendingPosition =
     <option value="CUSTOMER_VISIT">Customer Visit</option>
     <option value="OTHER">Other</option>
   </select>
+
+  {expenseForm.expenseType === 'CONTRACTOR_PAYMENT' && (
+  <div className="relative md:col-span-3">
+    <label className="mb-1 block text-sm font-semibold text-gray-700">
+      Contractor Assignment *
+    </label>
+
+    <input
+      type="text"
+      placeholder="Search contractor, customer, K No, project ID or assignment ID"
+      value={assignmentSearch}
+      onFocus={() => setAssignmentDropdownOpen(true)}
+      onChange={(e) => {
+        setAssignmentSearch(e.target.value);
+        setAssignmentDropdownOpen(true);
+        setExpenseForm((previous) => ({
+          ...previous,
+          contractorAssignmentId: '',
+        }));
+      }}
+      className="w-full rounded-xl border border-gray-400 p-3"
+    />
+
+    {expenseForm.contractorAssignmentId && (
+      <p className="mt-1 text-xs font-semibold text-green-700">
+        Selected Assignment #{expenseForm.contractorAssignmentId}
+      </p>
+    )}
+
+    {assignmentDropdownOpen && (
+      <div className="mt-2 max-h-80 overflow-y-auto rounded-xl border border-gray-300 bg-white p-2 shadow-lg">
+        {assignmentLoading &&
+  assignmentOptions.length === 0 && (
+    <p className="p-2 text-sm text-gray-500">
+      Searching assignments...
+    </p>
+  )}
+
+{!assignmentLoading &&
+  assignmentOptions.length === 0 && (
+            <p className="p-2 text-sm text-gray-500">
+              No matching assignments found.
+            </p>
+          )}
+
+        {assignmentOptions.map((assignment) => (
+          <button
+            key={assignment.id}
+            type="button"
+            onClick={() => {
+              setExpenseForm((previous) => ({
+                ...previous,
+                projectId: String(assignment.projectId),
+                contractorAssignmentId: String(assignment.id),
+              }));
+
+              setAssignmentSearch(
+                `${assignment.contractorName} — ${assignment.project?.customerName || 'Project'} (#${assignment.projectId})`,
+              );
+
+              setAssignmentDropdownOpen(false);
+            }}
+            className="mb-1 w-full rounded-lg border border-gray-200 p-3 text-left hover:bg-blue-50"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-semibold text-gray-900">
+                {assignment.contractorName}
+              </span>
+
+              <span className="text-xs font-semibold text-blue-700">
+                {assignment.status}
+              </span>
+            </div>
+
+            <p className="mt-1 text-sm text-gray-700">
+              {assignment.project?.customerName || 'Customer unavailable'}
+              {' · '}Project #{assignment.projectId}
+            </p>
+
+            <p className="text-xs text-gray-600">
+              K No: {assignment.project?.electricityKNumber || 'N/A'}
+              {' · '}Assignment #{assignment.id}
+            </p>
+
+            <p className="text-xs text-gray-600">
+              {assignment.workScope || 'Work scope unavailable'}
+              {' · '}{assignment.project?.city || 'City unavailable'}
+            </p>
+          </button>
+        ))}
+
+        {assignmentOptions.length < assignmentTotal && (
+          <button
+            type="button"
+            disabled={assignmentLoading}
+            onClick={() =>
+              fetchContractorAssignments(
+                assignmentSearch,
+                assignmentPage + 1,
+              )
+            }
+            className="mt-2 w-full rounded-lg border border-blue-300 p-2 text-sm font-semibold text-blue-700 disabled:opacity-50"
+          >
+            {assignmentLoading
+              ? 'Loading...'
+              : `Load More (${assignmentOptions.length} of ${assignmentTotal})`}
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setAssignmentDropdownOpen(false)}
+          className="mt-2 w-full p-2 text-sm text-gray-500"
+        >
+          Close Results
+        </button>
+      </div>
+    )}
+  </div>
+)}
 
   {expenseForm.expenseType === 'SITE_PURCHASE' && (
   <div>
@@ -1125,17 +1559,34 @@ const estimatedPendingPosition =
   />
 
   <input
-    type="number"
-    placeholder="Project ID (optional)"
-    value={expenseForm.projectId}
-    onChange={(e) =>
-      setExpenseForm({
-        ...expenseForm,
-        projectId: e.target.value,
-      })
+  type="number"
+  placeholder={
+    expenseForm.expenseType === 'CONTRACTOR_PAYMENT'
+      ? 'Project ID (required)'
+      : 'Project ID (optional)'
+  }
+  value={expenseForm.projectId}
+  onChange={(e) => {
+    const newProjectId = e.target.value;
+
+    setExpenseForm((previous) => ({
+      ...previous,
+      projectId: newProjectId,
+      contractorAssignmentId:
+        newProjectId === previous.projectId
+          ? previous.contractorAssignmentId
+          : '',
+    }));
+
+    if (newProjectId !== expenseForm.projectId) {
+      setAssignmentSearch('');
+      setAssignmentOptions([]);
+      setAssignmentTotal(0);
+      setAssignmentPage(1);
     }
-    className="rounded-xl border p-3"
-  />
+  }}
+  className="rounded-xl border p-3"
+/>
 
   <div className="rounded-xl border p-3">
   <p className="mb-2 text-xs font-semibold text-gray-500">
@@ -1599,6 +2050,19 @@ const estimatedPendingPosition =
         </button>
       )}
 
+      {canConfirmContractorPayment &&
+  item.expenseType === 'CONTRACTOR_PAYMENT' &&
+  item.approvalStatus === 'APPROVED' &&
+  item.expenseStatus === 'UNPAID' && (
+    <button
+      type="button"
+      onClick={() => previewContractorPayment(item)}
+      className="rounded bg-purple-700 px-2 py-1 text-xs font-semibold text-white hover:bg-purple-800"
+    >
+      Preview Payment
+    </button>
+  )}
+
     {canApproveExpense && (
       <button
         type="button"
@@ -1819,6 +2283,126 @@ const estimatedPendingPosition =
   </div>
 </div>
       </div>
+
+      {settlementExpense && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold text-gray-900">
+          Contractor Payment Settlement
+        </h2>
+
+        <button
+          type="button"
+          onClick={() => {
+            setSettlementExpense(null);
+            setSettlementPreview(null);
+            setSettlementError('');
+          }}
+          className="rounded-lg border px-3 py-1 text-sm"
+        >
+          Close
+        </button>
+      </div>
+
+      <p className="mt-2 text-sm text-gray-600">
+        Expense #{settlementExpense.id}
+        {' · '}
+        Project #{settlementExpense.projectId || 'N/A'}
+      </p>
+
+      {settlementLoading && (
+        <p className="mt-4 text-sm text-gray-500">
+          Calculating outstanding SLA penalties...
+        </p>
+      )}
+
+      {settlementError && (
+        <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          {settlementError}
+        </p>
+      )}
+
+      {settlementPreview && (
+        <div className="mt-5 space-y-3">
+          {[
+  ['Gross Payment', settlementPreview.grossAmount],
+  ['Outstanding Penalties', settlementPreview.totalOutstandingPenalty],
+  ['Penalty Deduction', settlementPreview.proposedPenaltyDeduction],
+  ['Net Payable', settlementPreview.netPayable],
+].map(([label, amount]) => (
+            <div
+              key={String(label)}
+              className="flex justify-between gap-3 border-b pb-2 text-sm"
+            >
+              <span className="text-gray-600">{label}</span>
+              <span className="font-semibold">
+                ₹{Number(amount || 0).toLocaleString('en-IN')}
+              </span>
+            </div>
+          ))}
+
+          <div className="space-y-3 border-t pt-4">
+  <h3 className="text-sm font-bold text-gray-800">
+    Confirm Actual Contractor Payment
+  </h3>
+
+  <select
+    value={settlementPaymentMode}
+    onChange={(e) => setSettlementPaymentMode(e.target.value)}
+    className="w-full rounded-xl border p-3 text-sm"
+  >
+    <option value="BANK_TRANSFER">Bank Transfer</option>
+    <option value="UPI">UPI</option>
+    <option value="CASH">Cash</option>
+    <option value="CHEQUE">Cheque</option>
+    <option value="OTHER">Other</option>
+  </select>
+
+  <input
+    type="text"
+    placeholder="Payment reference / UTR / transaction ID"
+    value={settlementPaymentReference}
+    onChange={(e) =>
+      setSettlementPaymentReference(e.target.value)
+    }
+    className="w-full rounded-xl border p-3 text-sm"
+  />
+
+  <input
+    type="url"
+    placeholder="Payment proof URL (optional)"
+    value={settlementProofUrl}
+    onChange={(e) => setSettlementProofUrl(e.target.value)}
+    className="w-full rounded-xl border p-3 text-sm"
+  />
+
+  <p className="text-xs text-gray-500">
+    Confirm only after the actual net payment has been made.
+    The backend will recalculate penalties before recording
+    the settlement.
+  </p>
+
+  {canConfirmContractorPayment && (
+    <button
+      type="button"
+      disabled={settlementConfirming || settlementLoading}
+      onClick={confirmContractorPayment}
+      className="w-full rounded-xl bg-green-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
+    >
+      {settlementConfirming
+        ? 'Confirming Payment...'
+        : `Confirm Net Payment ₹${Number(
+            settlementPreview.netPayable || 0,
+          ).toLocaleString('en-IN')}`}
+    </button>
+  )}
+</div>
+        </div>
+      )}
+    </div>
+  </div>
+)}
 
       {selectedExpense && (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
