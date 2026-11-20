@@ -138,6 +138,52 @@ export class MeetingActivityProvider implements AnalyticsActivityProvider {
       [ids, context.fromDate, context.toDate],
     );
 
+        const actionRows = await this.meetingRepository.query(
+      `
+      WITH meeting_history AS (
+        SELECT
+          m.id,
+          COALESCE(m."meetingGroupId", m.id) AS group_id,
+          m.status,
+          m."updatedBy",
+          m."createdAt",
+          LAG(m.status) OVER (
+            PARTITION BY COALESCE(m."meetingGroupId", m.id)
+            ORDER BY m."createdAt", m.id
+          ) AS previous_status
+        FROM meetings m
+      )
+      SELECT
+        COUNT(*) FILTER (
+          WHERE status = 'COMPLETED'
+        ) AS completed_during_period,
+
+        COUNT(*) FILTER (
+          WHERE status = 'CANCELLED'
+        ) AS cancelled_during_period,
+
+        COUNT(*) FILTER (
+          WHERE status = 'CNR'
+        ) AS cnr_during_period,
+
+        COUNT(*) FILTER (
+          WHERE status = 'CONVERTED_TO_PROJECT'
+        ) AS converted_during_period
+
+      FROM meeting_history
+      WHERE previous_status IS NOT NULL
+        AND previous_status IS DISTINCT FROM status
+        AND "updatedBy" = ANY($1::int[])
+        AND "createdAt" BETWEEN $2 AND $3
+      `,
+      [ids, context.fromDate, context.toDate],
+    );
+
+    const action = actionRows[0] || {};
+
+    const actionNum = (key: string) =>
+      Number(action[key] || 0);
+
     const r = rows[0] || {};
     const num = (key: string) => Number(r[key] || 0);
 
@@ -227,6 +273,44 @@ export class MeetingActivityProvider implements AnalyticsActivityProvider {
         description:
           'Conversion indication only; does not confirm project creation.',
       },
+            {
+        key: 'completed_during_period',
+        label: 'Meetings Completed During Period',
+        kind: 'COMPLETED_WORK',
+        value: actionNum('completed_during_period'),
+        unit: 'COUNT',
+        attribution: 'Meeting version updatedBy',
+        timeScope: 'PERIOD',
+      },
+      {
+        key: 'cancelled_during_period',
+        label: 'Meetings Cancelled During Period',
+        kind: 'UPDATED_WORK',
+        value: actionNum('cancelled_during_period'),
+        unit: 'COUNT',
+        attribution: 'Meeting version updatedBy',
+        timeScope: 'PERIOD',
+      },
+      {
+        key: 'cnr_during_period',
+        label: 'CNR Actions During Period',
+        kind: 'UPDATED_WORK',
+        value: actionNum('cnr_during_period'),
+        unit: 'COUNT',
+        attribution: 'Meeting version updatedBy',
+        timeScope: 'PERIOD',
+      },
+      {
+        key: 'converted_during_period',
+        label: 'Meetings Marked Converted During Period',
+        kind: 'PIPELINE',
+        value: actionNum('converted_during_period'),
+        unit: 'COUNT',
+        attribution: 'Meeting version updatedBy',
+        timeScope: 'PERIOD',
+        description:
+          'Recorded conversion-status transitions, not confirmed project creations.',
+      },
       {
         key: 'actual_converted',
         label: 'Meetings Linked to Actual Projects',
@@ -247,7 +331,11 @@ export class MeetingActivityProvider implements AnalyticsActivityProvider {
       hasActivity:
         num('assigned') > 0 ||
         num('created') > 0 ||
-        num('involved') > 0,
+        num('involved') > 0 ||
+        actionNum('completed_during_period') > 0 ||
+        actionNum('cancelled_during_period') > 0 ||
+        actionNum('cnr_during_period') > 0 ||
+        actionNum('converted_during_period') > 0,
     };
   }
 }
