@@ -105,6 +105,15 @@ export class FollowupService {
   ]);
 }
 
+private canManageFollowups(user: any): boolean {
+  return (
+    this.isBroadAccessRole(user) ||
+    this.isSolarStore(user) ||
+    this.isOwnAssignedOnlyRole(user) ||
+    this.isMeetingAssistant(user)
+  );
+}
+
   private getCurrentUserId(user: any): number {
     return Number(user?.id ?? user?.sub);
   }
@@ -341,10 +350,19 @@ if (this.isBroadAccessRole(user)) {
         );
       }
 
+           return followUp;
+    }
+
+    if (
+      followUp.lead &&
+      Number(followUp.lead.createdBy) === currentUserId
+    ) {
       return followUp;
     }
 
-    return followUp;
+    throw new ForbiddenException(
+      'You can only view follow-ups belonging to leads you created',
+    );
   }
 
     async create(data: Partial<FollowUp>, user: any) {
@@ -547,13 +565,20 @@ const sourceModule = String(data.sourceModule || 'FOLLOWUP').toUpperCase();
               currentUserId,
             },
           )
-          .orWhere(
+                    .orWhere(
             'lead.originTelecallerId = :currentUserId',
             {
               currentUserId,
             },
           );
       }),
+    );
+  } else if (!this.isBroadAccessRole(user)) {
+    const currentUserId = this.getCurrentUserId(user);
+
+    qb.andWhere(
+      'lead.createdBy = :creatorUserId',
+      { creatorUserId: currentUserId },
     );
   }
 
@@ -738,7 +763,13 @@ const qb = this.followUpRepository
   async update(id: number, data: Partial<FollowUp>, user: any) {
     const followUp = await this.getAccessibleFollowUp(id, user);
 
-    if (data.note !== undefined) {
+if (!this.canManageFollowups(user)) {
+  throw new ForbiddenException(
+    'You have read-only access to this follow-up',
+  );
+}
+
+if (data.note !== undefined) {
       followUp.note = data.note;
     }
 
@@ -746,7 +777,25 @@ const qb = this.followUpRepository
       followUp.followUpDate = new Date(data.followUpDate);
     }
 
-    if (data.status !== undefined) {
+        if (data.status !== undefined) {
+      const previousStatus = followUp.status;
+
+      if (
+        data.status === FollowUpStatus.COMPLETED &&
+        previousStatus !== FollowUpStatus.COMPLETED
+      ) {
+        followUp.completedBy = Number(user.id);
+        followUp.completedAt = new Date();
+      }
+
+      if (
+        data.status !== FollowUpStatus.COMPLETED &&
+        previousStatus === FollowUpStatus.COMPLETED
+      ) {
+        followUp.completedBy = null;
+        followUp.completedAt = null;
+      }
+
       followUp.status = data.status;
     }
 
@@ -771,7 +820,19 @@ const qb = this.followUpRepository
   async markCompleted(id: number, user: any) {
     const followUp = await this.getAccessibleFollowUp(id, user);
 
+if (!this.canManageFollowups(user)) {
+  throw new ForbiddenException(
+    'You have read-only access to this follow-up',
+  );
+}
+
+    if (followUp.status !== FollowUpStatus.COMPLETED) {
+      followUp.completedBy = Number(user.id);
+      followUp.completedAt = new Date();
+    }
+
     followUp.status = FollowUpStatus.COMPLETED;
+
     return this.followUpRepository.save(followUp);
   }
 

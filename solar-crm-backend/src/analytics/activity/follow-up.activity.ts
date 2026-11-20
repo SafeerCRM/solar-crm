@@ -47,6 +47,7 @@ export class FollowUpActivityProvider
       involved,
       pending,
       completed,
+      completedDuringPeriod,
       missed,
       overdue,
       lead,
@@ -82,10 +83,25 @@ export class FollowUpActivityProvider
         })
         .getCount(),
 
-      assignedQuery()
+            assignedQuery()
         .andWhere('followup.status = :status', {
           status: FollowUpStatus.COMPLETED,
         })
+        .getCount(),
+
+      this.followUpRepository
+        .createQueryBuilder('followup')
+        .where('followup.completedBy IN (:...ids)', { ids })
+        .andWhere('followup.status = :status', {
+          status: FollowUpStatus.COMPLETED,
+        })
+        .andWhere(
+          'followup.completedAt BETWEEN :start AND :end',
+          {
+            start: context.fromDate,
+            end: context.toDate,
+          },
+        )
         .getCount(),
 
       assignedQuery()
@@ -177,6 +193,17 @@ export class FollowUpActivityProvider
         timeScope: 'CURRENT',
         description:
           'Does not prove the assigned employee performed completion.',
+      },
+            {
+        key: 'completed_during_period',
+        label: 'Follow-ups Completed During Period',
+        kind: 'COMPLETED_WORK',
+        value: completedDuringPeriod,
+        unit: 'COUNT',
+        attribution: 'completedBy',
+        timeScope: 'PERIOD',
+        description:
+          'Follow-ups completed by this employee during the selected reporting period.',
       },
       {
         key: 'missed',

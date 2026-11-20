@@ -57,6 +57,12 @@ customerPhone: string;
   @Column({ nullable: true })
   createdBy: number;
 
+    @Column({ type: 'integer', nullable: true })
+  completedBy: number | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  completedAt: Date | null;
+
   @Column({ nullable: true })
   createdByName: string;
 
