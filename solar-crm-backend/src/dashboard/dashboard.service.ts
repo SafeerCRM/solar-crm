@@ -756,7 +756,31 @@ private readonly projectRepository: Repository<Project>,
           AND meeting."meetingCategory" = $5
           AND meeting."updatedAt"
             BETWEEN $7 AND $8
-      ) AS "selfSiteVisitsThisMonth"
+            ) AS "selfSiteVisitsThisMonth",
+
+      COUNT(
+        DISTINCT COALESCE(
+          meeting."meetingGroupId",
+          meeting.id
+        )
+      ) FILTER (
+        WHERE meeting."meetingType" = $1
+          AND meeting."meetingCategory" = $9
+          AND meeting."updatedAt"
+            BETWEEN $2 AND $3
+      ) AS "solarMiterSiteVisitsToday",
+
+      COUNT(
+        DISTINCT COALESCE(
+          meeting."meetingGroupId",
+          meeting.id
+        )
+      ) FILTER (
+        WHERE meeting."meetingType" = $1
+          AND meeting."meetingCategory" = $9
+          AND meeting."updatedAt"
+            BETWEEN $7 AND $8
+      ) AS "solarMiterSiteVisitsThisMonth"
 
     FROM meetings meeting
 
@@ -774,6 +798,107 @@ private readonly projectRepository: Repository<Project>,
       managerIds,
       monthStart,
       monthEnd,
+      MeetingCategory.SOLARMITER,
+    ],
+  );
+
+  /*
+ * Query 2B:
+ * First completed site visit per meeting group.
+ * Completion date comes from the COMPLETED version's createdAt.
+ */
+const completedSiteVisitRows: any[] =
+  await this.meetingRepository.query(
+    `
+    WITH first_completed AS (
+      SELECT DISTINCT ON (
+        COALESCE(
+          meeting."meetingGroupId",
+          meeting.id
+        )
+      )
+        COALESCE(
+          meeting."meetingGroupId",
+          meeting.id
+        ) AS "groupId",
+        meeting."updatedBy" AS "managerId",
+        meeting."meetingCategory" AS "category",
+        meeting."createdAt" AS "completedAt"
+      FROM meetings meeting
+      WHERE meeting."meetingType" = $1
+        AND meeting.status = $2
+      ORDER BY
+        COALESCE(
+          meeting."meetingGroupId",
+          meeting.id
+        ),
+        meeting."createdAt" ASC,
+        meeting.id ASC
+    )
+    SELECT
+      fc."managerId",
+
+      COUNT(*) FILTER (
+        WHERE fc."completedAt"
+          BETWEEN $3 AND $4
+      ) AS "completedSiteVisitsToday",
+
+      COUNT(*) FILTER (
+        WHERE fc."category" = $5
+          AND fc."completedAt"
+            BETWEEN $3 AND $4
+      ) AS "companyCompletedSiteVisitsToday",
+
+      COUNT(*) FILTER (
+        WHERE fc."category" = $6
+          AND fc."completedAt"
+            BETWEEN $3 AND $4
+      ) AS "selfCompletedSiteVisitsToday",
+
+      COUNT(*) FILTER (
+        WHERE fc."category" = $7
+          AND fc."completedAt"
+            BETWEEN $3 AND $4
+      ) AS "solarMiterCompletedSiteVisitsToday",
+
+      COUNT(*) FILTER (
+        WHERE fc."completedAt"
+          BETWEEN $8 AND $9
+      ) AS "completedSiteVisitsThisMonth",
+
+      COUNT(*) FILTER (
+        WHERE fc."category" = $5
+          AND fc."completedAt"
+            BETWEEN $8 AND $9
+      ) AS "companyCompletedSiteVisitsThisMonth",
+
+      COUNT(*) FILTER (
+        WHERE fc."category" = $6
+          AND fc."completedAt"
+            BETWEEN $8 AND $9
+      ) AS "selfCompletedSiteVisitsThisMonth",
+
+      COUNT(*) FILTER (
+        WHERE fc."category" = $7
+          AND fc."completedAt"
+            BETWEEN $8 AND $9
+      ) AS "solarMiterCompletedSiteVisitsThisMonth"
+
+    FROM first_completed fc
+    WHERE fc."managerId" = ANY($10::int[])
+    GROUP BY fc."managerId"
+    `,
+    [
+      MeetingType.SITE_VISIT,
+      MeetingStatus.COMPLETED,
+      start,
+      end,
+      MeetingCategory.COMPANY_MEETING,
+      MeetingCategory.SELF_MEETING,
+      MeetingCategory.SOLARMITER,
+      monthStart,
+      monthEnd,
+      managerIds,
     ],
   );
 
@@ -921,8 +1046,11 @@ private readonly projectRepository: Repository<Project>,
   const assignedMeetingMap =
     createRowMap(assignedMeetingRows);
 
-  const siteVisitMap =
+    const siteVisitMap =
     createRowMap(siteVisitRows);
+
+  const completedSiteVisitMap =
+    createRowMap(completedSiteVisitRows);
 
   const createdMeetingMap =
     createRowMap(createdMeetingRows);
@@ -941,6 +1069,9 @@ private readonly projectRepository: Repository<Project>,
 
     const siteVisits =
       siteVisitMap.get(managerId) || {};
+
+    const completedSiteVisits =
+      completedSiteVisitMap.get(managerId) || {};
 
     const created =
       createdMeetingMap.get(managerId) || {};
@@ -983,6 +1114,39 @@ const companySiteVisitsThisMonth =
 
 const selfSiteVisitsThisMonth =
   toNumber(siteVisits.selfSiteVisitsThisMonth);
+
+  // Solar Miter — Updated Site Visits
+const solarMiterSiteVisitsToday =
+  toNumber(siteVisits.solarMiterSiteVisitsToday);
+
+const solarMiterSiteVisitsThisMonth =
+  toNumber(siteVisits.solarMiterSiteVisitsThisMonth);
+
+// Completed Site Visits — Today
+const completedSiteVisitsToday =
+  toNumber(completedSiteVisits.completedSiteVisitsToday);
+
+const companyCompletedSiteVisitsToday =
+  toNumber(completedSiteVisits.companyCompletedSiteVisitsToday);
+
+const selfCompletedSiteVisitsToday =
+  toNumber(completedSiteVisits.selfCompletedSiteVisitsToday);
+
+const solarMiterCompletedSiteVisitsToday =
+  toNumber(completedSiteVisits.solarMiterCompletedSiteVisitsToday);
+
+// Completed Site Visits — This Month
+const completedSiteVisitsThisMonth =
+  toNumber(completedSiteVisits.completedSiteVisitsThisMonth);
+
+const companyCompletedSiteVisitsThisMonth =
+  toNumber(completedSiteVisits.companyCompletedSiteVisitsThisMonth);
+
+const selfCompletedSiteVisitsThisMonth =
+  toNumber(completedSiteVisits.selfCompletedSiteVisitsThisMonth);
+
+const solarMiterCompletedSiteVisitsThisMonth =
+  toNumber(completedSiteVisits.solarMiterCompletedSiteVisitsThisMonth);
 
     const meetingFormsCreatedToday =
       toNumber(created.meetingFormsCreatedToday);
@@ -1037,13 +1201,29 @@ const selfSiteVisitsThisMonth =
       companyMeetingsToday,
       selfMeetingsToday,
 
+            // Updated Site Visits — Today
       siteVisitsToday,
       companySiteVisitsToday,
       selfSiteVisitsToday,
+      solarMiterSiteVisitsToday,
 
+      // Updated Site Visits — This Month
       siteVisitsThisMonth,
-companySiteVisitsThisMonth,
-selfSiteVisitsThisMonth,
+      companySiteVisitsThisMonth,
+      selfSiteVisitsThisMonth,
+      solarMiterSiteVisitsThisMonth,
+
+      // Completed Site Visits — Today
+      completedSiteVisitsToday,
+      companyCompletedSiteVisitsToday,
+      selfCompletedSiteVisitsToday,
+      solarMiterCompletedSiteVisitsToday,
+
+      // Completed Site Visits — This Month
+      completedSiteVisitsThisMonth,
+      companyCompletedSiteVisitsThisMonth,
+      selfCompletedSiteVisitsThisMonth,
+      solarMiterCompletedSiteVisitsThisMonth,
 
       meetingFormsCreatedToday,
       completedMeetingsToday,
