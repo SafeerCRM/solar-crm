@@ -683,62 +683,99 @@ private readonly projectRepository: Repository<Project>,
    * Site visits based on meeting.updatedBy.
    */
   const siteVisitRows: any[] =
-    await this.meetingRepository.query(
-      `
-      SELECT
-        meeting."updatedBy" AS "managerId",
+  await this.meetingRepository.query(
+    `
+    SELECT
+      meeting."updatedBy" AS "managerId",
 
-        COUNT(
-          DISTINCT COALESCE(
-            meeting."meetingGroupId",
-            meeting.id
-          )
-        ) FILTER (
-          WHERE meeting."meetingType" = $1
-            AND meeting."updatedAt"
-              BETWEEN $2 AND $3
-        ) AS "siteVisitsToday",
+      COUNT(
+        DISTINCT COALESCE(
+          meeting."meetingGroupId",
+          meeting.id
+        )
+      ) FILTER (
+        WHERE meeting."meetingType" = $1
+          AND meeting."updatedAt"
+            BETWEEN $2 AND $3
+      ) AS "siteVisitsToday",
 
-        COUNT(
-          DISTINCT COALESCE(
-            meeting."meetingGroupId",
-            meeting.id
-          )
-        ) FILTER (
-          WHERE meeting."meetingType" = $1
-            AND meeting."meetingCategory" = $4
-            AND meeting."updatedAt"
-              BETWEEN $2 AND $3
-        ) AS "companySiteVisitsToday",
+      COUNT(
+        DISTINCT COALESCE(
+          meeting."meetingGroupId",
+          meeting.id
+        )
+      ) FILTER (
+        WHERE meeting."meetingType" = $1
+          AND meeting."meetingCategory" = $4
+          AND meeting."updatedAt"
+            BETWEEN $2 AND $3
+      ) AS "companySiteVisitsToday",
 
-        COUNT(
-          DISTINCT COALESCE(
-            meeting."meetingGroupId",
-            meeting.id
-          )
-        ) FILTER (
-          WHERE meeting."meetingType" = $1
-            AND meeting."meetingCategory" = $5
-            AND meeting."updatedAt"
-              BETWEEN $2 AND $3
-        ) AS "selfSiteVisitsToday"
+      COUNT(
+        DISTINCT COALESCE(
+          meeting."meetingGroupId",
+          meeting.id
+        )
+      ) FILTER (
+        WHERE meeting."meetingType" = $1
+          AND meeting."meetingCategory" = $5
+          AND meeting."updatedAt"
+            BETWEEN $2 AND $3
+      ) AS "selfSiteVisitsToday",
 
-      FROM meetings meeting
+      COUNT(
+        DISTINCT COALESCE(
+          meeting."meetingGroupId",
+          meeting.id
+        )
+      ) FILTER (
+        WHERE meeting."meetingType" = $1
+          AND meeting."updatedAt"
+            BETWEEN $7 AND $8
+      ) AS "siteVisitsThisMonth",
 
-      WHERE meeting."updatedBy" =
-        ANY($6::int[])
+      COUNT(
+        DISTINCT COALESCE(
+          meeting."meetingGroupId",
+          meeting.id
+        )
+      ) FILTER (
+        WHERE meeting."meetingType" = $1
+          AND meeting."meetingCategory" = $4
+          AND meeting."updatedAt"
+            BETWEEN $7 AND $8
+      ) AS "companySiteVisitsThisMonth",
 
-      GROUP BY meeting."updatedBy"
-      `,
-      [
-        MeetingType.SITE_VISIT,
-        start,
-        end,
-        MeetingCategory.COMPANY_MEETING,
-        MeetingCategory.SELF_MEETING,
-        managerIds,
-      ],
-    );
+      COUNT(
+        DISTINCT COALESCE(
+          meeting."meetingGroupId",
+          meeting.id
+        )
+      ) FILTER (
+        WHERE meeting."meetingType" = $1
+          AND meeting."meetingCategory" = $5
+          AND meeting."updatedAt"
+            BETWEEN $7 AND $8
+      ) AS "selfSiteVisitsThisMonth"
+
+    FROM meetings meeting
+
+    WHERE meeting."updatedBy" =
+      ANY($6::int[])
+
+    GROUP BY meeting."updatedBy"
+    `,
+    [
+      MeetingType.SITE_VISIT,
+      start,
+      end,
+      MeetingCategory.COMPANY_MEETING,
+      MeetingCategory.SELF_MEETING,
+      managerIds,
+      monthStart,
+      monthEnd,
+    ],
+  );
 
   /*
    * Query 3:
@@ -938,6 +975,15 @@ private readonly projectRepository: Repository<Project>,
     const selfSiteVisitsToday =
       toNumber(siteVisits.selfSiteVisitsToday);
 
+      const siteVisitsThisMonth =
+  toNumber(siteVisits.siteVisitsThisMonth);
+
+const companySiteVisitsThisMonth =
+  toNumber(siteVisits.companySiteVisitsThisMonth);
+
+const selfSiteVisitsThisMonth =
+  toNumber(siteVisits.selfSiteVisitsThisMonth);
+
     const meetingFormsCreatedToday =
       toNumber(created.meetingFormsCreatedToday);
 
@@ -994,6 +1040,10 @@ private readonly projectRepository: Repository<Project>,
       siteVisitsToday,
       companySiteVisitsToday,
       selfSiteVisitsToday,
+
+      siteVisitsThisMonth,
+companySiteVisitsThisMonth,
+selfSiteVisitsThisMonth,
 
       meetingFormsCreatedToday,
       completedMeetingsToday,
