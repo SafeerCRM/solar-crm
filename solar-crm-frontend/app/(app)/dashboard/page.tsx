@@ -60,9 +60,27 @@ type MeetingManagerAnalyticsItem = {
   todayMeetings?: number;
   companyMeetingsToday?: number;
   selfMeetingsToday?: number;
+    // Updated Site Visits
   siteVisitsToday?: number;
   companySiteVisitsToday?: number;
   selfSiteVisitsToday?: number;
+  solarMiterSiteVisitsToday?: number;
+
+  siteVisitsThisMonth?: number;
+  companySiteVisitsThisMonth?: number;
+  selfSiteVisitsThisMonth?: number;
+  solarMiterSiteVisitsThisMonth?: number;
+
+  // Completed Site Visits
+  completedSiteVisitsToday?: number;
+  companyCompletedSiteVisitsToday?: number;
+  selfCompletedSiteVisitsToday?: number;
+  solarMiterCompletedSiteVisitsToday?: number;
+
+  completedSiteVisitsThisMonth?: number;
+  companyCompletedSiteVisitsThisMonth?: number;
+  selfCompletedSiteVisitsThisMonth?: number;
+  solarMiterCompletedSiteVisitsThisMonth?: number;
   meetingFormsCreatedToday?: number;
   completedMeetingsToday?: number;
   convertedMeetingsToday?: number;
@@ -848,26 +866,101 @@ useEffect(() => {
                 <p className="text-gray-500">Self Meetings Scheduled Today</p>
                 <p className="text-lg font-bold">{item.selfMeetings}</p>
               </div>
-               <div className="rounded bg-white p-2">
-  <p className="text-gray-500">Site Visits Updated Today</p>
-  <p className="text-lg font-bold text-blue-600">
-    {item.siteVisitsToday || 0}
-  </p>
+               {/* UPDATED SITE VISITS — TODAY */}
+<div className="col-span-full mt-2 border-t pt-3">
+  <h3 className="text-sm font-bold text-gray-800">
+    Updated Site Visits — Today
+  </h3>
 </div>
 
-<div className="rounded bg-white p-2">
-  <p className="text-gray-500">Company Site Visits Updated Today</p>
-  <p className="text-lg font-bold text-indigo-600">
-    {item.companySiteVisitsToday || 0}
-  </p>
+{[
+  ['Total', item.siteVisitsToday, 'text-blue-600'],
+  ['Company', item.companySiteVisitsToday, 'text-indigo-600'],
+  ['Self', item.selfSiteVisitsToday, 'text-purple-600'],
+  ['Solar Miter', item.solarMiterSiteVisitsToday, 'text-amber-600'],
+].map(([label, value, color]) => (
+  <div
+    key={`updated-today-${label}`}
+    className="rounded bg-white p-2"
+  >
+    <p className="text-gray-500">{label} Updated Today</p>
+    <p className={`text-lg font-bold ${color}`}>
+      {Number(value || 0)}
+    </p>
+  </div>
+))}
+
+{/* UPDATED SITE VISITS — THIS MONTH */}
+<div className="col-span-full mt-2 border-t pt-3">
+  <h3 className="text-sm font-bold text-gray-800">
+    Updated Site Visits — This Month
+  </h3>
 </div>
 
-<div className="rounded bg-white p-2">
-  <p className="text-gray-500">Self Site Visits Updated Today</p>
-  <p className="text-lg font-bold text-purple-600">
-    {item.selfSiteVisitsToday || 0}
-  </p>
+{[
+  ['Total', item.siteVisitsThisMonth, 'text-blue-600'],
+  ['Company', item.companySiteVisitsThisMonth, 'text-indigo-600'],
+  ['Self', item.selfSiteVisitsThisMonth, 'text-purple-600'],
+  ['Solar Miter', item.solarMiterSiteVisitsThisMonth, 'text-amber-600'],
+].map(([label, value, color]) => (
+  <div
+    key={`updated-month-${label}`}
+    className="rounded bg-white p-2"
+  >
+    <p className="text-gray-500">{label} Updated This Month</p>
+    <p className={`text-lg font-bold ${color}`}>
+      {Number(value || 0)}
+    </p>
+  </div>
+))}
+
+{/* COMPLETED SITE VISITS — TODAY */}
+<div className="col-span-full mt-2 border-t pt-3">
+  <h3 className="text-sm font-bold text-gray-800">
+    Completed Site Visits — Today
+  </h3>
 </div>
+
+{[
+  ['Total', item.completedSiteVisitsToday, 'text-green-600'],
+  ['Company', item.companyCompletedSiteVisitsToday, 'text-indigo-600'],
+  ['Self', item.selfCompletedSiteVisitsToday, 'text-purple-600'],
+  ['Solar Miter', item.solarMiterCompletedSiteVisitsToday, 'text-amber-600'],
+].map(([label, value, color]) => (
+  <div
+    key={`completed-today-${label}`}
+    className="rounded bg-white p-2"
+  >
+    <p className="text-gray-500">{label} Completed Today</p>
+    <p className={`text-lg font-bold ${color}`}>
+      {Number(value || 0)}
+    </p>
+  </div>
+))}
+
+{/* COMPLETED SITE VISITS — THIS MONTH */}
+<div className="col-span-full mt-2 border-t pt-3">
+  <h3 className="text-sm font-bold text-gray-800">
+    Completed Site Visits — This Month
+  </h3>
+</div>
+
+{[
+  ['Total', item.completedSiteVisitsThisMonth, 'text-green-600'],
+  ['Company', item.companyCompletedSiteVisitsThisMonth, 'text-indigo-600'],
+  ['Self', item.selfCompletedSiteVisitsThisMonth, 'text-purple-600'],
+  ['Solar Miter', item.solarMiterCompletedSiteVisitsThisMonth, 'text-amber-600'],
+].map(([label, value, color]) => (
+  <div
+    key={`completed-month-${label}`}
+    className="rounded bg-white p-2"
+  >
+    <p className="text-gray-500">{label} Completed This Month</p>
+    <p className={`text-lg font-bold ${color}`}>
+      {Number(value || 0)}
+    </p>
+  </div>
+))}
 
 <div className="rounded bg-white p-2">
   <p className="text-gray-500">Company Meetings Created Today</p>
