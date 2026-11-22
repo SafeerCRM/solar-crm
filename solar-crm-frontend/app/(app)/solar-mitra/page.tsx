@@ -689,9 +689,15 @@ const [
   setMitraApprovalStatus,
 ] = useState('');
 
+
 const [
-  mitraPrintingStatus,
-  setMitraPrintingStatus,
+  mitraStandeePrintingStatus,
+  setMitraStandeePrintingStatus,
+] = useState('');
+
+const [
+  mitraPosterPrintingStatus,
+  setMitraPosterPrintingStatus,
 ] = useState('');
 
 const [
@@ -1173,12 +1179,20 @@ const updateMitraShopStatus = async (
 const [updatingBulkPrinting, setUpdatingBulkPrinting] =
   useState(false);
 
+  const [updatingIndividualPrintingId, setUpdatingIndividualPrintingId] =
+  useState<number | null>(null);
+
 
 const updateBulkPrintingStatus = async (
   format: 'POSTER' | 'STANDEE',
   printingStatus: 'PRINTED' | 'UNPRINTED',
 ) => {
-  if (updatingBulkPrinting) return;
+  if (
+  updatingBulkPrinting ||
+  updatingIndividualPrintingId !== null
+) {
+  return;
+}
 
   const selectedIds =
     format === 'POSTER'
@@ -1293,6 +1307,65 @@ const updateBulkPrintingStatus = async (
     }
   } finally {
     setUpdatingBulkPrinting(false);
+  }
+};
+
+
+
+const updateIndividualPrintingStatus = async (
+  item: SolarMitra,
+  format: 'POSTER' | 'STANDEE',
+  printingStatus: 'PRINTED' | 'UNPRINTED',
+) => {
+  if (
+    updatingIndividualPrintingId !== null ||
+    updatingBulkPrinting
+  ) {
+    return;
+  }
+
+  const formatLabel =
+    format === 'POSTER' ? 'Blank Poster' : 'Small Standee';
+
+  const confirmed = window.confirm(
+    `Mark ${item.name}'s ${formatLabel} as ${printingStatus}?`,
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setUpdatingIndividualPrintingId(item.id);
+
+    const response = await axios.post(
+      `${API_BASE_URL}/solar-mitra/printing-status/bulk`,
+      {
+        format,
+        printingStatus,
+        mitraIds: [item.id],
+      },
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    if (Number(response.data?.updatedCount ?? 0) !== 1) {
+      throw new Error(
+        'The printing status was not updated. Please refresh and retry.',
+      );
+    }
+
+    await loadMitras();
+
+    alert(`${formatLabel} marked as ${printingStatus}.`);
+  } catch (error) {
+    alert(
+      getErrorMessage(
+        error,
+        'Failed to update printing status',
+      ),
+    );
+  } finally {
+    setUpdatingIndividualPrintingId(null);
   }
 };
 
@@ -1836,12 +1909,22 @@ try {
       return false;
     }
 
+
     if (
-      mitraPrintingStatus &&
-      (item.printingStatus || 'UNPRINTED') !== mitraPrintingStatus
-    ) {
-      return false;
-    }
+  mitraStandeePrintingStatus &&
+  (item.standeePrintingStatus || 'UNPRINTED') !==
+    mitraStandeePrintingStatus
+) {
+  return false;
+}
+
+if (
+  mitraPosterPrintingStatus &&
+  (item.posterPrintingStatus || 'UNPRINTED') !==
+    mitraPosterPrintingStatus
+) {
+  return false;
+}
 
     if (
   mitraShopStatus &&
@@ -1908,7 +1991,8 @@ try {
   mitraIdTo,
   mitraStatus,
   mitraInterestStatus,
-  mitraPrintingStatus,
+  mitraStandeePrintingStatus,
+mitraPosterPrintingStatus,
   mitraShopStatus,
   mitraCreatedBy,
   mitraDateFilterType,
@@ -2130,9 +2214,17 @@ if (mitraApprovalStatus) {
 }
 
 if (
-  mitraPrintingStatus &&
-  (item.printingStatus || 'UNPRINTED') !==
-    mitraPrintingStatus
+  mitraStandeePrintingStatus &&
+  (item.standeePrintingStatus || 'UNPRINTED') !==
+    mitraStandeePrintingStatus
+) {
+  return false;
+}
+
+if (
+  mitraPosterPrintingStatus &&
+  (item.posterPrintingStatus || 'UNPRINTED') !==
+    mitraPosterPrintingStatus
 ) {
   return false;
 }
@@ -2236,7 +2328,8 @@ if (mitraDateFilterType !== 'ALL') {
   mitraStatus,
   mitraInterestStatus,
   mitraApprovalStatus,
-  mitraPrintingStatus,
+  mitraStandeePrintingStatus,
+mitraPosterPrintingStatus,
   mitraShopStatus,
   mitraPosterVerificationStatus,
   mitraCreatedBy,
@@ -5866,24 +5959,40 @@ const exportSolarReferralsCsv = async (
 </select>
 
             <select
-              value={mitraPrintingStatus}
-              onChange={(event) =>
-                setMitraPrintingStatus(
-                  event.target.value,
-                )
-              }
-              className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
-            >
-              <option value="">
-                All Printing Status
-              </option>
-              <option value="UNPRINTED">
-                Unprinted
-              </option>
-              <option value="PRINTED">
-                Printed
-              </option>
-            </select>
+  value={mitraStandeePrintingStatus}
+  onChange={(event) =>
+    setMitraStandeePrintingStatus(event.target.value)
+  }
+  className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
+>
+  <option value="">
+    All Small Standee Printing
+  </option>
+  <option value="UNPRINTED">
+    Small Standee — Unprinted
+  </option>
+  <option value="PRINTED">
+    Small Standee — Printed
+  </option>
+</select>
+
+<select
+  value={mitraPosterPrintingStatus}
+  onChange={(event) =>
+    setMitraPosterPrintingStatus(event.target.value)
+  }
+  className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
+>
+  <option value="">
+    All Blank Poster Printing
+  </option>
+  <option value="UNPRINTED">
+    Blank Poster — Unprinted
+  </option>
+  <option value="PRINTED">
+    Blank Poster — Printed
+  </option>
+</select>
 
             <select
   value={mitraPosterVerificationStatus}
@@ -5944,7 +6053,8 @@ const exportSolarReferralsCsv = async (
     setMitraCreatedBy('');
     setMitraInterestStatus('');
     setMitraApprovalStatus('');
-    setMitraPrintingStatus('');
+    setMitraStandeePrintingStatus('');
+setMitraPosterPrintingStatus('');
     setMitraShopStatus('');
     setMitraPosterVerificationStatus('');
     setMitraDateFilterType('ALL');
@@ -6912,54 +7022,86 @@ const exportSolarReferralsCsv = async (
     </div>
   )}
 
-  {/* QR Poster Printing */}
+  {/* Independent Standee and Poster Printing */}
+<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+  {/* Small Standee */}
   <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-3">
     <p className="text-xs font-bold text-gray-700">
-      🖨️ QR Poster Printing
+      🖨️ Small Standee (4 × 6)
     </p>
 
     <div className="mt-2">
       <StatusBadge
-        value={item.printingStatus || 'UNPRINTED'}
+        value={item.standeePrintingStatus || 'UNPRINTED'}
       />
     </div>
 
     {isOwner || isFranchiseHead ? (
       <select
-        value={item.printingStatus || 'UNPRINTED'}
-        disabled={updatingMitraStatusId !== null}
+        value={item.standeePrintingStatus || 'UNPRINTED'}
+        disabled={
+          updatingIndividualPrintingId !== null ||
+          updatingBulkPrinting
+        }
         onChange={(event) =>
-          updateMitraVerificationStatus(
+          void updateIndividualPrintingStatus(
             item,
-            'printingStatus',
-            event.target.value,
+            'STANDEE',
+            event.target.value as 'PRINTED' | 'UNPRINTED',
           )
         }
         className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
       >
-        <option value="UNPRINTED">
-          Unprinted
-        </option>
-        <option value="PRINTED">
-          Printed
-        </option>
+        <option value="UNPRINTED">Unprinted</option>
+        <option value="PRINTED">Printed</option>
       </select>
     ) : (
       <p className="mt-3 text-xs text-gray-500">
         Managed by Solar Mitra Head
       </p>
     )}
+  </div>
 
-    {item.printingUpdatedAt && (
-      <p className="mt-2 text-xs text-gray-500">
-        Updated by{' '}
-        {item.printingUpdatedByName ||
-          `User #${item.printingUpdatedBy || '—'}`}
-        {' • '}
-        {formatDate(item.printingUpdatedAt)}
+  {/* Blank Poster */}
+  <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3">
+    <p className="text-xs font-bold text-gray-700">
+      🖨️ Blank Poster (11 × 17)
+    </p>
+
+    <div className="mt-2">
+      <StatusBadge
+        value={item.posterPrintingStatus || 'UNPRINTED'}
+      />
+    </div>
+
+    {isOwner || isFranchiseHead ? (
+      <select
+        value={item.posterPrintingStatus || 'UNPRINTED'}
+        disabled={
+          updatingIndividualPrintingId !== null ||
+          updatingBulkPrinting
+        }
+        onChange={(event) =>
+          void updateIndividualPrintingStatus(
+            item,
+            'POSTER',
+            event.target.value as 'PRINTED' | 'UNPRINTED',
+          )
+        }
+        className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+      >
+        <option value="UNPRINTED">Unprinted</option>
+        <option value="PRINTED">Printed</option>
+      </select>
+    ) : (
+      <p className="mt-3 text-xs text-gray-500">
+        Managed by Solar Mitra Head
       </p>
     )}
   </div>
+
+</div>
 </div>
 
                   {item.address && (
