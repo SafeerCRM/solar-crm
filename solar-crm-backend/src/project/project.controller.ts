@@ -1464,15 +1464,6 @@ resumeContractorSlaWork(
 }
 
 @Roles('OWNER')
-@Post('solar-mitra/reconcile-historical-payouts')
-reconcileHistoricalSolarMitraPayouts(
-  @CurrentUser() user: any,
-) {
-  return this.projectService
-    .reconcileHistoricalSolarMitraPayouts(user);
-}
-
-@Roles('OWNER')
 @Get('contractor-sla/settings')
 getContractorSlaSettings(
   @CurrentUser() user: any,
