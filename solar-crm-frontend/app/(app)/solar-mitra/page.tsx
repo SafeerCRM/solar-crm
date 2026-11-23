@@ -6112,7 +6112,7 @@ setMitraPosterPrintingStatus('');
         color: 'border-gray-200 bg-gray-50 text-gray-900',
       },
       {
-        label: 'Interested – Pending Approval',
+        label: 'Interested – Solar Mitra Pending Approval',
         count: approvalVerificationCounts.pending,
         status: 'PENDING',
         color: 'border-amber-200 bg-amber-50 text-amber-800',
