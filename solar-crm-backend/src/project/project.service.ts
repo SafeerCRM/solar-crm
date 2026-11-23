@@ -4616,11 +4616,16 @@ if (
 async reconcileHistoricalSolarMitraPayouts(
   user: any,
 ) {
-  if (user?.role !== 'OWNER') {
-    throw new ForbiddenException(
-      'Only Owner can reconcile Solar Mitra payouts',
-    );
-  }
+  const isOwner =
+  user?.role === 'OWNER' ||
+  (Array.isArray(user?.roles) &&
+    user.roles.includes('OWNER'));
+
+if (!isOwner) {
+  throw new ForbiddenException(
+    'Only Owner can reconcile Solar Mitra payouts',
+  );
+}
 
   /*
    * Fixed historical Project allowlist.
