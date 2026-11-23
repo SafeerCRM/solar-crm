@@ -3459,7 +3459,7 @@ private async sendCustomerProjectUpdateWhatsapp(
       );
       return;
     }
-    
+
     const customerPhone = String(
       project?.customerPhone || '',
     ).trim();
@@ -49322,6 +49322,24 @@ if (
         user?.email ||
         '',
     });
+}
+
+/*
+ * Customer WhatsApp — Subsidy Submission Done.
+ * Send only when the subsidy status changes
+ * to SUBMISSION_DONE.
+ */
+if (
+  currentSubsidyStatus ===
+    ProjectSubsidyStatus.SUBMISSION_DONE &&
+  previousSubsidyStatus !==
+    ProjectSubsidyStatus.SUBMISSION_DONE
+) {
+  await this.sendCustomerProjectUpdateWhatsapp(
+    project,
+    'Your solar project subsidy submission has been completed successfully.',
+    `subsidy-submission-done-${savedDetail.id}`,
+  );
 }
 
 /*
