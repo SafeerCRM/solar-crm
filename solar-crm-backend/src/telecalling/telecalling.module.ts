@@ -10,9 +10,11 @@ import { User } from '../users/user.entity';
 import { ContactCallHistory } from './contact-call-history.entity';
 import { ContactNote } from './contact-note.entity';
 import { Meeting } from '../meeting/meeting.entity';
+import { LeadsModule } from '../leads/leads.module';
 
 @Module({
   imports: [
+    LeadsModule,
     TypeOrmModule.forFeature([
       CallLog,
       Meeting,

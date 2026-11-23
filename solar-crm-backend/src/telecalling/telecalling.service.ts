@@ -31,6 +31,7 @@ import { Meeting } from '../meeting/meeting.entity';
 import { Cron } from '@nestjs/schedule';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
+import { LeadsService } from '../leads/leads.service';
 
 type RecycleContactFilters = {
   fromTelecallerId: number;
@@ -97,6 +98,8 @@ private readonly meetingRepository: Repository<Meeting>,
 
     @InjectRepository(ContactNote)
     private readonly contactNoteRepository: Repository<ContactNote>,
+
+    private readonly leadsService: LeadsService,
 
   ) {}
 
@@ -2809,9 +2812,12 @@ const finalLeadRemarks = latestContext
     status: LeadStatus.NEW,
     potentialPercentage: potentialPercentage || 50,
     remarks: finalLeadRemarks,
-  } as any);
+  } as Partial<Lead>);
 
-  const savedLead = await this.leadRepository.save(lead);
+  const savedLead =
+  await this.leadsService.createLeadWithDuplicateProtection(
+    lead,
+  );
 
   contact.convertedToLead = true;
 contact.status = ContactStatus.CONVERTED;
@@ -2902,26 +2908,88 @@ const finalMeetingNotes = latestContext
   ? `${latestContext}\n${cleanNote}`
   : cleanNote;
 
-  let lead = await this.leadRepository.findOne({
-    where: { phone: normalizedPhone },
-  });
+  let lead = await this.leadRepository
+  .createQueryBuilder('lead')
+  .where(
+    `RIGHT(
+      REGEXP_REPLACE(
+        COALESCE(lead.phone, ''),
+        '[^0-9]',
+        '',
+        'g'
+      ),
+      10
+    ) = :phone`,
+    { phone: normalizedPhone },
+  )
+  .orderBy('lead.id', 'ASC')
+  .getOne();
 
   if (!lead) {
-    lead = await this.leadRepository.save({
-      name: contact.name,
-      phone: normalizedPhone,
-      city: contact.city || '',
-      address: contact.address || contact.location || contact.city || '',
-      source: 'TELECALLING',
-      assignedTo: meetingManager.id,
-      createdBy: user.id,
-      createdByName: user.name,
-      originTelecallerId: contact.assignedTo,
-      originTelecallerName:
-        contact.assignedToName || `User ${contact.assignedTo || ''}`,
-      status: LeadStatus.NEW,
-    } as any);
-  } else {
+  const newLeadData: Partial<Lead> = {
+    name: contact.name,
+    phone: normalizedPhone,
+    city: contact.city || '',
+    address:
+      contact.address ||
+      contact.location ||
+      contact.city ||
+      '',
+    source: 'TELECALLING',
+    assignedTo: meetingManager.id,
+    createdBy: user.id,
+    createdByName: user.name,
+    originTelecallerId: contact.assignedTo,
+    originTelecallerName:
+      contact.assignedToName ||
+      `User ${contact.assignedTo || ''}`,
+    status: LeadStatus.NEW,
+  };
+
+  try {
+    lead =
+      await this.leadsService
+        .createLeadWithDuplicateProtection(
+          newLeadData,
+        );
+  } catch (error) {
+    /*
+     * Another request may have created this Lead
+     * after our initial lookup.
+     *
+     * Only recover from the known duplicate-phone
+     * conflict. Other errors must propagate.
+     */
+    if (
+      !(error instanceof BadRequestException) ||
+      error.message !==
+        'Lead with this number already exists.'
+    ) {
+      throw error;
+    }
+
+    lead = await this.leadRepository
+      .createQueryBuilder('lead')
+      .where(
+        `RIGHT(
+          REGEXP_REPLACE(
+            COALESCE(lead.phone, ''),
+            '[^0-9]',
+            '',
+            'g'
+          ),
+          10
+        ) = :phone`,
+        { phone: normalizedPhone },
+      )
+      .orderBy('lead.id', 'ASC')
+      .getOne();
+
+    if (!lead) {
+      throw error;
+    }
+  }
+} else {
     const updatedLeadRemarks = lead.remarks
       ? `${lead.remarks}\nMeeting reassigned by ${user.name}`
       : `Meeting reassigned by ${user.name}`;

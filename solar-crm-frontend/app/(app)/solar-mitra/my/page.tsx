@@ -446,19 +446,45 @@ setBankIfscCode(
       });
   }, [publicReferralUrl]);
 
-  const payoutByReferralId =
-    useMemo(() => {
-      const map = new Map<number, Payout>();
+  const payoutsByReferralId = useMemo(() => {
+  const map = new Map<number, Payout[]>();
 
-      for (const payout of payouts) {
-        map.set(
-          Number(payout.referralId),
-          payout,
-        );
-      }
+  for (const payout of payouts) {
+    const referralId = Number(payout.referralId);
+    const existing = map.get(referralId) || [];
 
-      return map;
-    }, [payouts]);
+    existing.push(payout);
+    map.set(referralId, existing);
+  }
+
+  return map;
+}, [payouts]);
+
+const payoutByReferralId = useMemo(() => {
+  const map = new Map<number, Payout>();
+
+  const priority: Record<string, number> = {
+    PAID: 3,
+    ELIGIBLE: 2,
+    WAITING: 1,
+    CANCELLED: 0,
+  };
+
+  for (const [referralId, referralPayouts] of
+    payoutsByReferralId.entries()) {
+    const highest = [...referralPayouts].sort(
+      (a, b) =>
+        (priority[b.status] ?? -1) -
+        (priority[a.status] ?? -1),
+    )[0];
+
+    if (highest) {
+      map.set(referralId, highest);
+    }
+  }
+
+  return map;
+}, [payoutsByReferralId]);
 
   const getDisplayStatus = (
     referral: Referral,
@@ -1751,6 +1777,31 @@ const handleQrFile = async (
                     ),
                   );
 
+                  const referralPayouts =
+  payoutsByReferralId.get(
+    Number(referral.id),
+  ) || [];
+
+const activePayouts =
+  referralPayouts.filter(
+    (item) => item.status !== 'CANCELLED',
+  );
+
+const projectIds = [
+  ...new Set(
+    referralPayouts
+      .map((item) => Number(item.projectId))
+      .filter((id) => Number.isInteger(id) && id > 0),
+  ),
+];
+
+const totalPayoutAmount =
+  activePayouts.reduce(
+    (sum, item) =>
+      sum + Number(item.payoutAmount || 0),
+    0,
+  );
+
                 return (
                   <article
                     key={referral.id}
@@ -1812,28 +1863,34 @@ const handleQrFile = async (
                       />
 
                       <InfoBox
-                        label="Project"
-                        value={
-                          referral.linkedProjectId
-                            ? `#${referral.linkedProjectId}`
-                            : '—'
-                        }
-                      />
+  label={
+    projectIds.length > 1
+      ? 'Projects'
+      : 'Project'
+  }
+  value={
+    projectIds.length > 0
+      ? projectIds.map((id) => `#${id}`).join(', ')
+      : referral.linkedProjectId
+        ? `#${referral.linkedProjectId}`
+        : '—'
+  }
+/>
 
-                      <InfoBox
-                        label="Payout"
-                        value={
-                          payout
-                            ? formatMoney(
-                                payout.payoutAmount,
-                              )
-                            : referral.payoutAmountSnapshot
-                              ? formatMoney(
-                                  referral.payoutAmountSnapshot,
-                                )
-                              : '—'
-                        }
-                      />
+<InfoBox
+  label={
+    activePayouts.length > 0
+      ? `Total Project Payouts (${activePayouts.length})`
+      : 'Potential Payout Per Project'
+  }
+  value={
+    activePayouts.length > 0
+      ? formatMoney(totalPayoutAmount)
+      : referral.payoutAmountSnapshot
+        ? formatMoney(referral.payoutAmountSnapshot)
+        : '—'
+  }
+/>
                     </div>
 
                     {referral.remarks && (

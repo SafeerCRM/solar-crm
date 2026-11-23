@@ -29,19 +29,23 @@ export class SolarMitraPayout {
   @Column({ type: 'text', nullable: true })
   solarMitraBusinessName: string;
 
-  /*
-   * One payout belongs to one referral.
-   *
-   * unique prevents accidentally creating two payout records
-   * for the same Solar Mitra referral.
-   */
-  @Index({ unique: true })
-  @Column()
-  referralId: number;
 
-  @Index()
-  @Column({ nullable: true })
-  projectId: number;
+/*
+ * One referral can generate payouts for
+ * multiple legitimate customer Projects.
+ */
+@Index()
+@Column()
+referralId: number;
+
+/*
+ * Each Project can have only one
+ * Solar Mitra payout.
+ */
+@Index({ unique: true })
+@Column({ nullable: true })
+projectId: number;
+
 
   @Column({ type: 'text', nullable: true })
   customerName: string;

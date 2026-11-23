@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
+  DataSource,
+  EntityManager,
   In,
   Repository,
   SelectQueryBuilder,
@@ -47,7 +49,110 @@ private readonly solarStoreRepository: Repository<SolarStore>,
 
   @InjectRepository(LeadStorage)
   private readonly leadStorageRepository: Repository<LeadStorage>,
+
+  private readonly dataSource: DataSource,
 ) {}
+
+private normalizeLeadPhone(value: unknown): string {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return digits.length > 10 ? digits.slice(-10) : digits;
+}
+
+async createLeadWithDuplicateProtection(
+  data: Partial<Lead>,
+  storageId?: number,
+  storageAssignedTo?: number,
+  existingManager?: EntityManager,
+): Promise<Lead> {
+  const phone = this.normalizeLeadPhone(data.phone);
+
+  if (phone.length !== 10) {
+    throw new BadRequestException(
+      'Valid 10 digit customer phone is required',
+    );
+  }
+
+  const execute = async (
+  manager: EntityManager,
+): Promise<Lead> => {
+    /*
+     * Serialize cooperating Lead creation requests
+     * for the same normalized customer phone.
+     *
+     * The lock is released automatically when the
+     * transaction commits or rolls back.
+     */
+    await manager.query(
+      `SELECT pg_advisory_xact_lock(
+        hashtext($1),
+        hashtext($2)
+      )`,
+      ['CRM_LEAD_PHONE', phone],
+    );
+
+    const existing = await manager
+      .getRepository(Lead)
+      .createQueryBuilder('lead')
+      .where(
+        `RIGHT(
+          REGEXP_REPLACE(
+            COALESCE(lead.phone, ''),
+            '[^0-9]',
+            '',
+            'g'
+          ),
+          10
+        ) = :phone`,
+        { phone },
+      )
+      .getOne();
+
+    if (existing) {
+      throw new BadRequestException(
+        'Lead with this number already exists.',
+      );
+    }
+
+    const lead = manager.getRepository(Lead).create({
+      ...data,
+      phone,
+    });
+
+    const savedLead = await manager
+  .getRepository(Lead)
+  .save(lead);
+
+if (storageId !== undefined) {
+  const result = await manager
+    .getRepository(LeadStorage)
+    .createQueryBuilder()
+    .update(LeadStorage)
+    .set({
+  isConverted: true,
+  ...(storageAssignedTo !== undefined
+    ? { assignedTo: storageAssignedTo }
+    : {}),
+})
+    .where('id = :storageId', { storageId })
+    .andWhere('"isConverted" = false')
+    .execute();
+
+  if (result.affected !== 1) {
+    throw new BadRequestException(
+      'Storage Lead already converted or unavailable',
+    );
+  }
+}
+
+    return savedLead;
+  };
+
+  if (existingManager) {
+    return execute(existingManager);
+  }
+
+  return this.dataSource.transaction(execute);
+}
 
   private getRoles(user: any): string[] {
     if (Array.isArray(user?.roles)) {
@@ -400,8 +505,7 @@ let leadData: Partial<Lead> = {
   };
 }
 
-    const lead = this.leadRepository.create(leadData);
-    return this.leadRepository.save(lead);
+    return this.createLeadWithDuplicateProtection(leadData);
   }
 
   async createSolarMitraLead(
@@ -473,14 +577,9 @@ let leadData: Partial<Lead> = {
         : 15,
   };
 
-  const lead =
-    this.leadRepository.create(
-      leadData,
-    );
-
-  return this.leadRepository.save(
-    lead,
-  );
+  return this.createLeadWithDuplicateProtection(
+  leadData,
+);
 }
 
   async getLeadManagerLeadCount(userId: number, user: any) {
@@ -2119,51 +2218,71 @@ async assignStorageLeadsByCount(
     return { message: 'No storage leads available for selected filter' };
   }
 
-  // CHECK EXISTING LEADS (avoid duplicates)
-  const phones = storageLeads.map((s) => s.phone);
+    let createdCount = 0;
+  let skippedCount = 0;
 
-  const existingLeads = await this.leadRepository.find({
-    where: { phone: In(phones) },
-  });
+  const processedPhones = new Set<string>();
 
-  const existingPhoneSet = new Set(existingLeads.map((l) => l.phone));
+  for (const storage of storageLeads) {
+    const phone = this.normalizeLeadPhone(
+      storage.phone,
+    );
 
-  const newLeads = storageLeads.filter(
-    (s) => !existingPhoneSet.has(s.phone),
-  );
+    // Skip invalid numbers and duplicates
+    // within the same storage batch.
+    if (
+      phone.length !== 10 ||
+      processedPhones.has(phone)
+    ) {
+      skippedCount++;
+      continue;
+    }
 
-  if (!newLeads.length) {
-    return { message: 'All selected storage leads already exist in leads' };
-  }
+    processedPhones.add(phone);
 
-  // CREATE LEADS
-  const leadEntities = newLeads.map((s) =>
-    this.leadRepository.create({
-      name: s.name,
-      phone: s.phone,
-      city: s.city,
-      zone: s.zone,
-      address: s.address,
+    const leadData: Partial<Lead> = {
+      name: storage.name,
+      phone,
+      city: storage.city,
+      zone: storage.zone,
+      address: storage.address,
       source: 'STORAGE_IMPORT',
       assignedTo,
       createdBy: this.getCurrentUserId(user),
       createdByName: this.getCurrentUserName(user),
       status: LeadStatus.NEW,
-    }),
-  );
+    };
 
-  await this.leadRepository.save(leadEntities);
+    try {
+      await this.createLeadWithDuplicateProtection(
+  leadData,
+  storage.id,
+);
 
-  // MARK STORAGE AS CONVERTED
-  const ids = newLeads.map((s) => s.id);
+createdCount++;
+    } catch (error) {
+      if (
+        error instanceof BadRequestException &&
+        error.message ===
+          'Lead with this number already exists.'
+      ) {
+        skippedCount++;
+        continue;
+      }
 
-  await this.leadStorageRepository.update(ids, {
-    isConverted: true,
-  });
+      // Unexpected errors must not be silently ignored.
+      throw error;
+    }
+  }
+
+
 
   return {
-    message: `Assigned ${leadEntities.length} storage leads successfully`,
+    message:
+      `Assigned ${createdCount} storage leads successfully`,
     assignedTo,
+    createdCount,
+    skippedCount,
   };
 }
 
@@ -2473,102 +2592,143 @@ async assignStorageLeads(
   };
 }
 
+
 async convertStorageToLeads(
   body: { contactIds: number[]; assignedTo?: number },
   user: any,
 ) {
   if (!this.isOwner(user)) {
-    throw new ForbiddenException('Only owner can convert storage to leads');
-  }
-
-  const storageIds = Array.isArray(body?.contactIds)
-    ? body.contactIds.map(Number).filter((id) => Number.isFinite(id) && id > 0)
-    : [];
-
-  if (!storageIds.length) {
-    throw new BadRequestException('No storage leads selected');
-  }
-
-  const storageItems = await this.leadStorageRepository.find({
-    where: {
-      id: In(storageIds),
-      isConverted: false,
-    },
-  });
-
-  if (!storageItems.length) {
-    throw new BadRequestException('No valid storage leads found');
-  }
-
-  const currentUserId = this.getCurrentUserId(user);
-  const currentUserName = this.getCurrentUserName(user);
-
-  const phones = storageItems.map((item) => item.phone).filter(Boolean);
-
-  const existingLeads = phones.length
-    ? await this.leadRepository.find({
-        where: {
-          phone: In(phones),
-        },
-      })
-    : [];
-
-  const existingPhoneSet = new Set(existingLeads.map((lead) => lead.phone));
-
-  const leadsToCreate = storageItems
-    .filter((item) => item.phone && !existingPhoneSet.has(item.phone))
-    .map((item) => {
-      const potentialPercentage =
-        item.leadPotential === LeadStoragePotential.HIGH
-          ? 75
-          : item.leadPotential === LeadStoragePotential.MEDIUM
-          ? 50
-          : 15;
-
-      return this.leadRepository.create({
-        name: item.name || 'Unknown',
-        phone: item.phone,
-        alternatePhone: item.alternatePhone || undefined,
-        email: item.email || undefined,
-        city: item.city || undefined,
-        state: item.state || undefined,
-        zone: item.zone || undefined,
-        region: item.region || undefined,
-        address: item.address || undefined,
-        source: item.source || 'LEAD_STORAGE',
-        assignedTo: body.assignedTo ? Number(body.assignedTo) : undefined,
-        createdBy: currentUserId,
-        createdByName: currentUserName,
-        potential: item.leadPotential as any,
-        potentialPercentage,
-        status: LeadStatus.NEW,
-        remarks: item.remarks || undefined,
-      });
-    });
-
-  if (!leadsToCreate.length) {
-    throw new BadRequestException(
-      'Selected storage leads already exist as active leads or have invalid phone numbers',
+    throw new ForbiddenException(
+      'Only owner can convert storage to leads',
     );
   }
 
-  const savedLeads = await this.leadRepository.save(leadsToCreate);
+  const storageIds = Array.isArray(body?.contactIds)
+    ? [
+        ...new Set(
+          body.contactIds
+            .map(Number)
+            .filter(
+              (id) =>
+                Number.isSafeInteger(id) && id > 0,
+            ),
+        ),
+      ]
+    : [];
 
-  await this.leadStorageRepository.update(
-    {
-      id: In(storageItems.map((item) => item.id)),
-    },
-    {
-      isConverted: true,
-      assignedTo: body.assignedTo ? Number(body.assignedTo) : undefined,
-    },
-  );
+  if (!storageIds.length) {
+    throw new BadRequestException(
+      'No storage leads selected',
+    );
+  }
+
+  const storageItems =
+    await this.leadStorageRepository.find({
+      where: {
+        id: In(storageIds),
+        isConverted: false,
+      },
+    });
+
+  if (!storageItems.length) {
+    throw new BadRequestException(
+      'No valid storage leads found',
+    );
+  }
+
+  const currentUserId =
+    this.getCurrentUserId(user);
+
+  const currentUserName =
+    this.getCurrentUserName(user);
+
+  let createdCount = 0;
+  let skippedCount = 0;
+
+  const processedPhones = new Set<string>();
+
+  for (const item of storageItems) {
+    const phone = this.normalizeLeadPhone(
+      item.phone,
+    );
+
+    if (
+      phone.length !== 10 ||
+      processedPhones.has(phone)
+    ) {
+      skippedCount++;
+      continue;
+    }
+
+    processedPhones.add(phone);
+
+    const potentialPercentage =
+      item.leadPotential ===
+      LeadStoragePotential.HIGH
+        ? 75
+        : item.leadPotential ===
+            LeadStoragePotential.MEDIUM
+          ? 50
+          : 15;
+
+    const leadData: Partial<Lead> = {
+      name: item.name || 'Unknown',
+      phone,
+      alternatePhone:
+        item.alternatePhone || undefined,
+      email: item.email || undefined,
+      city: item.city || undefined,
+      state: item.state || undefined,
+      zone: item.zone || undefined,
+      region: item.region || undefined,
+      address: item.address || undefined,
+      source: item.source || 'LEAD_STORAGE',
+      assignedTo: body.assignedTo
+        ? Number(body.assignedTo)
+        : undefined,
+      createdBy: currentUserId,
+      createdByName: currentUserName,
+      potential: item.leadPotential as any,
+      potentialPercentage,
+      status: LeadStatus.NEW,
+      remarks: item.remarks || undefined,
+    };
+
+    try {
+      await this.createLeadWithDuplicateProtection(
+  leadData,
+  item.id,
+  body.assignedTo
+    ? Number(body.assignedTo)
+    : undefined,
+);
+
+      createdCount++;
+    } catch (error) {
+      if (
+        error instanceof BadRequestException &&
+        (
+          error.message ===
+            'Lead with this number already exists.' ||
+          error.message ===
+            'Storage Lead already converted or unavailable'
+        )
+      ) {
+        skippedCount++;
+        continue;
+      }
+
+      throw error;
+    }
+  }
 
   return {
-    message: `${savedLeads.length} leads created successfully from storage`,
-    createdCount: savedLeads.length,
-    skippedCount: storageItems.length - savedLeads.length,
+    message:
+      `${createdCount} leads created successfully from storage`,
+    createdCount,
+    skippedCount,
   };
 }
+
 
 }

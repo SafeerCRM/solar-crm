@@ -3834,7 +3834,7 @@ private async sendCustomerExecutionMilestoneWhatsapp(
     return;
   }
 
-  
+
   const ratingMilestone = [
     ProjectExecutionActivityType.STRUCTURE_WORK,
     ProjectExecutionActivityType.PANEL_INSTALLED,
@@ -4612,121 +4612,393 @@ if (
   return snapshot;
 }
 
+
+async reconcileHistoricalSolarMitraPayouts(
+  user: any,
+) {
+  if (user?.role !== 'OWNER') {
+    throw new ForbiddenException(
+      'Only Owner can reconcile Solar Mitra payouts',
+    );
+  }
+
+  /*
+   * Fixed historical Project allowlist.
+   * Do not accept arbitrary Project IDs.
+   */
+  const projectIds = [
+    3649,
+    3615,
+    3599,
+    3560,
+  ];
+
+  const results: Array<{
+  projectId: number;
+  result: string;
+  payoutId?: number | null;
+  status?: SolarMitraPayoutStatus | null;
+  error?: string;
+}> = [];
+
+  for (const projectId of projectIds) {
+    try {
+      const project =
+        await this.projectRepository.findOne({
+          where: { id: projectId },
+        });
+
+      if (!project) {
+        results.push({
+          projectId,
+          result: 'PROJECT_NOT_FOUND',
+        });
+        continue;
+      }
+
+      const existingBefore =
+        await this.solarMitraPayoutRepository.findOne({
+          where: { projectId },
+        });
+
+      if (existingBefore) {
+        results.push({
+          projectId,
+          result: 'ALREADY_EXISTS',
+          payoutId: existingBefore.id,
+          status: existingBefore.status,
+        });
+        continue;
+      }
+
+      await this.syncSolarMitraProjectLink(
+        project,
+      );
+
+      const payout =
+        await this.solarMitraPayoutRepository.findOne({
+          where: { projectId },
+        });
+
+      results.push({
+        projectId,
+        result: payout
+          ? 'RECONCILED'
+          : 'NOT_ELIGIBLE_FOR_ATTRIBUTION',
+        payoutId: payout?.id ?? null,
+        status: payout?.status ?? null,
+      });
+    } catch (error) {
+      results.push({
+        projectId,
+        result: 'ERROR',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Unknown reconciliation error',
+      });
+    }
+  }
+
+  return {
+    message:
+      'Historical Solar Mitra payout reconciliation completed',
+    results,
+  };
+}
+
+
+
 private async syncSolarMitraProjectLink(
   project: Project,
+): Promise<void> {
+  const projectId = Number(project?.id || 0);
+  const leadId = Number(project?.leadId || 0);
+
+  const digits = String(
+    project?.customerPhone || '',
+  ).replace(/\D/g, '');
+
+  const customerPhone = digits.slice(-10);
+
+  if (!projectId) {
+  return;
+}
+
+/*
+ * Solar Mitra payouts are created only
+ * after final Owner approval.
+ */
+if (
+  project.ownerApprovalStatus !==
+  ProjectApprovalStatus.APPROVED
 ) {
-  const leadId =
-    Number(project?.leadId || 0);
+  return;
+}
 
-  if (!leadId) {
-    return;
-  }
+/*
+ * Rejected and cancelled Projects must
+ * never generate new payouts.
+ */
+if (
+  project.status === ProjectStatus.REJECTED ||
+  project.status === ProjectStatus.CANCELLED
+) {
+  return;
+}
 
-  const referral =
-    await this.solarMitraReferralRepository.findOne({
-      where: {
-        linkedLeadId: leadId,
-        isHidden: false,
-      },
-      order: {
-        id: 'DESC',
-      },
-    });
+  await this.dataSource.transaction(
+    async (manager) => {
+      /*
+       * Serialize attribution for this Project.
+       * The database also enforces unique projectId.
+       */
+      await manager.query(
+        `SELECT pg_advisory_xact_lock(
+          hashtext($1),
+          hashtext($2)
+        )`,
+        ['SOLAR_MITRA_PROJECT', String(projectId)],
+      );
 
-  if (!referral) {
-    return;
-  }
+      const payoutRepo =
+        manager.getRepository(SolarMitraPayout);
 
-  referral.linkedProjectId =
-    project.id;
+      const referralRepo =
+        manager.getRepository(SolarMitraReferral);
 
-  if (project.meetingId) {
-    referral.linkedMeetingId =
-      project.meetingId;
-  }
+      /*
+       * Never overwrite an existing Project payout.
+       */
+      const existingPayout =
+        await payoutRepo.findOne({
+          where: { projectId },
+        });
 
-  referral.status =
-    SolarMitraReferralStatus
-      .PROJECT_CREATED;
+      if (existingPayout) {
+        return;
+      }
 
-  await this.solarMitraReferralRepository.save(
-    referral,
+      /*
+       * First preference: original referred Lead.
+       */
+      let referral: SolarMitraReferral | null =
+        null;
+
+      if (leadId > 0) {
+        referral = await referralRepo.findOne({
+          where: {
+            linkedLeadId: leadId,
+            isHidden: false,
+          },
+        });
+      }
+
+      /*
+       * Fallback: normalized customer phone.
+       * Reject ambiguous historical ownership.
+       */
+      if (!referral && customerPhone.length === 10) {
+        const matches = await referralRepo
+          .createQueryBuilder('referral')
+          .where(
+            `RIGHT(
+              REGEXP_REPLACE(
+                COALESCE(
+                  referral."customerPhone",
+                  ''
+                ),
+                '[^0-9]',
+                '',
+                'g'
+              ),
+              10
+            ) = :phone`,
+            { phone: customerPhone },
+          )
+          .andWhere(
+            'referral."isHidden" = false',
+          )
+          .andWhere(
+            'referral.status != :rejected',
+            {
+              rejected:
+                SolarMitraReferralStatus.REJECTED,
+            },
+          )
+          .getMany();
+
+        if (matches.length > 1) {
+          throw new BadRequestException(
+            'Multiple Solar Mitra referrals found for this customer phone',
+          );
+        }
+
+        referral = matches[0] || null;
+
+        /*
+ * A Project linked to an existing Lead
+ * must not inherit a referral belonging
+ * to a different Lead.
+ *
+ * Direct Projects without a Lead can
+ * still use customer-phone matching.
+ */
+if (
+  referral &&
+  leadId > 0 &&
+  referral.linkedLeadId &&
+  Number(referral.linkedLeadId) !== leadId
+) {
+  return;
+}
+      }
+
+if (!referral) {
+  return;
+}
+
+/*
+ * Rejected referrals must never
+ * generate Project payouts, regardless
+ * of whether attribution was matched
+ * through Lead ID or customer phone.
+ */
+if (
+  referral.status ===
+  SolarMitraReferralStatus.REJECTED
+) {
+  return;
+}
+
+/*
+ * Verify customer identity before attribution.
+ * A Project with a different customer phone
+ * must not receive this referral's payout.
+ */
+const referralDigits = String(
+  referral.customerPhone || '',
+).replace(/\D/g, '');
+
+const referralPhone = referralDigits.slice(-10);
+
+if (
+  customerPhone.length !== 10 ||
+  referralPhone.length !== 10 ||
+  customerPhone !== referralPhone
+) {
+  return;
+}
+
+/*
+ * Client-confirmed rule:
+ * Referral must exist BEFORE the Project
+ * is created.
+ *
+ * Projects created before the referral
+ * are not eligible for Solar Mitra payout.
+ */
+const projectCreatedAt = new Date(
+  project.createdAt,
+).getTime();
+
+const referralCreatedAt = new Date(
+  referral.createdAt,
+).getTime();
+
+if (
+  !Number.isFinite(projectCreatedAt) ||
+  !Number.isFinite(referralCreatedAt) ||
+  projectCreatedAt <= referralCreatedAt
+) {
+  return;
+}
+
+/*
+ * Keep the first linked Project for
+ * backward compatibility.
+ */
+      if (!referral.linkedProjectId) {
+        referral.linkedProjectId = projectId;
+      }
+
+      if (
+        project.meetingId &&
+        !referral.linkedMeetingId
+      ) {
+        referral.linkedMeetingId =
+          project.meetingId;
+      }
+
+      /*
+       * Do not downgrade a referral that has
+       * already reached payout milestones.
+       */
+      if (
+        referral.status !==
+          SolarMitraReferralStatus.PAYOUT_PAID &&
+        referral.status !==
+          SolarMitraReferralStatus.PAYOUT_ELIGIBLE
+      ) {
+        referral.status =
+          SolarMitraReferralStatus.PROJECT_CREATED;
+      }
+
+      const payoutAmount = Number(
+        referral.payoutAmountSnapshot ?? 0,
+      );
+
+      const requiredPercentage = Number(
+        referral
+          .requiredPaymentPercentageSnapshot ?? 0,
+      );
+
+      if (
+        !Number.isFinite(payoutAmount) ||
+        payoutAmount <= 0 ||
+        !Number.isFinite(requiredPercentage) ||
+        requiredPercentage <= 0 ||
+        requiredPercentage > 100
+      ) {
+        throw new BadRequestException(
+          'Solar Mitra payout terms are invalid',
+        );
+      }
+
+      const payout = payoutRepo.create({
+        solarMitraId: referral.solarMitraId,
+        solarMitraName:
+          referral.solarMitraName,
+        solarMitraBusinessName:
+          referral.solarMitraBusinessName,
+        referralId: referral.id,
+        projectId,
+        customerName:
+          referral.customerName,
+        customerPhone:
+          referral.customerPhone,
+        payoutAmount,
+        requiredProjectPaymentPercentage:
+          requiredPercentage,
+        status:
+          SolarMitraPayoutStatus.WAITING,
+      } as Partial<SolarMitraPayout>);
+
+      await payoutRepo.save(payout);
+      await referralRepo.save(referral);
+    },
   );
 
-  const existingPayout =
-    await this.solarMitraPayoutRepository.findOne({
-      where: {
-        referralId: referral.id,
-      },
-    });
-
-  if (existingPayout) {
-    return;
-  }
-
-  const payoutAmount =
-    Number(
-      referral.payoutAmountSnapshot ||
-        0,
-    );
-
-  const requiredPaymentPercentage =
-    Number(
-      referral
-        .requiredPaymentPercentageSnapshot ||
-        0,
-    );
-
-  if (
-    !Number.isFinite(payoutAmount) ||
-    payoutAmount <= 0 ||
-    !Number.isFinite(
-      requiredPaymentPercentage,
-    ) ||
-    requiredPaymentPercentage <= 0 ||
-    requiredPaymentPercentage > 100
-  ) {
-    throw new BadRequestException(
-      'Solar Mitra payout terms are invalid',
-    );
-  }
-
-  const payout =
-    this.solarMitraPayoutRepository.create({
-      solarMitraId:
-        referral.solarMitraId,
-
-      solarMitraName:
-        referral.solarMitraName,
-
-      solarMitraBusinessName:
-        referral.solarMitraBusinessName,
-
-      referralId:
-        referral.id,
-
-      projectId:
-        project.id,
-
-      customerName:
-        referral.customerName,
-
-      customerPhone:
-        referral.customerPhone,
-
-      payoutAmount,
-
-      requiredProjectPaymentPercentage:
-        requiredPaymentPercentage,
-
-      status:
-        SolarMitraPayoutStatus.WAITING,
-    } as Partial<SolarMitraPayout>);
-
-  await this.solarMitraPayoutRepository.save(
-    payout,
+  /*
+   * Check whether the Project has already
+   * reached its qualifying payment threshold.
+   * This is performed after the transaction.
+   */
+  await this.syncSolarMitraPayoutEligibility(
+    projectId,
   );
 }
+
 
 private async validateProjectPanelMaterial(
   materialId: number | null | undefined,
@@ -5309,12 +5581,18 @@ return savedProject;
 
 const project = this.projectRepository.create(projectData);
 
-    const savedProject =
-      await this.projectRepository.save(project);
 
-    return {
-      message:
-        'Project created with calculated cost successfully',
+const savedProject =
+  await this.projectRepository.save(project);
+
+await this.syncSolarMitraProjectLink(
+  savedProject,
+);
+
+return {
+  message:
+    'Project created with calculated cost successfully',
+
 
       calculation,
 
@@ -11012,7 +11290,7 @@ async getProjectOwnerMonthlySummary(
     getOwner(project).totalCreated += 1;
   }
 
-  
+
   /*
    * Bulk payment milestone calculation.
    *
@@ -16552,7 +16830,7 @@ if (
     )
   `;
 
-  
+
 const getPaymentThresholdReachedDateSql = (
   threshold: number,
 ) => `
@@ -16639,7 +16917,7 @@ const fullPaymentReachedDateSql =
   getPaymentThresholdReachedDateSql(1.00);
 
 
-  
+
 const completionDateSql =
   `project."actualCompletionDate"`;
 
@@ -16761,7 +17039,7 @@ if (filters?.toDate) {
       qualifiedAt: string | Date | null;
     }>();
 
-  
+
 const projectIds = [
   ...new Set(
     qualifiedProjects
@@ -16923,7 +17201,7 @@ if (projectIds.length > 0) {
         'expense.projectId IN (:...projectIds)',
         { projectIds },
       )
-      
+
       .andWhere(
         'expense.approvalStatus = :approvalStatus',
         { approvalStatus: 'APPROVED' },
@@ -25576,7 +25854,7 @@ const upcomingDateIndia = getIndiaDateString(upcomingDate);
       .where(
         'payment.pendingAmount > 0',
       )
-      
+
       .andWhere(
         'payment.isHidden = false',
       )
@@ -26511,7 +26789,7 @@ const skip =
     );
   }
 
-  
+
 
   const totalQb =
   this.projectMaterialRequestItemRepository
@@ -26652,7 +26930,7 @@ const stateMap =
 
       createdAt: row.createdAt,
     };
-    
+
   });
 
   return {
@@ -26665,7 +26943,7 @@ const stateMap =
       total / limit,
     ) || 1,
 };
-  
+
 }
 
 private getRequiredProjectDocumentTypes(project: Project) {
@@ -27192,7 +27470,7 @@ const dismissedIds =
       ProjectApprovalStatus.PENDING,
   },
 )
-      
+
 
   if (!canSeeAll) {
     projectQuery.andWhere(
@@ -28036,7 +28314,7 @@ const dismissedIds =
           ProjectElectricityStatus.REJECTED,
         ],
       })
-      
+
 
   if (!canSeeAll) {
     qb.andWhere('project.projectOwnerId = :userId', {
@@ -28260,7 +28538,7 @@ const dismissedIds =
       .andWhere(
   'project.actualCompletionDate IS NOT NULL',
 )
-      
+
 
   if (!canSeeAll) {
     qb.andWhere('project.projectOwnerId = :userId', {
@@ -32236,6 +32514,36 @@ private async deactivateAutomaticProjectProcurement(
     await this.projectRepository.save(
       project,
     );
+
+    /*
+ * Create Solar Mitra payout only after
+ * final Owner approval.
+ *
+ * The attribution method handles:
+ * - Referral date validation
+ * - Customer phone matching
+ * - Lead ownership protection
+ * - One payout per Project
+ * - Duplicate prevention
+ */
+if (
+  approvalStatus ===
+  ProjectApprovalStatus.APPROVED
+) {
+  try {
+    await this.syncSolarMitraProjectLink(
+      savedProject,
+    );
+  } catch (error) {
+    console.error(
+      'Solar Mitra payout attribution failed after Owner approval',
+      {
+        projectId: savedProject.id,
+        error,
+      },
+    );
+  }
+}
 
     /*
  * Create customer confirmation only when the Owner
@@ -43010,7 +43318,31 @@ private async syncSolarMitraPayoutEligibility(
       },
     });
 
-  if (!payout) {
+    if (!payout) {
+    return;
+  }
+
+  /*
+   * Solar Mitra payout eligibility requires
+   * final Owner approval of the Project.
+   *
+   * Existing WAITING payouts must remain
+   * WAITING until Owner approval.
+   */
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: normalizedProjectId,
+      },
+    });
+
+  if (
+    !project ||
+    project.ownerApprovalStatus !==
+      ProjectApprovalStatus.APPROVED ||
+    project.status === ProjectStatus.REJECTED ||
+    project.status === ProjectStatus.CANCELLED
+  ) {
     return;
   }
 
@@ -54500,7 +54832,7 @@ async reassignContractorAssignment(
     .filter(Boolean)
     .join('\n');
 
-  
+
 
   /*
    * Create fresh assignment for new contractor.

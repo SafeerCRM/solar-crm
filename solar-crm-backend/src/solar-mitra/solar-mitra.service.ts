@@ -729,13 +729,22 @@ const payouts =
         .getMany()
     : [];
 
-const payoutByReferralId =
-  new Map<number, SolarMitraPayout>();
+const payoutsByReferralId =
+  new Map<number, SolarMitraPayout[]>();
 
 for (const payout of payouts) {
-  payoutByReferralId.set(
-    Number(payout.referralId),
-    payout,
+  const referralId = Number(
+    payout.referralId,
+  );
+
+  const existing =
+    payoutsByReferralId.get(referralId) || [];
+
+  existing.push(payout);
+
+  payoutsByReferralId.set(
+    referralId,
+    existing,
   );
 }
 
@@ -789,12 +798,32 @@ return referrals.map(
     payoutTermsSnapshottedAt:
       referral.payoutTermsSnapshottedAt,
 
-    payout:
-      this.buildPortalPayoutInfo(
-        payoutByReferralId.get(
-          Number(referral.id),
-        ),
-      ),
+
+payout:
+  this.buildPortalPayoutInfo(
+    payoutsByReferralId.get(
+      Number(referral.id),
+    )?.[0],
+  ),
+
+payouts:
+  (
+    payoutsByReferralId.get(
+      Number(referral.id),
+    ) || []
+  ).map((payout) => ({
+    id: payout.id,
+    projectId: payout.projectId,
+    ...this.buildPortalPayoutInfo(payout),
+  })),
+
+totalProjectPayouts:
+  (
+    payoutsByReferralId.get(
+      Number(referral.id),
+    ) || []
+  ).length,
+
 
     createdAt:
       referral.createdAt,
@@ -830,11 +859,13 @@ async getSolarMitraPortalReferral(
     );
   }
 
-  const payout =
-  await this.payoutRepository.findOne({
+  const payouts =
+  await this.payoutRepository.find({
     where: {
-      referralId:
-        referral.id,
+      referralId: referral.id,
+    },
+    order: {
+      createdAt: 'ASC',
     },
   });
 
@@ -892,8 +923,18 @@ async getSolarMitraPortalReferral(
 
       payout:
   this.buildPortalPayoutInfo(
-    payout,
+    payouts[0],
   ),
+
+payouts:
+  payouts.map((payout) => ({
+    id: payout.id,
+    projectId: payout.projectId,
+    ...this.buildPortalPayoutInfo(payout),
+  })),
+
+totalProjectPayouts:
+  payouts.length,
 
     createdAt:
       referral.createdAt,
@@ -2952,40 +2993,7 @@ async createPublicQrReferral(
  * immediately below. There is no separate referral
  * approval/conversion stage.
  */
-  const existingReferral =
-    await this.referralRepository
-      .createQueryBuilder('referral')
-      .where(
-        `RIGHT(
-          REGEXP_REPLACE(
-            COALESCE(referral."customerPhone", ''),
-            '[^0-9]',
-            '',
-            'g'
-          ),
-          10
-        ) = :phone`,
-        {
-          phone: customerPhone,
-        },
-      )
-      .andWhere(
-        'referral."isHidden" = false',
-      )
-      .andWhere(
-        'referral.status != :rejectedStatus',
-        {
-          rejectedStatus:
-            SolarMitraReferralStatus.REJECTED,
-        },
-      )
-      .getOne();
 
-  if (existingReferral) {
-    throw new BadRequestException(
-      'A Solar Mitra referral already exists for this customer phone',
-    );
-  }
 
   const alternatePhone =
     body?.alternatePhone
@@ -3087,106 +3095,143 @@ async createPublicQrReferral(
         ).trim() || null,
     } as Partial<SolarMitraReferral>);
 
-  const savedReferral =
-  await this.referralRepository.save(
-    referral,
-  );
 
-try {
-  const leadData: Partial<Lead> = {
-    name: savedReferral.customerName,
+  /*
+   * Create the Solar Mitra referral and its CRM Lead
+   * within the same database transaction.
+   *
+   * If any operation fails, both records roll back.
+   */
 
-    phone: savedReferral.customerPhone,
+return this.dataSource.transaction(
+  async (manager) => {
+    /*
+     * Serialize Solar Mitra referral creation
+     * for the same customer phone.
+     */
+    await manager.query(
+      `SELECT pg_advisory_xact_lock(
+        hashtext($1),
+        hashtext($2)
+      )`,
+      ['CRM_LEAD_PHONE', customerPhone],
+    );
 
-    alternatePhone:
-      savedReferral.alternatePhone ||
-      undefined,
+    const existingReferral = await manager
+      .getRepository(SolarMitraReferral)
+      .createQueryBuilder('referral')
+      .where(
+        `RIGHT(
+          REGEXP_REPLACE(
+            COALESCE(referral."customerPhone", ''),
+            '[^0-9]',
+            '',
+            'g'
+          ),
+          10
+        ) = :phone`,
+        { phone: customerPhone },
+      )
+      .andWhere(
+        'referral."isHidden" = false',
+      )
+      .andWhere(
+        'referral.status != :rejectedStatus',
+        {
+          rejectedStatus:
+            SolarMitraReferralStatus.REJECTED,
+        },
+      )
+      .getOne();
 
-    address:
-      savedReferral.customerAddress ||
-      undefined,
-
-    city:
-      savedReferral.customerCity ||
-      undefined,
-
-    source: 'SOLAR_MITRA',
-
-    remarks:
-      savedReferral.remarks ||
-      undefined,
-  };
-
-  const lead =
-    await this.leadsService
-      .createSolarMitraLead(
-        leadData,
+    if (existingReferral) {
+      throw new BadRequestException(
+        'Lead with this number already exists.',
       );
+    }
 
-  savedReferral.linkedLeadId =
-    lead.id;
+    const savedReferral = await manager
 
-  savedReferral.status =
-    SolarMitraReferralStatus
-      .LEAD_CREATED;
+        .getRepository(SolarMitraReferral)
+        .save(referral);
 
-  /*
-   * Snapshot the applicable payout terms
-   * when this referral successfully enters
-   * the CRM as a Lead.
-   */
-  const setting =
-    await this.getOrCreateSettings();
+      const leadData: Partial<Lead> = {
+        name: savedReferral.customerName,
+        phone: savedReferral.customerPhone,
+        alternatePhone:
+          savedReferral.alternatePhone || undefined,
+        address:
+          savedReferral.customerAddress || undefined,
+        city:
+          savedReferral.customerCity || undefined,
+        source: 'SOLAR_MITRA',
+        remarks:
+          savedReferral.remarks || undefined,
 
-  savedReferral.payoutAmountSnapshot =
-    mitra.payoutAmountOverride !==
-      null &&
-    mitra.payoutAmountOverride !==
-      undefined
-      ? Number(
-          mitra.payoutAmountOverride,
-        )
-      : Number(
-          setting.defaultPayoutAmount,
+        assignedTo: undefined,
+        createdBy: undefined,
+        createdByName: 'Solar Mitra Referral',
+
+        originTelecallerId: undefined,
+        originTelecallerName: undefined,
+        telecallerId: undefined,
+        telecallerName: undefined,
+        telecallerRole: undefined,
+        telecallingAssistantId: undefined,
+        telecallingAssistantName: undefined,
+        telecallingAssistantRole: undefined,
+        leadManagerId: undefined,
+        leadManagerName: undefined,
+        leadManagerRole: undefined,
+        potentialPercentage: 15,
+      };
+
+      const lead = await this.leadsService
+        .createLeadWithDuplicateProtection(
+          leadData,
+          undefined,
+          undefined,
+          manager,
         );
 
-  savedReferral
-    .requiredPaymentPercentageSnapshot =
-    mitra
-      .requiredPaymentPercentageOverride !==
-        null &&
-    mitra
-      .requiredPaymentPercentageOverride !==
-        undefined
-      ? Number(
-          mitra
-            .requiredPaymentPercentageOverride,
-        )
-      : Number(
-          setting
-            .requiredProjectPaymentPercentage,
-        );
+      savedReferral.linkedLeadId = lead.id;
 
-  savedReferral
-    .payoutTermsSnapshottedAt =
-    new Date();
+      savedReferral.status =
+        SolarMitraReferralStatus.LEAD_CREATED;
 
-  return this.referralRepository.save(
-    savedReferral,
+      /*
+       * Snapshot the applicable payout terms
+       * when the referral successfully enters CRM.
+       */
+      const setting =
+       await this.getOrCreateSettings(manager);
+
+      savedReferral.payoutAmountSnapshot =
+        mitra.payoutAmountOverride !== null &&
+        mitra.payoutAmountOverride !== undefined
+          ? Number(mitra.payoutAmountOverride)
+          : Number(setting.defaultPayoutAmount);
+
+      savedReferral.requiredPaymentPercentageSnapshot =
+        mitra.requiredPaymentPercentageOverride !== null &&
+        mitra.requiredPaymentPercentageOverride !== undefined
+          ? Number(
+              mitra.requiredPaymentPercentageOverride,
+            )
+          : Number(
+              setting.requiredProjectPaymentPercentage,
+            );
+
+      savedReferral.payoutTermsSnapshottedAt =
+        new Date();
+
+      return manager
+        .getRepository(SolarMitraReferral)
+        .save(savedReferral);
+    },
   );
-} catch (error) {
-  /*
-   * The referral must not remain stored if
-   * the corresponding Lead could not be
-   * created.
-   */
-  await this.referralRepository.delete(
-    savedReferral.id,
-  );
+}
 
-  throw error;
-}
-}
 
 async listReferrals(query: any) {
   const qb =
@@ -4049,124 +4094,153 @@ async markCreatorPayoutPaid(
 }
 
 
+
 async markPayoutPaid(
   id: number,
   body: any,
   user: any,
 ) {
-  const payout =
-    await this.payoutRepository.findOne({
-      where: {
-        id: Number(id),
-      },
-    });
-
-  if (!payout) {
-    throw new NotFoundException(
-      'Solar Mitra payout not found',
-    );
-  }
+  const payoutId = Number(id);
 
   if (
-    payout.status ===
-    SolarMitraPayoutStatus.PAID
+    !Number.isInteger(payoutId) ||
+    payoutId <= 0
   ) {
     throw new BadRequestException(
-      'Solar Mitra payout is already paid',
+      'Valid Solar Mitra payout ID is required',
     );
   }
 
-  if (
-    payout.status !==
-    SolarMitraPayoutStatus.ELIGIBLE
-  ) {
-    throw new BadRequestException(
-      'Only an eligible Solar Mitra payout can be marked as paid',
-    );
-  }
-
-  const paymentMode =
-  String(
+  const paymentMode = String(
     body?.paymentMode || '',
   ).trim();
 
-const paymentReference =
-  String(
+  const paymentReference = String(
     body?.paymentReference || '',
   ).trim();
 
-const paymentRemarks =
-  String(
+  const paymentRemarks = String(
     body?.paymentRemarks || '',
   ).trim();
 
-if (!paymentMode) {
-  throw new BadRequestException(
-    'Payment mode is required to mark a payout as paid',
-  );
-}
-
-if (!paymentReference) {
-  throw new BadRequestException(
-    'Transaction or payment reference is required to mark a payout as paid',
-  );
-}
-
-  payout.status =
-    SolarMitraPayoutStatus.PAID;
-
-  payout.paidAt =
-    new Date();
-
-  payout.paidBy =
-  Number(
-    user?.id ||
-      user?.userId ||
-      user?.sub ||
-      0,
-  );
-
-payout.paidByName =
-  String(
-    user?.name ||
-      user?.email ||
-      '',
-  ).trim();
-
-payout.paymentMode =
-  paymentMode;
-
-payout.paymentReference =
-  paymentReference;
-
-payout.paymentRemarks =
-  paymentRemarks;
-
-  const savedPayout =
-    await this.payoutRepository.save(
-      payout,
-    );
-
-  const referral =
-    await this.referralRepository.findOne({
-      where: {
-        id: payout.referralId,
-        isHidden: false,
-      },
-    });
-
-  if (referral) {
-    referral.status =
-      SolarMitraReferralStatus
-        .PAYOUT_PAID;
-
-    await this.referralRepository.save(
-      referral,
+  if (!paymentMode) {
+    throw new BadRequestException(
+      'Payment mode is required to mark a payout as paid',
     );
   }
 
-  return savedPayout;
+  if (!paymentReference) {
+    throw new BadRequestException(
+      'Transaction or payment reference is required to mark a payout as paid',
+    );
+  }
+
+  return this.dataSource.transaction(
+    async (manager) => {
+      const payoutRepo =
+        manager.getRepository(SolarMitraPayout);
+
+      const referralRepo =
+        manager.getRepository(SolarMitraReferral);
+
+      /*
+       * Lock the payout row until the
+       * transaction completes.
+       *
+       * Concurrent payment requests for
+       * this payout must wait.
+       */
+      const payout =
+        await payoutRepo
+          .createQueryBuilder('payout')
+          .setLock('pessimistic_write')
+          .where('payout.id = :payoutId', {
+            payoutId,
+          })
+          .getOne();
+
+      if (!payout) {
+        throw new NotFoundException(
+          'Solar Mitra payout not found',
+        );
+      }
+
+      /*
+       * Recheck status while holding
+       * the database row lock.
+       */
+      if (
+        payout.status ===
+        SolarMitraPayoutStatus.PAID
+      ) {
+        throw new BadRequestException(
+          'Solar Mitra payout is already paid',
+        );
+      }
+
+      if (
+        payout.status !==
+        SolarMitraPayoutStatus.ELIGIBLE
+      ) {
+        throw new BadRequestException(
+          'Only an eligible Solar Mitra payout can be marked as paid',
+        );
+      }
+
+      payout.status =
+        SolarMitraPayoutStatus.PAID;
+
+      payout.paidAt = new Date();
+
+      payout.paidBy = Number(
+        user?.id ||
+        user?.userId ||
+        user?.sub ||
+        0,
+      );
+
+      payout.paidByName = String(
+        user?.name ||
+        user?.email ||
+        '',
+      ).trim();
+
+      payout.paymentMode = paymentMode;
+      payout.paymentReference =
+        paymentReference;
+      payout.paymentRemarks =
+        paymentRemarks;
+
+      const savedPayout =
+        await payoutRepo.save(payout);
+
+      /*
+       * Preserve existing referral-level
+       * status behavior.
+       *
+       * Other Project payouts are not
+       * modified.
+       */
+      const referral =
+        await referralRepo.findOne({
+          where: {
+            id: payout.referralId,
+            isHidden: false,
+          },
+        });
+
+      if (referral) {
+        referral.status =
+          SolarMitraReferralStatus.PAYOUT_PAID;
+
+        await referralRepo.save(referral);
+      }
+
+      return savedPayout;
+    },
+  );
 }
+
 
 async createMeeting(
   body: any,
@@ -5182,33 +5256,39 @@ async uploadMeetingDocument(
     .save(document);
 }
 
-  async getOrCreateSettings() {
-    let setting =
-      await this.settingRepository.findOne({
-        where: {
-          isActive: true,
-        },
-        order: {
-          id: 'DESC',
-        },
-      });
 
-    if (setting) {
-      return setting;
-    }
+async getOrCreateSettings(
+  manager?: EntityManager,
+) {
+  const repository = manager
+    ? manager.getRepository(SolarMitraSetting)
+    : this.settingRepository;
 
-    setting =
-      this.settingRepository.create({
-        defaultPayoutAmount: 5000,
-        payoutQualificationType:
-          SolarMitraPayoutQualificationType
-            .PROJECT_PAYMENT_PERCENTAGE,
-        requiredProjectPaymentPercentage: 20,
-        isActive: true,
-      });
+  let setting = await repository.findOne({
+    where: {
+      isActive: true,
+    },
+    order: {
+      id: 'DESC',
+    },
+  });
 
-    return this.settingRepository.save(setting);
+  if (setting) {
+    return setting;
   }
+
+  setting = repository.create({
+    defaultPayoutAmount: 5000,
+    payoutQualificationType:
+      SolarMitraPayoutQualificationType
+        .PROJECT_PAYMENT_PERCENTAGE,
+    requiredProjectPaymentPercentage: 20,
+    isActive: true,
+  });
+
+  return repository.save(setting);
+}
+
 
   async updateSettings(
     body: any,
