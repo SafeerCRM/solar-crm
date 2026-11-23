@@ -3405,6 +3405,61 @@ private async sendCustomerProjectUpdateWhatsapp(
   executionActivityId?: number,
 ): Promise<void> {
   try {
+
+        /*
+     * Customer WhatsApp notification preferences
+     * approved on 23 November 2026.
+     *
+     * Only suppress WhatsApp delivery.
+     * Project operations remain unaffected.
+     */
+    const blockedExactEvents = new Set([
+      'project-completed',
+      'owner-approved-loan-process',
+      'owner-approved-project-management',
+    ]);
+
+    const blockedPrefixes = [
+      'project-material-dispatch-',
+      'status-',
+    ];
+
+    const event = String(occurrenceKey || '');
+
+    const isBlockedExact =
+      blockedExactEvents.has(event);
+
+    const isBlockedPrefix =
+      blockedPrefixes.some((prefix) =>
+        event.startsWith(prefix),
+      );
+
+    const isBlockedElectricity =
+      event.startsWith('electricity-') &&
+      !event.startsWith('electricity-work-') &&
+      !event.endsWith('-to-FILE_SUBMITTED');
+
+    const isBlockedElectricityWork =
+      event.startsWith('electricity-work-') &&
+      !event.endsWith('-to-FILE_SUBMITTED');
+
+    const isBlockedSolarExtension =
+      event.startsWith('solar-extension-') &&
+      !event.endsWith('-to-FILE_SUBMITTED');
+
+    if (
+      isBlockedExact ||
+      isBlockedPrefix ||
+      isBlockedElectricity ||
+      isBlockedElectricityWork ||
+      isBlockedSolarExtension
+    ) {
+      console.log(
+        `[WhatsApp] Customer project update suppressed: ${event}`,
+      );
+      return;
+    }
+    
     const customerPhone = String(
       project?.customerPhone || '',
     ).trim();
