@@ -167,6 +167,37 @@ findFranchiseManagers() {
   return this.usersService.findFranchiseManagers();
 }
 
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'HR_MANAGER')
+@Get('management')
+findManagementUsers(
+  @Query('includeHidden') includeHidden?: string,
+) {
+  return this.usersService.findManagementUsers(
+    includeHidden === 'true',
+  );
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'HR_MANAGER')
+@Patch(':id/details')
+updateUserDetails(
+  @Param('id', ParseIntPipe) id: number,
+  @Body()
+  data: {
+    mobileNumber?: string;
+    aadhaarNumber?: string | null;
+    servingCity?: string;
+  },
+  @CurrentUser() user: any,
+) {
+  return this.usersService.updateUserDetails(
+    id,
+    data,
+    user,
+  );
+}
+
   @UseGuards(JwtAuthGuard)
   @Get(':id')
   findById(@Param('id', ParseIntPipe) id: number) {

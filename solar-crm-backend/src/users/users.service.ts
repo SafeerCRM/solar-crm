@@ -25,6 +25,83 @@ export class UsersService {
   private readonly jwtService: JwtService,
 ) {}
 
+private normalizeMobileNumber(value: unknown): string {
+  let mobile = String(value ?? '')
+    .trim()
+    .replace(/[\s()-]/g, '');
+
+  if (mobile.startsWith('+91') && mobile.length === 13) {
+    mobile = mobile.slice(3);
+  } else if (mobile.startsWith('91') && mobile.length === 12) {
+    mobile = mobile.slice(2);
+  } else if (mobile.startsWith('0') && mobile.length === 11) {
+    mobile = mobile.slice(1);
+  }
+
+  if (!/^[6-9]\d{9}$/.test(mobile)) {
+    throw new BadRequestException(
+      'Please enter a valid 10-digit Indian mobile number',
+    );
+  }
+
+  return mobile;
+}
+
+private normalizeAadhaarNumber(value: unknown): string | null {
+  const aadhaar = String(value ?? '')
+    .trim()
+    .replace(/[\s-]/g, '');
+
+  if (!aadhaar) {
+    return null;
+  }
+
+  if (!/^\d{12}$/.test(aadhaar)) {
+    throw new BadRequestException(
+      'Aadhaar number must contain exactly 12 digits',
+    );
+  }
+
+  return aadhaar;
+}
+
+private normalizeServingCity(value: unknown): string {
+  const city = String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toUpperCase();
+
+  if (!city) {
+    throw new BadRequestException(
+      'City / Serving Area is required',
+    );
+  }
+
+  if (city.length > 150) {
+    throw new BadRequestException(
+      'City / Serving Area cannot exceed 150 characters',
+    );
+  }
+
+  return city;
+}
+
+private async ensureUniqueMobileNumber(
+  mobileNumber: string,
+  excludeUserId?: number,
+): Promise<void> {
+  const existing = await this.userRepository.findOne({
+    where: { mobileNumber },
+    select: ['id'],
+  });
+
+  if (existing && existing.id !== excludeUserId) {
+    throw new BadRequestException(
+      'A user with this mobile number already exists',
+    );
+  }
+}
+
   private normalizeRoles(inputRoles?: UserRole[] | string[]): UserRole[] {
     const allowedRoles = Object.values(UserRole);
     const roles = Array.isArray(inputRoles) ? inputRoles : [];
@@ -75,16 +152,71 @@ export class UsersService {
     throw new BadRequestException('Password is required');
   }
 
-  const hashedPassword = await bcrypt.hash(data.password, 10);
+ const mobileNumber = this.normalizeMobileNumber(
+  data.mobileNumber,
+);
 
-  const user = this.userRepository.create({
-    name: data.name,
-    email: data.email,
-    password: hashedPassword,
-    roles: normalizedRoles,
-  });
+const aadhaarNumber = this.normalizeAadhaarNumber(
+  data.aadhaarNumber,
+);
 
-  return this.userRepository.save(user);
+const servingCity = this.normalizeServingCity(
+  data.servingCity,
+);
+
+await this.ensureUniqueMobileNumber(mobileNumber);
+
+const hashedPassword = await bcrypt.hash(
+  data.password,
+  10,
+);
+
+const user = this.userRepository.create({
+  name: data.name,
+  email: data.email,
+  password: hashedPassword,
+  roles: normalizedRoles,
+  mobileNumber,
+  aadhaarNumber,
+  servingCity,
+});
+
+try {
+  const savedUser = await this.userRepository.save(user);
+
+  return {
+    id: savedUser.id,
+    name: savedUser.name,
+    email: savedUser.email,
+    roles: savedUser.roles,
+    mobileNumber: savedUser.mobileNumber,
+    aadhaarNumber: savedUser.aadhaarNumber,
+    servingCity: savedUser.servingCity,
+    isHidden: savedUser.isHidden,
+    createdAt: savedUser.createdAt,
+  };
+} catch (error) {
+  const dbError = error as {
+    code?: string;
+    constraint?: string;
+  };
+
+  if (dbError.code === '23505') {
+    if (
+      dbError.constraint === 'UQ_user_mobileNumber'
+    ) {
+      throw new BadRequestException(
+        'A user with this mobile number already exists',
+      );
+    }
+
+    throw new BadRequestException(
+      'A user with these unique details already exists',
+    );
+  }
+
+  throw error;
+}
 }
 
   async create(
@@ -257,6 +389,36 @@ export class UsersService {
   });
 }
 
+async findManagementUsers(includeHidden = false) {
+  return this.userRepository.find({
+    where: includeHidden
+      ? {}
+      : { isHidden: false },
+
+    select: [
+      'id',
+      'name',
+      'email',
+      'mobileNumber',
+      'aadhaarNumber',
+      'servingCity',
+      'roles',
+      'createdAt',
+      'isHidden',
+      'hiddenAt',
+      'hiddenBy',
+      'hiddenByName',
+      'hiddenReason',
+      'restoredAt',
+      'restoredBy',
+      'restoredByName',
+      'restoreReason',
+    ],
+
+    order: { id: 'ASC' },
+  });
+}
+
   async findAllUsers(includeHidden = false) {
   return this.userRepository.find({
     where: includeHidden ? {} : { isHidden: false },
@@ -278,6 +440,101 @@ export class UsersService {
     ],
     order: { id: 'ASC' },
   });
+}
+
+async updateUserDetails(
+  id: number,
+  data: {
+    mobileNumber?: string;
+    aadhaarNumber?: string | null;
+    servingCity?: string;
+  },
+  currentUser: any,
+) {
+  const currentUserRoles: string[] = Array.isArray(
+    currentUser?.roles,
+  )
+    ? currentUser.roles
+    : [];
+
+  const isOwner = currentUserRoles.includes(UserRole.OWNER);
+  const isHRManager = currentUserRoles.includes(
+    UserRole.HR_MANAGER,
+  );
+
+  if (!isOwner && !isHRManager) {
+    throw new ForbiddenException(
+      'Only OWNER or HR_MANAGER can update user details',
+    );
+  }
+
+  const user = await this.userRepository.findOne({
+    where: { id },
+  });
+
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  if (!isOwner && user.roles?.includes(UserRole.OWNER)) {
+    throw new ForbiddenException(
+      'HR Manager cannot modify OWNER accounts',
+    );
+  }
+
+  const updates: Partial<User> = {};
+
+  if (data.mobileNumber !== undefined) {
+    const mobileNumber = this.normalizeMobileNumber(
+      data.mobileNumber,
+    );
+
+    await this.ensureUniqueMobileNumber(
+      mobileNumber,
+      id,
+    );
+
+    updates.mobileNumber = mobileNumber;
+  }
+
+  if (data.aadhaarNumber !== undefined) {
+    updates.aadhaarNumber = this.normalizeAadhaarNumber(
+      data.aadhaarNumber,
+    );
+  }
+
+  if (data.servingCity !== undefined) {
+    updates.servingCity = this.normalizeServingCity(
+      data.servingCity,
+    );
+  }
+
+  if (Object.keys(updates).length === 0) {
+    throw new BadRequestException(
+      'No user details provided for update',
+    );
+  }
+
+  try {
+    await this.userRepository.update(id, updates);
+  } catch (error) {
+    const dbError = error as {
+      code?: string;
+      constraint?: string;
+    };
+
+    if (dbError.code === '23505') {
+      throw new BadRequestException(
+        'A user with this mobile number already exists',
+      );
+    }
+
+    throw error;
+  }
+
+  return {
+    message: 'User details updated successfully',
+  };
 }
 
   async updateUserPassword(

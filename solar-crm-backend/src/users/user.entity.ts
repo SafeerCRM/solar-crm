@@ -50,10 +50,33 @@ export class User {
   name: string;
 
   @Column({ unique: true })
-  email: string;
+email: string;
 
-  @Column()
-  password: string;
+@Column({
+  type: 'varchar',
+  length: 10,
+  nullable: true,
+  unique: true,
+})
+mobileNumber: string | null;
+
+@Column({
+  type: 'varchar',
+  length: 12,
+  nullable: true,
+  select: false,
+})
+aadhaarNumber: string | null;
+
+@Column({
+  type: 'varchar',
+  length: 150,
+  nullable: true,
+})
+servingCity: string | null;
+
+@Column()
+password: string;
 
   @Column({
     type: 'simple-array',
