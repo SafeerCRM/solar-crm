@@ -158,6 +158,71 @@ private readonly payrollMetricResolverService:
   StaffPayrollMetricResolverService,
 ) {}
 
+private normalizeBloodGroup(value: unknown): string | null {
+  const bloodGroup = String(value ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/−/g, '-');
+
+  if (!bloodGroup) {
+    return null;
+  }
+
+  const allowedBloodGroups = [
+    'A+',
+    'A-',
+    'B+',
+    'B-',
+    'AB+',
+    'AB-',
+    'O+',
+    'O-',
+  ];
+
+  if (!allowedBloodGroups.includes(bloodGroup)) {
+    throw new BadRequestException(
+      'Please select a valid blood group',
+    );
+  }
+
+  return bloodGroup;
+}
+
+async getFilterOptions() {
+  const [branches, departments] = await Promise.all([
+    this.staffRepo
+      .createQueryBuilder('staff')
+      .select('DISTINCT staff.branchName', 'value')
+      .where('staff.branchName IS NOT NULL')
+      .andWhere("TRIM(staff.branchName) <> ''")
+      .orderBy('staff.branchName', 'ASC')
+      .getRawMany<{ value: string }>(),
+
+    this.staffRepo
+      .createQueryBuilder('staff')
+      .select('DISTINCT staff.department', 'value')
+      .where('staff.department IS NOT NULL')
+      .andWhere("TRIM(staff.department) <> ''")
+      .orderBy('staff.department', 'ASC')
+      .getRawMany<{ value: string }>(),
+  ]);
+
+  return {
+    branches: branches.map((item) => item.value),
+    departments: departments.map((item) => item.value),
+    bloodGroups: [
+      'A+',
+      'A-',
+      'B+',
+      'B-',
+      'AB+',
+      'AB-',
+      'O+',
+      'O-',
+    ],
+  };
+}
+
   async findAll(query: any) {
     const page = Math.max(Number(query.page || 1), 1);
     const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
@@ -185,6 +250,16 @@ if (query.designation) {
     query.designation;
 }
 
+if (query.bloodGroup) {
+  const bloodGroup = this.normalizeBloodGroup(
+    query.bloodGroup,
+  );
+
+  if (bloodGroup) {
+    baseWhere.bloodGroup = bloodGroup;
+  }
+}
+
 const where = search
   ? [
       {
@@ -205,16 +280,15 @@ const where = search
     ]
   : baseWhere;
 
-const [data, total] =
-  await this.staffRepo.findAndCount({
-    where,
-    order: {
-      createdAt: 'DESC',
-    },
-    skip:
-      (page - 1) * limit,
-    take: limit,
-  });
+const [data, total] = await this.staffRepo
+  .createQueryBuilder('staff')
+  .addSelect('staff.bloodGroup')
+  .where(where)
+  .orderBy('staff.createdAt', 'DESC')
+  .addOrderBy('staff.id', 'DESC')
+  .skip((page - 1) * limit)
+  .take(limit)
+  .getManyAndCount();
 
     return {
       data,
@@ -261,9 +335,13 @@ const [data, total] =
   }
 
   const staff = this.staffRepo.create({
-    ...body,
+  ...body,
 
-    fullName: String(body.fullName).trim(),
+  bloodGroup: this.normalizeBloodGroup(
+    body.bloodGroup,
+  ),
+
+  fullName: String(body.fullName).trim(),
 
     linkedUserId:
       body.linkedUserId === undefined ||
@@ -380,16 +458,23 @@ const [data, total] =
         : Number(body.linkedUserId);
   }
 
+  if (body.bloodGroup !== undefined) {
+  staff.bloodGroup = this.normalizeBloodGroup(
+    body.bloodGroup,
+  );
+}
+
   const protectedFields = new Set([
-    'id',
-    'monthlyBasicSalary',
-    'isSupportingStaff',
-    'reportingManagerId',
-    'reportingManagerName',
-    'linkedUserId',
-    'fullName',
-    'createdAt',
-  ]);
+  'id',
+  'monthlyBasicSalary',
+  'isSupportingStaff',
+  'reportingManagerId',
+  'reportingManagerName',
+  'linkedUserId',
+  'fullName',
+  'bloodGroup',
+  'createdAt',
+]);
 
   Object.entries(body).forEach(([key, value]) => {
     if (!protectedFields.has(key)) {

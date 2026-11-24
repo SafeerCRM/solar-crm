@@ -205,6 +205,11 @@ async previewPayrollMetric(
   };
 }
 
+@Get('filter-options')
+getFilterOptions() {
+  return this.staffService.getFilterOptions();
+}
+
   @Get()
   findAll(@Query() query: any) {
     return this.staffService.findAll(query);

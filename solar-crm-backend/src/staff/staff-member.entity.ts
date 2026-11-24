@@ -76,6 +76,14 @@ reportingManagerId: number | null;
   @Column({ type: 'date', nullable: true })
   dateOfBirth: string;
 
+  @Column({
+  type: 'varchar',
+  length: 3,
+  nullable: true,
+  select: false,
+})
+bloodGroup: string | null;
+
   @Column({ default: true })
   birthdayReminderEnabled: boolean;
 

@@ -4,9 +4,21 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { uploadPreparedFile } from '@/app/utils/fileUpload';
 import TextField from '@mui/material/TextField';
+import Autocomplete from '@mui/material/Autocomplete';
 import { getRoleDisplayName } from '@/lib/roleDisplay';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+const BLOOD_GROUP_OPTIONS = [
+  'A+',
+  'A-',
+  'B+',
+  'B-',
+  'AB+',
+  'AB-',
+  'O+',
+  'O-',
+];
 
 type Staff = {
   id: number;
@@ -20,6 +32,7 @@ type Staff = {
   branchName?: string;
   joiningDate?: string;
   dateOfBirth?: string;
+  bloodGroup?: string | null;
   visibleToCustomer?: boolean;
   visibleToDealer?: boolean;
   isHidden?: boolean;
@@ -55,7 +68,8 @@ isSupportingStaff: false,
 branchName: '',
   joiningDate: '',
   dateOfBirth: '',
-  birthdayReminderEnabled: true,
+bloodGroup: '',
+birthdayReminderEnabled: true,
   birthdayRemarks: '',
   employmentType: 'FULL_TIME',
   visibleToCustomer: false,
@@ -101,6 +115,65 @@ const USER_ROLE_OPTIONS = [
   'FRANCHISE_MANAGER',
 ];
 
+function SearchableFilter({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Autocomplete
+      fullWidth
+      size="small"
+      options={options}
+      value={value || null}
+      onChange={(_, selectedValue) =>
+        onChange(selectedValue || '')
+      }
+      openOnFocus
+      autoHighlight
+      noOptionsText="No matching options"
+      slotProps={{
+        listbox: {
+          sx: {
+            maxHeight: 200,
+            overflowY: 'auto',
+            '& .MuiAutocomplete-option': {
+              fontSize: '13px',
+              minHeight: '34px',
+            },
+          },
+        },
+      }}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          label={label}
+          placeholder="Search..."
+          size="small"
+        />
+      )}
+      sx={{
+        minWidth: 0,
+        '& .MuiOutlinedInput-root': {
+          borderRadius: '10px',
+          minHeight: '42px',
+          backgroundColor: '#fff',
+          fontSize: '13px',
+        },
+        '& .MuiInputLabel-root': {
+          fontSize: '13px',
+        },
+      }}
+    />
+  );
+}
+
 export default function StaffPage() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [form, setForm] = useState<any>(emptyForm);
@@ -109,6 +182,21 @@ export default function StaffPage() {
   const [search, setSearch] = useState('');
   const [branchName, setBranchName] = useState('');
   const [department, setDepartment] = useState('');
+  const [bloodGroup, setBloodGroup] = useState('');
+
+const [branchOptions, setBranchOptions] =
+  useState<string[]>([]);
+
+const [departmentOptions, setDepartmentOptions] =
+  useState<string[]>([]);
+
+const [appliedFilters, setAppliedFilters] = useState({
+  search: '',
+  branchName: '',
+  department: '',
+  bloodGroup: '',
+  showHidden: false,
+});
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -152,19 +240,44 @@ const [showLinkedUserOptions, setShowLinkedUserOptions] = useState(false);
   setUsers(Array.isArray(res.data) ? res.data : []);
 };
 
+const fetchFilterOptions = async () => {
+  try {
+    const res = await axios.get(
+      `${API_BASE_URL}/staff/filter-options`,
+      {
+        headers: headers(),
+      },
+    );
+
+    setBranchOptions(
+      Array.isArray(res.data?.branches)
+        ? res.data.branches
+        : [],
+    );
+
+    setDepartmentOptions(
+      Array.isArray(res.data?.departments)
+        ? res.data.departments
+        : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to load staff filter options',
+      error,
+    );
+  }
+};
+
   const fetchStaff = async () => {
     try {
       setLoading(true);
 
       const res = await axios.get(`${API_BASE_URL}/staff`, {
         params: {
-          page,
-          limit: 20,
-          search,
-          branchName,
-          department,
-          showHidden,
-        },
+  page,
+  limit: 20,
+  ...appliedFilters,
+},
         headers: headers(),
       });
 
@@ -178,13 +291,34 @@ const [showLinkedUserOptions, setShowLinkedUserOptions] = useState(false);
     }
   };
 
-  const clearFilters = () => {
-    setSearch('');
-    setBranchName('');
-    setDepartment('');
-    setShowHidden(false);
-    setPage(1);
-  };
+  const applyFilters = () => {
+  setPage(1);
+
+  setAppliedFilters({
+    search: search.trim(),
+    branchName,
+    department,
+    bloodGroup,
+    showHidden,
+  });
+};
+
+const clearFilters = () => {
+  setSearch('');
+  setBranchName('');
+  setDepartment('');
+  setBloodGroup('');
+  setShowHidden(false);
+  setPage(1);
+
+  setAppliedFilters({
+    search: '',
+    branchName: '',
+    department: '',
+    bloodGroup: '',
+    showHidden: false,
+  });
+};
 
       const exportStaffCsv = async () => {
     try {
@@ -193,13 +327,10 @@ const [showLinkedUserOptions, setShowLinkedUserOptions] = useState(false);
       // Fetch first page so we know how many pages exist.
       const firstRes = await axios.get(`${API_BASE_URL}/staff`, {
         params: {
-          page: 1,
-          limit: exportLimit,
-          search,
-          branchName,
-          department,
-          showHidden,
-        },
+  page: 1,
+  limit: exportLimit,
+  ...appliedFilters,
+},
         headers: headers(),
       });
 
@@ -215,13 +346,10 @@ const [showLinkedUserOptions, setShowLinkedUserOptions] = useState(false);
       for (let exportPage = 2; exportPage <= exportTotalPages; exportPage++) {
         const res = await axios.get(`${API_BASE_URL}/staff`, {
           params: {
-            page: exportPage,
-            limit: exportLimit,
-            search,
-            branchName,
-            department,
-            showHidden,
-          },
+  page: exportPage,
+  limit: exportLimit,
+  ...appliedFilters,
+},
           headers: headers(),
         });
 
@@ -315,10 +443,15 @@ const [showLinkedUserOptions, setShowLinkedUserOptions] = useState(false);
   };
 
   useEffect(() => {
-    fetchStaff();
-    fetchUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, showHidden]);
+  fetchUsers();
+  fetchFilterOptions();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
+useEffect(() => {
+  fetchStaff();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [page, appliedFilters]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -337,20 +470,27 @@ setShowLinkedUserOptions(false);
     }
 
     try {
-      let saved: any;
+  let saved: any;
 
-      if (editingId) {
+  const payload = {
+    ...form,
+    joiningDate: form.joiningDate || null,
+    dateOfBirth: form.dateOfBirth || null,
+    bloodGroup: form.bloodGroup || null,
+  };
+
+  if (editingId) {
         const res = await axios.patch(
-          `${API_BASE_URL}/staff/${editingId}`,
-          form,
-          { headers: headers() },
-        );
+  `${API_BASE_URL}/staff/${editingId}`,
+  payload,
+  { headers: headers() },
+);
         saved = res.data;
         alert('Staff updated successfully');
       } else {
-        const res = await axios.post(`${API_BASE_URL}/staff`, form, {
-          headers: headers(),
-        });
+       const res = await axios.post(`${API_BASE_URL}/staff`, payload, {
+  headers: headers(),
+});
         saved = res.data;
         alert('Staff added successfully');
       }
@@ -373,7 +513,8 @@ setShowLinkedUserOptions(false);
       }
 
       resetForm();
-      fetchStaff();
+fetchStaff();
+fetchFilterOptions();
     } catch (error: any) {
       console.error(error);
       alert(error?.response?.data?.message || 'Failed to save staff');
@@ -383,11 +524,12 @@ setShowLinkedUserOptions(false);
   const startEdit = (item: any) => {
     setEditingId(item.id);
     setForm({
-      ...emptyForm,
-      ...item,
-      joiningDate: item.joiningDate || '',
-      dateOfBirth: item.dateOfBirth || '',
-    });
+  ...emptyForm,
+  ...item,
+  joiningDate: item.joiningDate || '',
+  dateOfBirth: item.dateOfBirth || '',
+  bloodGroup: item.bloodGroup || '',
+});
     setLinkedUserSearch(
   item.linkedUserId ? `Linked User ID: ${item.linkedUserId}` : '',
 );
@@ -783,6 +925,26 @@ const filteredUsers = users.filter((user) => {
   }}
 />
 
+<select
+  aria-label="Blood Group"
+  value={form.bloodGroup || ''}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      bloodGroup: e.target.value,
+    })
+  }
+  className="w-full rounded-xl border border-gray-300 bg-white p-3"
+>
+  <option value="">Blood Group (Optional)</option>
+
+  {BLOOD_GROUP_OPTIONS.map((group) => (
+    <option key={group} value={group}>
+      {group}
+    </option>
+  ))}
+</select>
+
           <select value={form.employmentType} onChange={(e) => setForm({ ...form, employmentType: e.target.value })} className="rounded-xl border p-3">
             <option value="FULL_TIME">Full Time</option>
             <option value="PART_TIME">Part Time</option>
@@ -830,24 +992,58 @@ const filteredUsers = users.filter((user) => {
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="text-lg font-bold text-gray-800">Filters</h2>
 
-        <div className="mt-3 grid gap-3 md:grid-cols-4">
-          <input placeholder="Search staff" value={search} onChange={(e) => setSearch(e.target.value)} className="rounded-xl border p-3" />
-          <input placeholder="Branch" value={branchName} onChange={(e) => setBranchName(e.target.value)} className="rounded-xl border p-3" />
-          <input placeholder="Department" value={department} onChange={(e) => setDepartment(e.target.value)} className="rounded-xl border p-3" />
-          <label className="rounded-xl border p-3 text-sm">
-            <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> View Hidden
-          </label>
-        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+  <input
+    placeholder="Search name / code / mobile"
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter') {
+        applyFilters();
+      }
+    }}
+    className="col-span-2 min-w-0 rounded-[10px] border border-gray-400 bg-white px-3 py-2 text-sm outline-none focus:border-blue-600 lg:col-span-1"
+  />
+
+  <SearchableFilter
+    label="Branch"
+    value={branchName}
+    options={branchOptions}
+    onChange={setBranchName}
+  />
+
+  <SearchableFilter
+    label="Department"
+    value={department}
+    options={departmentOptions}
+    onChange={setDepartment}
+  />
+
+  <SearchableFilter
+    label="Blood Group"
+    value={bloodGroup}
+    options={BLOOD_GROUP_OPTIONS}
+    onChange={setBloodGroup}
+  />
+
+  <SearchableFilter
+    label="Staff Status"
+    value={
+      showHidden ? 'Hidden Staff' : 'Active Staff'
+    }
+    options={[
+      'Active Staff',
+      'Hidden Staff',
+    ]}
+    onChange={(value) =>
+      setShowHidden(value === 'Hidden Staff')
+    }
+  />
+</div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
           <button
-            onClick={() => {
-              if (page !== 1) {
-                setPage(1);
-              } else {
-                fetchStaff();
-              }
-            }}
+            onClick={applyFilters}
             className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
           >
             Apply
@@ -892,6 +1088,21 @@ const filteredUsers = users.filter((user) => {
                     <p className="text-sm text-gray-500">{item.designation || '-'} | {item.department || '-'}</p>
                     <p className="text-sm text-gray-500">{item.mobile || '-'} | {item.branchName || '-'}</p>
                     <p className="text-xs text-gray-400">DOB: {item.dateOfBirth || '-'}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+  <span className="text-xs font-medium text-gray-600">
+    Blood Group:
+  </span>
+
+  <span
+    className={`rounded-md border px-2 py-0.5 text-xs font-semibold ${
+      item.bloodGroup
+        ? 'border-red-200 bg-red-50 text-red-700'
+        : 'border-gray-200 bg-gray-50 text-gray-500'
+    }`}
+  >
+    {item.bloodGroup || 'Not Added'}
+  </span>
+</div>
                   </div>
                 </div>
 
@@ -1009,6 +1220,9 @@ const filteredUsers = users.filter((user) => {
           <p className="mt-2 text-sm">Mobile: {vaultStaff.mobile || '-'}</p>
           <p className="text-sm">Email: {vaultStaff.email || '-'}</p>
           <p className="text-sm">DOB: {vaultStaff.dateOfBirth || '-'}</p>
+          <p className="text-sm">
+  Blood Group: {vaultStaff.bloodGroup || 'Not Added'}
+</p>
           <p className="text-sm">Joining: {vaultStaff.joiningDate || '-'}</p>
           <p className="text-sm">Department: {vaultStaff.department || '-'}</p>
           <p className="text-sm">Branch: {vaultStaff.branchName || '-'}</p>
