@@ -31,6 +31,10 @@ import dayjs, {
 } from 'dayjs';
 
 import { getRoleDisplayName } from '@/lib/roleDisplay';
+import MyNetwork from './components/MyNetwork';
+import MyEarnings from './components/MyEarnings';
+import NetworkManagement from './components/NetworkManagement';
+import IncentiveSettlementModal from './components/IncentiveSettlementModal';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -41,6 +45,9 @@ type Tab =
   | 'REFERRALS'
   | 'PAYOUTS'
   | 'CREATOR_PAYOUTS'
+  | 'MY_NETWORK'
+  | 'MY_EARNINGS'
+  | 'NETWORK_MANAGEMENT'
   | 'SETTINGS';
 
 type CurrentUser = {
@@ -247,6 +254,7 @@ type SolarMitraSetting = {
   id: number;
   defaultPayoutAmount: number;
   creatorPayoutAmount: number;
+  networkPoolAmount: number | string;
   payoutQualificationType: string;
   requiredProjectPaymentPercentage: number;
   isActive: boolean;
@@ -596,19 +604,6 @@ const [
   setShowCreatorPayoutPaidModal,
 ] = useState(false);
 
-const [
-  creatorPayoutPaidForm,
-  setCreatorPayoutPaidForm,
-] = useState({
-  paymentMode: '',
-  paymentReference: '',
-  paymentRemarks: '',
-});
-
-const [
-  savingCreatorPayoutPayment,
-  setSavingCreatorPayoutPayment,
-] = useState(false);
 
 const [creatorPayouts, setCreatorPayouts] =
   useState<SolarMitraCreatorPayout[]>([]);
@@ -812,17 +807,13 @@ const [showPosterRejectionForm, setShowPosterRejectionForm] =
     useState(false);
   const [selectedPayout, setSelectedPayout] =
     useState<SolarMitraPayout | null>(null);
-  const [paidForm, setPaidForm] = useState({
-    paymentMode: '',
-    paymentReference: '',
-    paymentRemarks: '',
-  });
 
-    const [settingsForm, setSettingsForm] = useState({
-    defaultPayoutAmount: '',
-    creatorPayoutAmount: '',
-    requiredProjectPaymentPercentage: '',
-  });
+   const [settingsForm, setSettingsForm] = useState({
+  defaultPayoutAmount: '',
+  creatorPayoutAmount: '',
+  networkPoolAmount: '',
+  requiredProjectPaymentPercentage: '',
+});
 
   const [qrMitra, setQrMitra] =
     useState<SolarMitra | null>(null);
@@ -966,6 +957,10 @@ const [
 });
 
   const userRoles = currentUser?.roles || [];
+
+  const isSolarMitraOnly =
+  userRoles.includes('SOLAR_MITRA') &&
+  userRoles.every((role) => role === 'SOLAR_MITRA');
 
 const isOwner =
   userRoles.includes('OWNER');
@@ -1802,6 +1797,11 @@ try {
           res.data?.creatorPayoutAmount ??
             0,
         ),
+
+      networkPoolAmount:
+  String(
+    res.data?.networkPoolAmount ?? '',
+  ),
       requiredProjectPaymentPercentage:
         String(
           res.data
@@ -1831,14 +1831,22 @@ try {
     try {
       setLoading(true);
 
-      await Promise.all([
-  loadMitras(),
-  loadReferrals(),
-  loadPayouts(),
-  loadMeetings(),
-  loadSettings(),
-  loadFranchiseManagers(),
-]);
+   if (isSolarMitraOnly) {
+  await Promise.all([
+    loadMitras(),
+    loadReferrals(),
+    loadPayouts(),
+  ]);
+} else {
+  await Promise.all([
+    loadMitras(),
+    loadReferrals(),
+    loadPayouts(),
+    loadMeetings(),
+    loadSettings(),
+    loadFranchiseManagers(),
+  ]);
+}
     } catch (error) {
       console.error(
         'Failed to load Solar Mitra module:',
@@ -1857,14 +1865,23 @@ try {
   };
 
   useEffect(() => {
-    loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  if (!currentUser?.id) {
+    return;
+  }
+
+  loadAll();
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [currentUser]);
 
     useEffect(() => {
-    if (activeTab !== 'CREATOR_PAYOUTS') {
-      return;
-    }
+    if (
+  !currentUser?.id ||
+  isSolarMitraOnly ||
+  activeTab !== 'CREATOR_PAYOUTS'
+) {
+  return;
+}
 
     loadCreatorPayouts();
 
@@ -3968,12 +3985,15 @@ if (
   ) => {
     event.preventDefault();
 
-    if (!referralForm.solarMitraId) {
-      alert(
-        'Please select a Solar Mitra',
-      );
-      return;
-    }
+   if (
+  !isSolarMitraOnly &&
+  !referralForm.solarMitraId
+) {
+  alert(
+    'Please select a Solar Mitra',
+  );
+  return;
+}
 
     if (
       !referralForm.customerName.trim() ||
@@ -3989,7 +4009,9 @@ if (
       setSaving(true);
 
       await axios.post(
-        `${API_BASE_URL}/solar-mitra/${referralForm.solarMitraId}/referrals`,
+  isSolarMitraOnly
+    ? `${API_BASE_URL}/solar-mitra/me/referrals`
+    : `${API_BASE_URL}/solar-mitra/${referralForm.solarMitraId}/referrals`,
         {
           customerName:
             referralForm.customerName,
@@ -4071,147 +4093,20 @@ if (
 };
 
   const openMarkPaid = (
-    payout: SolarMitraPayout,
-  ) => {
-    setSelectedPayout(payout);
-
-    setPaidForm({
-      paymentMode: '',
-      paymentReference: '',
-      paymentRemarks: '',
-    });
-
-    setShowPaidModal(true);
-  };
-
-  const markPaid = async (
-    event: FormEvent,
-  ) => {
-    event.preventDefault();
-
-    if (!selectedPayout) return;
-
-    try {
-      setSaving(true);
-
-      await axios.patch(
-        `${API_BASE_URL}/solar-mitra/payouts/${selectedPayout.id}/paid`,
-        paidForm,
-        {
-          headers:
-            getAuthHeaders(),
-        },
-      );
-
-      alert(
-        'Solar Mitra payout marked as paid',
-      );
-
-      setShowPaidModal(false);
-      setSelectedPayout(null);
-
-      await Promise.all([
-        loadPayouts(),
-        loadReferrals(),
-      ]);
-    } catch (error) {
-      console.error(error);
-
-      alert(
-        getErrorMessage(
-          error,
-          'Failed to mark payout as paid',
-        ),
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const markCreatorPayoutPaid = async (
-  event: FormEvent,
+  payout: SolarMitraPayout,
 ) => {
-  event.preventDefault();
-
-  if (!selectedCreatorPayout) {
-    return;
-  }
-
   if (
     !userRoles.includes('OWNER') &&
     !userRoles.includes('ACCOUNT_MANAGER')
   ) {
-    alert(
-      'Only Owner or Account Manager can mark Creator Payouts as paid',
-    );
     return;
   }
 
-  const paymentMode =
-    creatorPayoutPaidForm.paymentMode.trim();
-
-  const paymentReference =
-    creatorPayoutPaidForm.paymentReference.trim();
-
-  const paymentRemarks =
-    creatorPayoutPaidForm.paymentRemarks.trim();
-
-  if (!paymentMode || !paymentReference) {
-    alert(
-      'Payment mode and transaction reference are required',
-    );
-    return;
-  }
-
-  if (savingCreatorPayoutPayment) {
-    return;
-  }
-
-  setSavingCreatorPayoutPayment(true);
-
-  try {
-    await axios.patch(
-      `${API_BASE_URL}/solar-mitra/creator-payouts/${selectedCreatorPayout.id}/paid`,
-      {
-        paymentMode,
-        paymentReference,
-        paymentRemarks,
-      },
-      {
-        headers: getAuthHeaders(),
-      },
-    );
-
-    setShowCreatorPayoutPaidModal(false);
-    setSelectedCreatorPayout(null);
-
-    setCreatorPayoutPaidForm({
-      paymentMode: '',
-      paymentReference: '',
-      paymentRemarks: '',
-    });
-
-    await loadCreatorPayouts();
-
-    alert(
-      'Creator Payout marked as paid successfully',
-    );
-  } catch (error) {
-    console.error(
-      'Failed to mark Creator Payout as paid',
-      error,
-    );
-
-    alert(
-      getErrorMessage(
-        error,
-        'Failed to mark Creator Payout as paid',
-      ),
-    );
-  } finally {
-    setSavingCreatorPayoutPayment(false);
-  }
+  setSelectedPayout(payout);
+  setShowPaidModal(true);
 };
+
+  
 
   const saveSettings = async (
     event: FormEvent,
@@ -4241,6 +4136,8 @@ if (
               settingsForm
                 .creatorPayoutAmount,
             ),
+            networkPoolAmount:
+  settingsForm.networkPoolAmount.trim(),
           requiredProjectPaymentPercentage:
             Number(
               settingsForm
@@ -5456,10 +5353,10 @@ const exportSolarReferralsCsv = async (
   }
 };
 
-  const tabs: {
-    key: Tab;
-    label: string;
-  }[] = [
+  const allTabs: {
+  key: Tab;
+  label: string;
+}[] = [
     {
       key: 'OVERVIEW',
       label: 'Overview',
@@ -5484,6 +5381,31 @@ const exportSolarReferralsCsv = async (
       key: 'CREATOR_PAYOUTS',
       label: 'Creator Payouts',
     },
+    {
+  key: 'MY_NETWORK',
+  label: 'My Network',
+},
+{
+  key: 'MY_EARNINGS',
+  label: 'My Earnings',
+},
+...(
+  userRoles.some((role) =>
+    [
+      'OWNER',
+      'FRANCHISE_HEAD',
+      'MARKETING_HEAD',
+      'ACCOUNT_MANAGER',
+    ].includes(role),
+  )
+    ? [
+        {
+          key: 'NETWORK_MANAGEMENT' as Tab,
+          label: 'Network Management',
+        },
+      ]
+    : []
+),
         ...(!userRoles.includes('SOLAR_MITRA_ASSISTANT') ||
     isOwner ||
     isFranchiseHead
@@ -5496,12 +5418,24 @@ const exportSolarReferralsCsv = async (
       : []),
   ];
 
+  const tabs = isSolarMitraOnly
+  ? allTabs.filter((tab) =>
+      [
+        'OVERVIEW',
+        'MITRAS',
+        'REFERRALS',
+        'MY_NETWORK',
+        'MY_EARNINGS',
+      ].includes(tab.key),
+    )
+  : allTabs;
+
   if (loading) {
     return (
       <div className="p-6">
         <div className="rounded-2xl bg-white p-8 text-center shadow">
           <p className="font-semibold text-gray-600">
-            Loading Solar Mitra...
+            Loading Solar Mitra Chain...
           </p>
         </div>
       </div>
@@ -5514,13 +5448,13 @@ const exportSolarReferralsCsv = async (
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-2xl font-black text-gray-900">
-              Solar Mitra
-            </h1>
+  Solar Mitra Chain
+</h1>
 
-            <p className="mt-1 text-sm text-gray-500">
-              Manage referral partners, customer referrals,
-              project-linked payouts and payout rules.
-            </p>
+<p className="mt-1 text-sm text-gray-500">
+  Grow your Solar Mitra network, manage customer referrals,
+  track team performance and earn project-linked incentives.
+</p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -5561,6 +5495,26 @@ const exportSolarReferralsCsv = async (
           ))}
         </div>
       </div>
+
+      {activeTab === 'MY_NETWORK' && (
+  <MyNetwork />
+)}
+
+{activeTab === 'MY_EARNINGS' && (
+  <MyEarnings />
+)}
+
+{activeTab === 'NETWORK_MANAGEMENT' &&
+  userRoles.some((role) =>
+    [
+      'OWNER',
+      'FRANCHISE_HEAD',
+      'MARKETING_HEAD',
+      'ACCOUNT_MANAGER',
+    ].includes(role),
+  ) && (
+    <NetworkManagement roles={userRoles} />
+)}
 
       {activeTab === 'OVERVIEW' && (
         <>
@@ -5715,10 +5669,11 @@ const exportSolarReferralsCsv = async (
                 </div>
               </div>
 
-              <div className="mt-5 rounded-xl border border-gray-100 p-4">
-                <p className="text-sm font-semibold text-gray-500">
-                  Current Default Terms
-                </p>
+              {!isSolarMitraOnly && (
+<div className="mt-5 rounded-xl border border-gray-100 p-4">
+  <p className="text-sm font-semibold text-gray-500">
+    Current Default Terms
+  </p>
 
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div>
@@ -5744,8 +5699,9 @@ const exportSolarReferralsCsv = async (
                       %
                     </p>
                   </div>
-                </div>
+                 </div>
               </div>
+              )}
             </div>
           </div>
         </>
@@ -6797,10 +6753,12 @@ setMitraPosterPrintingStatus('');
 
                     
 
-                    <div>
-                      <p className="text-xs font-semibold text-gray-400">
-                        Payout
-                      </p>
+                    {!isSolarMitraOnly && (
+<>
+<div>
+  <p className="text-xs font-semibold text-gray-400">
+    Payout
+  </p>
                       <p className="font-semibold text-gray-800">
                         {item.payoutAmountOverride !==
                           null &&
@@ -6830,7 +6788,9 @@ setMitraPosterPrintingStatus('');
                                 0,
                             )}% default`}
                       </p>
-                    </div>
+                      </div>
+                    </>
+                    )}
                   </div>
 
 <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -8645,16 +8605,9 @@ setShowReferralMitraOptions(false);
     <button
       type="button"
       onClick={() => {
-        setSelectedCreatorPayout(item);
-
-        setCreatorPayoutPaidForm({
-          paymentMode: '',
-          paymentReference: '',
-          paymentRemarks: '',
-        });
-
-        setShowCreatorPayoutPaidModal(true);
-      }}
+  setSelectedCreatorPayout(item);
+  setShowCreatorPayoutPaidModal(true);
+}}
       className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
     >
       Mark Paid
@@ -8987,15 +8940,77 @@ setShowReferralMitraOptions(false);
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 disabled:bg-gray-100"
               />
 
-              <p className="mt-2 text-xs text-gray-500">
-                One-time payout to the staff member who originally
-                registered the Solar Mitra, eligible only after QR
-                poster verification is approved. Solar Mitra
-                Assistants are excluded because their incentives
-                are handled through payroll. Creator payouts are
-                separate from referral and project payouts.
-              </p>
-            </div>
+             <p className="mt-2 text-xs text-gray-500">
+  One-time incentive for the eligible user who originally
+  registered the Solar Mitra, after QR poster verification
+  is approved. Solar Mitra Assistants remain excluded
+  under the existing incentive rules. Creator incentives
+  are separate from direct Project and Network incentives.
+</p>
+</div>
+
+<div>
+  <label className="mb-1 block text-sm font-bold text-gray-700">
+    Network Pool Amount (₹)
+  </label>
+
+  <input
+    type="number"
+    min="0"
+    max="9999999999.99"
+    step="0.01"
+    required={isOwner}
+    value={settingsForm.networkPoolAmount}
+    disabled={!isOwner}
+    onChange={(event) =>
+      setSettingsForm((prev) => ({
+        ...prev,
+        networkPoolAmount: event.target.value,
+      }))
+    }
+    className="w-full rounded-xl border border-gray-300 px-4 py-3 disabled:bg-gray-100"
+  />
+
+  <p className="mt-2 text-xs text-gray-500">
+    Additional incentive pool for each qualifying Solar
+    Mitra Project, distributed equally among its upline
+    members, including the original CRM user.
+    Inactive or blocked members' shares are retained
+    by the company.
+  </p>
+
+  <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs leading-relaxed text-blue-800">
+    <p className="font-bold">
+      Network Pool Rules
+    </p>
+
+    <ul className="mt-2 list-disc space-y-1 pl-4">
+      <li>
+        This amount is separate from the direct Project
+        incentive.
+      </li>
+
+      <li>
+        The applicable rate is determined by the
+        Project incentive eligibility date.
+      </li>
+
+      <li>
+        Previously generated Network payouts remain
+        unchanged when the rate is updated.
+      </li>
+
+      <li>
+        Setting the amount to zero disables the Network
+        pool for subsequent eligibility dates.
+      </li>
+
+      <li>
+        Only the Owner can modify this amount.
+      </li>
+    </ul>
+  </div>
+</div>
 
             <div>
               <label className="mb-1 block text-sm font-bold text-gray-700">
@@ -9575,21 +9590,28 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
   </select>
 </label>
 
-                  <FormField
-                    label="Primary Phone *"
-                    value={
-                      mitraForm.primaryPhone
-                    }
-                    onChange={(value) =>
-                      setMitraForm(
-                        (prev: any) => ({
-                          ...prev,
-                          primaryPhone:
-                            value,
-                        }),
-                      )
-                    }
-                  />
+                  {isSolarMitraOnly && editingMitra ? (
+  <div>
+    <label className="mb-1 block text-sm font-bold text-gray-700">
+      Primary Phone
+    </label>
+
+    <div className="rounded-xl border border-gray-200 bg-gray-100 px-4 py-3 text-sm text-gray-600">
+      {mitraForm.primaryPhone}
+    </div>
+  </div>
+) : (
+  <FormField
+    label="Primary Phone *"
+    value={mitraForm.primaryPhone}
+    onChange={(value) =>
+      setMitraForm((prev: any) => ({
+        ...prev,
+        primaryPhone: value,
+      }))
+    }
+  />
+)}
 
                   <FormField
                     label="Secondary Phone"
@@ -9607,6 +9629,8 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
                     }
                   />
 
+{(!isSolarMitraOnly || !editingMitra) && (
+  <>
                   <FormField
                     label="Email"
                     value={mitraForm.email}
@@ -9622,10 +9646,10 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
 
                   <FormField
                     label={
-  editingMitra
-    ? 'New CRM Password'
-    : 'CRM Password *'
-}
+                      editingMitra
+                   ? 'New CRM Password'
+                   : 'CRM Password *'
+                    }
                     value={
                       mitraForm.portalPassword
                     }
@@ -9639,6 +9663,8 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
                       )
                     }
                   />
+                    </>
+                   )}
                 </div>
               </div>
 
@@ -10204,8 +10230,9 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
                       </div>
                     )}
                     </div>
-       )}
-
+                 )}
+ 
+                {!isSolarMitraOnly && (
                   <div>
                     <label className="mb-1 block text-sm font-bold text-gray-700">
                       Status
@@ -10240,12 +10267,11 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
                       </option>
                     </select>
                   </div>
+                  )}
                 </div>
               </div>
 
-                         {(!userRoles.includes('SOLAR_MITRA_ASSISTANT') ||
-  isOwner ||
-  isFranchiseHead) && (
+           {(isOwner || isFranchiseHead) && (
   <div>
     <h3 className="mb-1 font-black text-gray-900">
       Payout Override
@@ -11089,10 +11115,11 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
               onSubmit={saveReferral}
               className="space-y-4 p-5"
             >
-              <div className="relative">
-                <label className="mb-1 block text-sm font-bold text-gray-700">
-                  Solar Mitra *
-                </label>
+              {!isSolarMitraOnly ? (
+  <div className="relative">
+    <label className="mb-1 block text-sm font-bold text-gray-700">
+      Solar Mitra *
+    </label>
 
                 <input
                   value={
@@ -11164,9 +11191,21 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
                         No active Solar Mitra found.
                       </p>
                     )}
-                  </div>
+                                    </div>
                 )}
               </div>
+            ) : (
+              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+                <p className="text-sm font-bold text-green-800">
+                  Your Personal Referral
+                </p>
+
+                <p className="mt-1 text-xs text-green-700">
+                  This customer referral will be registered
+                  under your own Solar Mitra account.
+                </p>
+              </div>
+            )}
 
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
@@ -11332,231 +11371,85 @@ viewingPosterMitra.qrPosterInstallationPhotoUrl2 ? (
         </div>
       )}
 
-      {showPaidModal &&
-        selectedPayout && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-3">
-            <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
-              <div className="border-b p-5">
-                <h2 className="text-xl font-black text-gray-900">
-                  Mark Payout Paid
-                </h2>
+      {/* Direct Project Incentive Settlement */}
 
-                <p className="mt-1 text-sm text-gray-500">
-                  {
-                    selectedPayout.solarMitraName
-                  }{' '}
-                  ·{' '}
-                  {money(
-                    selectedPayout.payoutAmount,
-                  )}
-                </p>
-              </div>
+{showPaidModal &&
+  selectedPayout &&
+  (
+    userRoles.includes('OWNER') ||
+    userRoles.includes('ACCOUNT_MANAGER')
+  ) && (
+    <IncentiveSettlementModal
+      key={`project-${selectedPayout.id}`}
+      category="PROJECT"
+      payoutId={selectedPayout.id}
+      beneficiaryName={
+        selectedPayout.solarMitraName || ''
+      }
+      onClose={() => {
+        setShowPaidModal(false);
+        setSelectedPayout(null);
+      }}
+      onSettled={() => {
+        setShowPaidModal(false);
+        setSelectedPayout(null);
 
-              <form
-                onSubmit={markPaid}
-                className="space-y-4 p-5"
-              >
-                <FormField
-                  label="Payment Mode"
-                  value={
-                    paidForm.paymentMode
-                  }
-                  onChange={(value) =>
-                    setPaidForm(
-                      (prev) => ({
-                        ...prev,
-                        paymentMode:
-                          value,
-                      }),
-                    )
-                  }
-                />
+        alert(
+          'Solar Mitra Project incentive settled successfully.',
+        );
 
-                <FormField
-                  label="Payment Reference"
-                  value={
-                    paidForm.paymentReference
-                  }
-                  onChange={(value) =>
-                    setPaidForm(
-                      (prev) => ({
-                        ...prev,
-                        paymentReference:
-                          value,
-                      }),
-                    )
-                  }
-                />
+        void Promise.all([
+          loadPayouts(),
+          loadReferrals(),
+        ]).catch((error) => {
+          console.error(
+            'Unable to refresh payout records',
+            error,
+          );
+        });
+      }}
+    />
+)}
 
-                <div>
-                  <label className="mb-1 block text-sm font-bold text-gray-700">
-                    Remarks
-                  </label>
 
-                  <textarea
-                    rows={3}
-                    value={
-                      paidForm.paymentRemarks
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setPaidForm(
-                        (prev) => ({
-                          ...prev,
-                          paymentRemarks:
-                            event.target
-                              .value,
-                        }),
-                      )
-                    }
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
-                  />
-                </div>
+{/* Creator Incentive Settlement */}
 
-                <div className="rounded-xl bg-amber-50 p-4 text-sm font-semibold text-amber-800">
-                  This records the payout as paid. Use the actual
-                  payment mode/reference used by the company.
-                </div>
+{showCreatorPayoutPaidModal &&
+  selectedCreatorPayout &&
+  (
+    userRoles.includes('OWNER') ||
+    userRoles.includes('ACCOUNT_MANAGER')
+  ) && (
+    <IncentiveSettlementModal
+      key={`creator-${selectedCreatorPayout.id}`}
+      category="CREATOR"
+      payoutId={selectedCreatorPayout.id}
+      beneficiaryName={
+        selectedCreatorPayout.creatorName || ''
+      }
+      onClose={() => {
+        setShowCreatorPayoutPaidModal(false);
+        setSelectedCreatorPayout(null);
+      }}
+      onSettled={() => {
+        setShowCreatorPayoutPaidModal(false);
+        setSelectedCreatorPayout(null);
 
-                <div className="flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowPaidModal(
-                        false,
-                      )
-                    }
-                    className="rounded-xl border border-gray-300 px-5 py-2.5 text-sm font-bold"
-                  >
-                    Cancel
-                  </button>
+        alert(
+          'Solar Mitra Creator incentive settled successfully.',
+        );
 
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
-                  >
-                    {saving
-                      ? 'Saving...'
-                      : 'Confirm Paid'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-              {showCreatorPayoutPaidModal &&
-        selectedCreatorPayout && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-3">
-            <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
-              <div className="border-b border-gray-200 p-5">
-                <h2 className="text-xl font-black text-gray-900">
-                  Mark Creator Payout as Paid
-                </h2>
-
-                <p className="mt-2 text-sm text-gray-600">
-                  Solar Mitra:{' '}
-                  <span className="font-semibold">
-                    {selectedCreatorPayout.solarMitraName}
-                  </span>
-                </p>
-
-                <p className="mt-1 text-sm text-gray-600">
-                  Creator:{' '}
-                  <span className="font-semibold">
-                    {selectedCreatorPayout.creatorName || '-'}
-                  </span>
-                </p>
-
-                <p className="mt-2 text-lg font-bold text-emerald-700">
-                  {money(selectedCreatorPayout.payoutAmount)}
-                </p>
-              </div>
-
-              <form
-                onSubmit={markCreatorPayoutPaid}
-                className="space-y-4 p-5"
-              >
-                <FormField
-                  label="Payment Mode"
-                  value={creatorPayoutPaidForm.paymentMode}
-                  onChange={(value) =>
-                    setCreatorPayoutPaidForm((prev) => ({
-                      ...prev,
-                      paymentMode: value,
-                    }))
-                  }
-                />
-
-                <FormField
-                  label="Transaction Reference"
-                  value={creatorPayoutPaidForm.paymentReference}
-                  onChange={(value) =>
-                    setCreatorPayoutPaidForm((prev) => ({
-                      ...prev,
-                      paymentReference: value,
-                    }))
-                  }
-                />
-
-                <div>
-                  <label className="mb-1 block text-sm font-bold text-gray-700">
-                    Payment Remarks (Optional)
-                  </label>
-
-                  <textarea
-                    rows={3}
-                    value={creatorPayoutPaidForm.paymentRemarks}
-                    onChange={(event) =>
-                      setCreatorPayoutPaidForm((prev) => ({
-                        ...prev,
-                        paymentRemarks: event.target.value,
-                      }))
-                    }
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-orange-500"
-                    placeholder="Additional payment details"
-                  />
-                </div>
-
-                <p className="text-xs text-gray-500">
-                  Confirm only after the payment has actually
-                  been transferred. This action records the
-                  payment in CRM; it does not transfer money.
-                </p>
-
-                <div className="flex flex-wrap justify-end gap-3">
-                  <button
-                    type="button"
-                    disabled={savingCreatorPayoutPayment}
-                    onClick={() => {
-                      setShowCreatorPayoutPaidModal(false);
-                      setSelectedCreatorPayout(null);
-                    }}
-                    className="rounded-xl border border-gray-300 px-5 py-3 text-sm font-bold text-gray-700 disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={
-                      savingCreatorPayoutPayment ||
-                      !creatorPayoutPaidForm.paymentMode.trim() ||
-                      !creatorPayoutPaidForm.paymentReference.trim()
-                    }
-                    className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {savingCreatorPayoutPayment
-                      ? 'Saving Payment...'
-                      : 'Confirm Payment'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+        void loadCreatorPayouts().catch(
+          (error) => {
+            console.error(
+              'Unable to refresh Creator payouts',
+              error,
+            );
+          },
+        );
+      }}
+    />
+)}
 
       {qrMitra && qrDataUrl && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-3">

@@ -302,7 +302,7 @@ const navItems = [
 },
 
 {
-  name: 'Solar Mitra',
+  name: 'Solar Mitra Chain',
   href: '/solar-mitra',
   roles: [
     'OWNER',
@@ -336,6 +336,7 @@ const navItems = [
  'FRANCHISE_HEAD',
  'SOLAR_STORE',
  'SOLAR_MITRA_ASSISTANT',
+ 'SOLAR_MITRA',
 ],
 },
 

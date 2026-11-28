@@ -489,7 +489,7 @@ const [viewCalculationOpen, setViewCalculationOpen] =
 
           <input
             type="number"
-            placeholder="Owner Override Net Salary"
+            placeholder="Owner Override Net Salary (Excl. Solar Mitra)"
             value={form.ownerOverrideNetSalary}
             onChange={(e) => setForm({ ...form, ownerOverrideNetSalary: e.target.value })}
             className="rounded-xl border p-3"
@@ -605,9 +605,82 @@ const [viewCalculationOpen, setViewCalculationOpen] =
                       Present {item.presentDays} | Half {item.halfDays} | Absent {item.absentDays} | Leave {item.leaveDays}
                     </p>
                     <p className="text-sm text-gray-500">
-                      Deduction {money(Number(item.attendanceDeduction || 0) + Number(item.leaveDeduction || 0) + Number(item.penaltyAmount || 0) + Number(item.otherDeduction || 0))}
-                      {' '}| Incentive {money(item.incentiveAmount)}
-                    </p>
+  Deduction{' '}
+  {money(
+    Number(item.attendanceDeduction || 0) +
+    Number(item.leaveDeduction || 0) +
+    Number(item.penaltyAmount || 0) +
+    Number(item.otherDeduction || 0) +
+    Number(item.solarMitraRecoveryDeduction || 0)
+  )}
+  {' '}| Staff Incentive {money(item.incentiveAmount)}
+</p>
+
+{(
+  Number(item.solarMitraCreatorIncentiveAmount || 0) > 0 ||
+  Number(item.solarMitraProjectIncentiveAmount || 0) > 0 ||
+  Number(item.solarMitraNetworkIncentiveAmount || 0) > 0 ||
+  Number(item.solarMitraRecoveryDeduction || 0) > 0
+) && (
+  <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+    <p className="mb-3 text-sm font-bold text-emerald-900">
+      Solar Mitra Incentives
+    </p>
+
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div>
+        <p className="text-xs text-gray-600">
+          Creator Incentive
+        </p>
+        <p className="font-bold text-emerald-700">
+          {money(item.solarMitraCreatorIncentiveAmount)}
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs text-gray-600">
+          Direct Project Incentive
+        </p>
+        <p className="font-bold text-emerald-700">
+          {money(item.solarMitraProjectIncentiveAmount)}
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs text-gray-600">
+          Network Incentive
+        </p>
+        <p className="font-bold text-emerald-700">
+          {money(item.solarMitraNetworkIncentiveAmount)}
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs text-gray-600">
+          Recovery Deduction
+        </p>
+        <p className="font-bold text-red-700">
+          {money(item.solarMitraRecoveryDeduction)}
+        </p>
+      </div>
+    </div>
+
+    <div className="mt-3 flex items-center justify-between border-t border-emerald-200 pt-3">
+      <span className="text-sm font-semibold text-emerald-900">
+        Net Solar Mitra Incentive
+      </span>
+
+      <span className="font-bold text-emerald-700">
+        {money(
+          Number(item.solarMitraCreatorIncentiveAmount || 0) +
+          Number(item.solarMitraProjectIncentiveAmount || 0) +
+          Number(item.solarMitraNetworkIncentiveAmount || 0) -
+          Number(item.solarMitraRecoveryDeduction || 0)
+        )}
+      </span>
+    </div>
+  </div>
+)}
 
                     {Number(
   item.penaltyAmount || 0,
@@ -848,7 +921,8 @@ item.ruleSnapshot ? (
 >
   View Calculation
 </button>
-                    {!item.isHidden && item.status !== 'PAID' && (
+                    {!item.isHidden &&
+  ['DRAFT', 'GENERATED'].includes(item.status) && (
                       <button
                         onClick={() => startEdit(item)}
                         className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
@@ -875,14 +949,40 @@ item.ruleSnapshot ? (
                       </button>
                     )}
 
-                    <button
-                      onClick={() => hideRestore(item, !!item.isHidden)}
-                      className={`rounded-xl px-3 py-2 text-sm font-semibold text-white ${
-                        item.isHidden ? 'bg-green-600' : 'bg-red-600'
-                      }`}
-                    >
-                      {item.isHidden ? 'Restore' : 'Hide'}
-                    </button>
+                   {!item.isHidden && item.status !== 'PAID' && (
+  <button
+    onClick={() => hideRestore(item, false)}
+    className="rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white"
+  >
+    Hide
+  </button>
+)}
+
+{item.isHidden &&
+  Number(item.solarMitraCreatorIncentiveAmount || 0) === 0 &&
+  Number(item.solarMitraProjectIncentiveAmount || 0) === 0 &&
+  Number(item.solarMitraNetworkIncentiveAmount || 0) === 0 &&
+  Number(item.solarMitraRecoveryDeduction || 0) === 0 && (
+    <button
+      onClick={() => hideRestore(item, true)}
+      className="rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white"
+    >
+      Restore
+    </button>
+)}
+
+{item.isHidden &&
+  (
+    Number(item.solarMitraCreatorIncentiveAmount || 0) !== 0 ||
+    Number(item.solarMitraProjectIncentiveAmount || 0) !== 0 ||
+    Number(item.solarMitraNetworkIncentiveAmount || 0) !== 0 ||
+    Number(item.solarMitraRecoveryDeduction || 0) !== 0
+  ) && (
+    <p className="max-w-xs rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs font-medium text-amber-800">
+      Restore unavailable. Generate fresh payroll to
+      recalculate and reserve eligible Solar Mitra incentives.
+    </p>
+)}
                   </div>
                 </div>
               </div>
@@ -1060,6 +1160,34 @@ item.ruleSnapshot ? (
       </span>
     </div>
 
+    {[
+  {
+    label: 'Solar Mitra Creator Incentive',
+    amount: viewPayroll.solarMitraCreatorIncentiveAmount,
+  },
+  {
+    label: 'Solar Mitra Direct Project Incentive',
+    amount: viewPayroll.solarMitraProjectIncentiveAmount,
+  },
+  {
+    label: 'Solar Mitra Network Incentive',
+    amount: viewPayroll.solarMitraNetworkIncentiveAmount,
+  },
+].map((incentive) => (
+  <div
+    key={incentive.label}
+    className="flex items-center justify-between gap-3"
+  >
+    <span className="text-gray-600">
+      {incentive.label}
+    </span>
+
+    <span className="font-semibold text-green-700">
+      + {money(incentive.amount)}
+    </span>
+  </div>
+))}
+
     <div className="flex items-center justify-between gap-3">
       <span className="text-gray-600">
         Other Allowance
@@ -1131,6 +1259,16 @@ item.ruleSnapshot ? (
         )}
       </span>
     </div>
+
+    <div className="flex items-center justify-between gap-3">
+  <span className="text-gray-600">
+    Solar Mitra Recovery Deduction
+  </span>
+
+  <span className="font-semibold text-red-700">
+    - {money(viewPayroll.solarMitraRecoveryDeduction)}
+  </span>
+</div>
 
     <div className="flex items-center justify-between gap-3 border-t pt-3">
       <span className="text-base font-bold text-gray-900">
@@ -1638,7 +1776,7 @@ item.ruleSnapshot ? (
             </h3>
 
             <p className="mt-2 text-sm text-amber-700">
-              Override Net Salary:{' '}
+              Override Net Salary (Before Solar Mitra Adjustments):{' '}
               {money(
                 viewPayroll.ownerOverrideNetSalary,
               )}
