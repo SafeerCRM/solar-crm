@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -68,6 +69,10 @@ import {
   SolarMitraMeetingDocument,
 } from './solar-mitra-meeting-document.entity';
 
+import { SolarMitraNetworkRate } from './solar-mitra-network-rate.entity';
+
+import { SolarMitraNetworkService } from './solar-mitra-network.service';
+
 
 @Injectable()
 export class SolarMitraService {
@@ -96,6 +101,8 @@ private readonly meetingRepository:
 @InjectRepository(SolarMitraMeetingDocument)
 private readonly meetingDocumentRepository:
   Repository<SolarMitraMeetingDocument>,
+
+  private readonly solarMitraNetworkService: SolarMitraNetworkService,
 
 private readonly leadsService: LeadsService,
 
@@ -1667,6 +1674,14 @@ private async isCreatorPayoutEligible(
   mitra: SolarMitra,
   manager: EntityManager = this.dataSource.manager,
 ): Promise<boolean> {
+
+  if (
+  mitra.status !== SolarMitraStatus.ACTIVE ||
+  mitra.isHidden
+) {
+  return false;
+}
+
   if (
     mitra.posterVerificationStatus !==
     SolarMitraPosterVerificationStatus.ATTACHED
@@ -1715,60 +1730,116 @@ private async isCreatorPayoutEligible(
 private async ensureCreatorPayout(
   mitra: SolarMitra,
 ): Promise<SolarMitraCreatorPayout | null> {
-  const existing =
-    await this.creatorPayoutRepository.findOne({
-      where: { solarMitraId: mitra.id },
-    });
+  return this.dataSource.transaction(
+    async (manager) => {
+      await this.solarMitraNetworkService
+        .lockNetworkFinancialOperations(
+          manager,
+        );
 
-  // Never recreate or overwrite an existing payout,
-  // including PAID and CANCELLED records.
-  if (existing) {
-    return existing;
-  }
+      const mitraRepository =
+        manager.getRepository(SolarMitra);
 
-  const eligible =
-    await this.isCreatorPayoutEligible(mitra);
+      const payoutRepository =
+        manager.getRepository(
+          SolarMitraCreatorPayout,
+        );
 
-  if (!eligible) {
-    return null;
-  }
+      const currentMitra =
+        await mitraRepository.findOne({
+          where: {
+            id: mitra.id,
+          },
+          lock: {
+            mode: 'pessimistic_write',
+          },
+        });
 
-  const settings =
-    await this.getOrCreateSettings();
+      if (!currentMitra) {
+        return null;
+      }
 
-  const amount =
-    Number(settings.creatorPayoutAmount ?? 0);
+      const existing =
+        await payoutRepository.findOne({
+          where: {
+            solarMitraId: currentMitra.id,
+          },
+        });
 
-  // Zero means Creator Payout is not configured.
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return null;
-  }
+      /*
+       * Never recreate or overwrite an existing
+       * payout, including PAID and CANCELLED.
+       */
+      if (existing) {
+        return existing;
+      }
 
-  const payout =
-    this.creatorPayoutRepository.create({
-      solarMitraId: mitra.id,
-      solarMitraName: mitra.name,
-      creatorId: Number(mitra.createdBy),
-      creatorName: mitra.createdByName ?? null,
-      creatorRole: mitra.createdByRole ?? null,
-      payoutAmount: amount,
-      status: SolarMitraCreatorPayoutStatus.ELIGIBLE,
-      eligibleAt:
-        mitra.posterVerifiedAt ?? new Date(),
-    });
+      const eligible =
+        await this.isCreatorPayoutEligible(
+          currentMitra,
+          manager,
+        );
 
-  // Unique solarMitraId constraint protects against
-  // concurrent duplicate creation.
-  await this.creatorPayoutRepository
-    .createQueryBuilder()
-    .insert()
-    .values(payout)
-    .orIgnore()
-    .execute();
+      if (!eligible) {
+        return null;
+      }
 
-  return this.creatorPayoutRepository.findOne({
-    where: { solarMitraId: mitra.id },
-  });
+      const settings =
+        await this.getOrCreateSettings();
+
+      const amount = Number(
+        settings.creatorPayoutAmount ?? 0,
+      );
+
+      if (
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+        return null;
+      }
+
+      const payout =
+        payoutRepository.create({
+          solarMitraId:
+            currentMitra.id,
+
+          solarMitraName:
+            currentMitra.name,
+
+          creatorId:
+            Number(currentMitra.createdBy),
+
+          creatorName:
+            currentMitra.createdByName ?? null,
+
+          creatorRole:
+            currentMitra.createdByRole ?? null,
+
+          payoutAmount:
+            amount,
+
+          status:
+            SolarMitraCreatorPayoutStatus.ELIGIBLE,
+
+          eligibleAt:
+            currentMitra.posterVerifiedAt ??
+            new Date(),
+        });
+
+      await payoutRepository
+        .createQueryBuilder()
+        .insert()
+        .values(payout)
+        .orIgnore()
+        .execute();
+
+      return payoutRepository.findOne({
+        where: {
+          solarMitraId: currentMitra.id,
+        },
+      });
+    },
+  );
 }
 
 async updateSolarMitraPosterVerification(
@@ -1795,52 +1866,13 @@ async updateSolarMitraPosterVerification(
     );
   }
 
-  const mitra = await this.getSolarMitra(mitraId);
-
-if (
-  mitra.posterVerificationStatus ===
-  SolarMitraPosterVerificationStatus.REJECTED
-) {
-  throw new BadRequestException(
-    'This poster proof was rejected. Upload a new installation photo before verification.',
-  );
-}
-
-if (
-  mitra.posterVerificationStatus ===
-  SolarMitraPosterVerificationStatus.ATTACHED
-) {
-  throw new BadRequestException(
-    'This QR poster installation is already verified.',
-  );
-}
-
-if (
-  mitra.posterVerificationStatus !==
-  SolarMitraPosterVerificationStatus.PENDING_VERIFICATION
-) {
-  throw new BadRequestException(
-    'Only pending poster installation proofs can be verified.',
-  );
-}
-
-const hasBothPosterPhotos = Boolean(
-  mitra.qrPosterInstallationPhotoUrl?.trim() &&
-  mitra.qrPosterInstallationPhotoUrl2?.trim(),
-);
-
-if (!hasBothPosterPhotos) {
-  throw new BadRequestException(
-    'Both Poster Photo and QR Photo must be uploaded before verification.',
-  );
-}
-
   const remarks = String(
     body?.remarks || '',
   ).trim();
 
   if (
-    status === SolarMitraPosterVerificationStatus.REJECTED &&
+    status ===
+      SolarMitraPosterVerificationStatus.REJECTED &&
     !remarks
   ) {
     throw new BadRequestException(
@@ -1848,22 +1880,116 @@ if (!hasBothPosterPhotos) {
     );
   }
 
-  mitra.posterVerificationStatus =
-    status as SolarMitraPosterVerificationStatus;
+  /*
+   * Preserve existing Solar Mitra lookup validation.
+   */
+  await this.getSolarMitra(mitraId);
 
-  mitra.posterVerifiedAt = new Date();
-  mitra.posterVerifiedBy = Number(user.id);
-  mitra.posterVerifiedByName = String(
-    user?.name || '',
-  ).trim();
+  const mitra =
+    await this.dataSource.transaction(
+      async (manager) => {
+        await this.solarMitraNetworkService
+          .lockNetworkFinancialOperations(
+            manager,
+          );
 
-  mitra.posterVerificationRemarks =
-    remarks || null;
+        const mitraRepository =
+          manager.getRepository(SolarMitra);
 
-    await this.solarMitraRepository.save(mitra);
+        const currentMitra =
+          await mitraRepository.findOne({
+            where: {
+              id: mitraId,
+            },
+            lock: {
+              mode: 'pessimistic_write',
+            },
+          });
 
+        if (!currentMitra) {
+          throw new NotFoundException(
+            'Solar Mitra not found',
+          );
+        }
+
+        if (currentMitra.isHidden) {
+          throw new BadRequestException(
+            'Hidden Solar Mitra cannot be verified',
+          );
+        }
+
+        if (
+          currentMitra.posterVerificationStatus ===
+          SolarMitraPosterVerificationStatus.REJECTED
+        ) {
+          throw new BadRequestException(
+            'This poster proof was rejected. Upload a new installation photo before verification.',
+          );
+        }
+
+        if (
+          currentMitra.posterVerificationStatus ===
+          SolarMitraPosterVerificationStatus.ATTACHED
+        ) {
+          throw new BadRequestException(
+            'This QR poster installation is already verified.',
+          );
+        }
+
+        if (
+          currentMitra.posterVerificationStatus !==
+          SolarMitraPosterVerificationStatus.PENDING_VERIFICATION
+        ) {
+          throw new BadRequestException(
+            'Only pending poster installation proofs can be verified.',
+          );
+        }
+
+        const hasBothPosterPhotos = Boolean(
+          currentMitra
+            .qrPosterInstallationPhotoUrl
+            ?.trim() &&
+          currentMitra
+            .qrPosterInstallationPhotoUrl2
+            ?.trim(),
+        );
+
+        if (!hasBothPosterPhotos) {
+          throw new BadRequestException(
+            'Both Poster Photo and QR Photo must be uploaded before verification.',
+          );
+        }
+
+        currentMitra.posterVerificationStatus =
+          status as SolarMitraPosterVerificationStatus;
+
+        currentMitra.posterVerifiedAt =
+          new Date();
+
+        currentMitra.posterVerifiedBy =
+          Number(user.id);
+
+        currentMitra.posterVerifiedByName =
+          String(
+            user?.name || '',
+          ).trim();
+
+        currentMitra.posterVerificationRemarks =
+          remarks || null;
+
+        return mitraRepository.save(
+          currentMitra,
+        );
+      },
+    );
+
+  /*
+   * Generate Creator incentive only after the
+   * poster verification transaction commits.
+   */
   if (
-    status === SolarMitraPosterVerificationStatus.ATTACHED
+    status ===
+    SolarMitraPosterVerificationStatus.ATTACHED
   ) {
     try {
       await this.ensureCreatorPayout(mitra);
@@ -1880,16 +2006,25 @@ if (!hasBothPosterPhotos) {
 
   return {
     message:
-      status === SolarMitraPosterVerificationStatus.ATTACHED
+      status ===
+      SolarMitraPosterVerificationStatus.ATTACHED
         ? 'QR poster installation verified successfully'
         : 'QR poster installation proof rejected',
+
     id: mitra.id,
+
     posterVerificationStatus:
       mitra.posterVerificationStatus,
-    posterVerifiedAt: mitra.posterVerifiedAt,
-    posterVerifiedBy: mitra.posterVerifiedBy,
+
+    posterVerifiedAt:
+      mitra.posterVerifiedAt,
+
+    posterVerifiedBy:
+      mitra.posterVerifiedBy,
+
     posterVerifiedByName:
       mitra.posterVerifiedByName,
+
     posterVerificationRemarks:
       mitra.posterVerificationRemarks,
   };
@@ -2262,6 +2397,44 @@ async getMySolarMitraProfile(
   const mitra =
     await this.getSolarMitra(id);
 
+    const isSolarMitraOnly =
+  roles.includes(UserRole.SOLAR_MITRA) &&
+  roles.every(
+    (role) => role === UserRole.SOLAR_MITRA,
+  );
+
+if (isSolarMitraOnly) {
+  if (
+    Number(mitra.createdBy) !== Number(user.id) ||
+    mitra.isHidden
+  ) {
+    throw new ForbiddenException(
+      'You can only update Solar Mitras created by you',
+    );
+  }
+
+  const allowedFields = [
+    'name',
+    'businessName',
+    'secondaryPhone',
+    'address',
+    'area',
+    'city',
+    'state',
+    'shopStatus',
+    'shopPhotoUrl',
+    'gpsLatitude',
+    'gpsLongitude',
+    'gpsAddress',
+  ];
+
+  body = Object.fromEntries(
+    Object.entries(body || {}).filter(
+      ([key]) => allowedFields.includes(key),
+    ),
+  );
+}
+
   /*
    * Prepare login-account changes separately from
    * ordinary Solar Mitra profile changes.
@@ -2544,9 +2717,14 @@ if (body?.shopStatus !== undefined) {
   }
 
   return this.dataSource.transaction(
-    async (manager) => {
-      const userRepository =
-        manager.getRepository(User);
+  async (manager) => {
+    await this.solarMitraNetworkService
+      .lockNetworkFinancialOperations(
+        manager,
+      );
+
+    const userRepository =
+      manager.getRepository(User);
 
       const mitraRepository =
         manager.getRepository(
@@ -2554,11 +2732,14 @@ if (body?.shopStatus !== undefined) {
         );
 
       const transactionalMitra =
-        await mitraRepository.findOne({
-          where: {
-            id: mitra.id,
-          },
-        });
+  await mitraRepository.findOne({
+    where: {
+      id: mitra.id,
+    },
+    lock: {
+      mode: 'pessimistic_write',
+    },
+  });
 
       if (!transactionalMitra) {
         throw new NotFoundException(
@@ -2828,8 +3009,10 @@ transactionalMitra.primaryPhone =
          */
       }
 
-      transactionalMitra.status =
-        requestedStatus;
+      if (body?.status !== undefined) {
+  transactionalMitra.status =
+    requestedStatus;
+}
 
       /*
        * portalPassword is legacy only.
@@ -2850,9 +3033,50 @@ transactionalMitra.primaryPhone =
           user?.name || '',
         ).trim() || null;
 
-      return mitraRepository.save(
-        transactionalMitra,
-      );
+      const savedMitra =
+  await mitraRepository.save(
+    transactionalMitra,
+  );
+
+if (
+  savedMitra.status === SolarMitraStatus.INACTIVE ||
+  savedMitra.status === SolarMitraStatus.BLOCKED
+) {
+  await manager
+    .getRepository(SolarMitraCreatorPayout)
+    .update(
+      {
+        solarMitraId: savedMitra.id,
+        status: SolarMitraCreatorPayoutStatus.ELIGIBLE,
+      },
+      {
+        status:
+          SolarMitraCreatorPayoutStatus.CANCELLED,
+
+        cancelledAt: new Date(),
+
+        cancelledBy:
+          Number(
+            user?.id ||
+            user?.userId ||
+            user?.sub ||
+            0,
+          ) || null,
+
+        cancelledByName:
+          String(
+            user?.name ||
+            user?.email ||
+            '',
+          ).trim() || null,
+
+        cancellationReason:
+          `Solar Mitra status changed to ${savedMitra.status}`,
+      },
+    );
+}
+
+return savedMitra;
     },
   );
 }
@@ -4019,11 +4243,177 @@ async getMyPayout(
   return payout;
 }
 
+private async assertCreatorPayoutStillEligible(
+  manager: EntityManager,
+  payout: SolarMitraCreatorPayout,
+): Promise<void> {
+  const mitra =
+    await manager.getRepository(SolarMitra)
+      .findOne({
+        where: {
+          id: payout.solarMitraId,
+        },
+        lock: {
+          mode: 'pessimistic_write',
+        },
+      });
+
+  if (!mitra) {
+    throw new BadRequestException(
+      'Associated Solar Mitra not found',
+    );
+  }
+
+  if (
+    Number(mitra.createdBy) !==
+    Number(payout.creatorId)
+  ) {
+    throw new BadRequestException(
+      'Creator Payout beneficiary does not match the original creator',
+    );
+  }
+
+  const eligible =
+    await this.isCreatorPayoutEligible(
+      mitra,
+      manager,
+    );
+
+  if (!eligible) {
+    throw new BadRequestException(
+      'Associated Solar Mitra no longer qualifies for Creator Payout',
+    );
+  }
+}
+
+async previewCreatorSettlement(
+  id: number,
+  user: any,
+) {
+  const roles: UserRole[] =
+    Array.isArray(user?.roles)
+      ? user.roles
+      : [];
+
+  if (
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.ACCOUNT_MANAGER)
+  ) {
+    throw new UnauthorizedException(
+      'Only Owner or Account Manager can settle Creator Payouts',
+    );
+  }
+
+  const payoutId = Number(id);
+
+  if (
+    !Number.isSafeInteger(payoutId) ||
+    payoutId <= 0 ||
+    payoutId > 2147483647
+  ) {
+    throw new BadRequestException(
+      'Valid Creator Payout ID is required',
+    );
+  }
+
+  return this.dataSource.transaction(
+    async (manager) => {
+      await this.solarMitraNetworkService
+        .lockNetworkFinancialOperations(
+          manager,
+        );
+
+      const payout = await manager.findOne(
+        SolarMitraCreatorPayout,
+        {
+          where: {
+            id: payoutId,
+          },
+          lock: {
+            mode: 'pessimistic_write',
+          },
+        },
+      );
+
+      if (!payout) {
+        throw new NotFoundException(
+          'Creator Payout not found',
+        );
+      }
+
+      if (payout.payrollId != null) {
+        throw new BadRequestException(
+          `Creator Payout is linked to Payroll #${payout.payrollId} and cannot be paid manually`,
+        );
+      }
+
+      if (
+        payout.status !==
+          SolarMitraCreatorPayoutStatus.ELIGIBLE ||
+        payout.paidAt
+      ) {
+        throw new BadRequestException(
+          'Creator Payout is already paid or is not eligible',
+        );
+      }
+
+     await this.assertCreatorPayoutStillEligible(
+  manager,
+  payout,
+);
+
+await this.solarMitraNetworkService
+  .assertManualIncentiveSettlementAllowed(
+    manager,
+    Number(payout.creatorId),
+  );
+
+      const settlement =
+        await this.solarMitraNetworkService
+          .calculateIncentiveSettlementPreview(
+            manager,
+            Number(payout.creatorId),
+            payout.payoutAmount,
+          );
+
+      return {
+        category: 'CREATOR',
+
+        payoutId:
+          payout.id,
+
+        solarMitraId:
+          payout.solarMitraId,
+
+        solarMitraName:
+          payout.solarMitraName,
+
+        beneficiaryUserId:
+          payout.creatorId,
+
+        beneficiaryName:
+          payout.creatorName,
+
+        ...settlement,
+      };
+    },
+  );
+}
+
 async markCreatorPayoutPaid(
   id: number,
   body: any,
   user: any,
 ) {
+
+    if (
+    process.env.SOLAR_MITRA_NETWORK_ENABLED !== 'true'
+  ) {
+    throw new BadRequestException(
+      'Incentive settlements are temporarily unavailable during system activation.',
+    );
+  }
+
   const roles: UserRole[] =
     Array.isArray(user?.roles) ? user.roles : [];
 
@@ -4036,6 +4426,36 @@ async markCreatorPayoutPaid(
     );
   }
 
+  const payoutId = Number(id);
+
+  if (
+    !Number.isSafeInteger(payoutId) ||
+    payoutId <= 0 ||
+    payoutId > 2147483647
+  ) {
+    throw new BadRequestException(
+      'Valid Creator Payout ID is required',
+    );
+  }
+
+  const expectedNetPayableAmount = String(
+    body?.expectedNetPayableAmount ?? '',
+  ).trim();
+
+  if (
+    !/^\d{1,10}(\.\d{1,2})?$/.test(
+      expectedNetPayableAmount,
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid expected net payable amount is required',
+    );
+  }
+
+  const expectedNetPaise = Math.round(
+    Number(expectedNetPayableAmount) * 100,
+  );
+
   const paymentMode = String(
     body?.paymentMode || '',
   ).trim();
@@ -4048,116 +4468,185 @@ async markCreatorPayoutPaid(
     body?.paymentRemarks || '',
   ).trim();
 
-  if (!paymentMode || !paymentReference) {
-    throw new BadRequestException(
-      'Payment mode and transaction reference are required',
-    );
-  }
+  return this.dataSource.transaction(
+    async (manager) => {
+      await this.solarMitraNetworkService
+        .lockNetworkFinancialOperations(manager);
 
-  const result = await this.creatorPayoutRepository
-    .createQueryBuilder()
-    .update(SolarMitraCreatorPayout)
-    .set({
-      status: SolarMitraCreatorPayoutStatus.PAID,
-      paidAt: new Date(),
-      paidBy: Number(user.id),
-      paidByName: String(user.name || '').trim(),
-      paymentMode,
-      paymentReference,
-      paymentRemarks: paymentRemarks || null,
-    })
-    .where('id = :id', { id })
-    .andWhere('status = :status', {
-      status: SolarMitraCreatorPayoutStatus.ELIGIBLE,
-    })
-    .execute();
+      const payoutRepo =
+        manager.getRepository(
+          SolarMitraCreatorPayout,
+        );
 
-  if (result.affected !== 1) {
-    const payout = await this.creatorPayoutRepository.findOne({
-      where: { id },
-    });
+      const payout = await payoutRepo.findOne({
+        where: { id: payoutId },
+        lock: {
+          mode: 'pessimistic_write',
+        },
+      });
 
-    if (!payout) {
-      throw new NotFoundException(
-        'Creator Payout not found',
+      if (!payout) {
+        throw new NotFoundException(
+          'Creator Payout not found',
+        );
+      }
+
+      if (payout.payrollId != null) {
+        throw new BadRequestException(
+          `Creator Payout is linked to Payroll #${payout.payrollId} and cannot be paid manually`,
+        );
+      }
+
+      if (
+        payout.status !==
+          SolarMitraCreatorPayoutStatus.ELIGIBLE ||
+        payout.paidAt
+      ) {
+        throw new BadRequestException(
+          'Creator Payout is already paid or is not eligible',
+        );
+      }
+
+     await this.assertCreatorPayoutStillEligible(
+  manager,
+  payout,
+);
+
+await this.solarMitraNetworkService
+  .assertManualIncentiveSettlementAllowed(
+    manager,
+    Number(payout.creatorId),
+  );
+
+      const settlement =
+        await this.solarMitraNetworkService
+          .applyIncentiveRecovery(
+            manager,
+            {
+              category: 'CREATOR',
+              payoutId: payout.id,
+              beneficiaryUserId:
+                Number(payout.creatorId),
+              payoutAmount:
+                payout.payoutAmount,
+            },
+            'MANUAL',
+            user,
+          );
+
+      const actualNetPaise = Math.round(
+        Number(settlement.netPayableAmount) * 100,
       );
-    }
 
-    throw new BadRequestException(
-      'Creator Payout is already paid or is not eligible',
-    );
-  }
+      if (
+        actualNetPaise !== expectedNetPaise
+      ) {
+        throw new BadRequestException(
+          'Net payable amount has changed. Refresh the settlement preview before proceeding.',
+        );
+      }
 
-  return this.creatorPayoutRepository.findOne({
-    where: { id },
-  });
+      if (
+        actualNetPaise > 0 &&
+        (
+          !paymentMode ||
+          !paymentReference ||
+          ['RECOVERY_ADJUSTMENT', 'PAYROLL']
+            .includes(paymentMode.toUpperCase())
+        )
+      ) {
+        throw new BadRequestException(
+          'Valid payment mode and transaction reference are required',
+        );
+      }
+
+      payout.status =
+        SolarMitraCreatorPayoutStatus.PAID;
+
+      payout.paidAt = new Date();
+
+      payout.paidBy = Number(user.id);
+
+      payout.paidByName = String(
+        user.name || '',
+      ).trim();
+
+      payout.recoveryDeductedAmount =
+        Number(
+          settlement.recoveryDeductedAmount,
+        );
+
+      payout.netPaidAmount =
+        Number(
+          settlement.netPayableAmount,
+        );
+
+      payout.paymentMode =
+        actualNetPaise > 0
+          ? paymentMode
+          : 'RECOVERY_ADJUSTMENT';
+
+      payout.paymentReference =
+        actualNetPaise > 0
+          ? paymentReference
+          : `RECOVERY-CREATOR-${payout.id}`;
+
+      payout.paymentRemarks =
+        paymentRemarks || null;
+
+      return payoutRepo.save(payout);
+    },
+  );
 }
 
-
-
-async markPayoutPaid(
+async previewProjectSettlement(
   id: number,
-  body: any,
   user: any,
 ) {
+  const roles: UserRole[] =
+    Array.isArray(user?.roles)
+      ? user.roles
+      : [];
+
+  if (
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.ACCOUNT_MANAGER)
+  ) {
+    throw new UnauthorizedException(
+      'Only Owner or Account Manager can settle Solar Mitra payouts',
+    );
+  }
+
   const payoutId = Number(id);
 
   if (
-    !Number.isInteger(payoutId) ||
-    payoutId <= 0
+    !Number.isSafeInteger(payoutId) ||
+    payoutId <= 0 ||
+    payoutId > 2147483647
   ) {
     throw new BadRequestException(
       'Valid Solar Mitra payout ID is required',
     );
   }
 
-  const paymentMode = String(
-    body?.paymentMode || '',
-  ).trim();
-
-  const paymentReference = String(
-    body?.paymentReference || '',
-  ).trim();
-
-  const paymentRemarks = String(
-    body?.paymentRemarks || '',
-  ).trim();
-
-  if (!paymentMode) {
-    throw new BadRequestException(
-      'Payment mode is required to mark a payout as paid',
-    );
-  }
-
-  if (!paymentReference) {
-    throw new BadRequestException(
-      'Transaction or payment reference is required to mark a payout as paid',
-    );
-  }
-
   return this.dataSource.transaction(
     async (manager) => {
-      const payoutRepo =
-        manager.getRepository(SolarMitraPayout);
+      await this.solarMitraNetworkService
+        .lockNetworkFinancialOperations(
+          manager,
+        );
 
-      const referralRepo =
-        manager.getRepository(SolarMitraReferral);
-
-      /*
-       * Lock the payout row until the
-       * transaction completes.
-       *
-       * Concurrent payment requests for
-       * this payout must wait.
-       */
-      const payout =
-        await payoutRepo
-          .createQueryBuilder('payout')
-          .setLock('pessimistic_write')
-          .where('payout.id = :payoutId', {
-            payoutId,
-          })
-          .getOne();
+      const payout = await manager.findOne(
+        SolarMitraPayout,
+        {
+          where: {
+            id: payoutId,
+          },
+          lock: {
+            mode: 'pessimistic_write',
+          },
+        },
+      );
 
       if (!payout) {
         throw new NotFoundException(
@@ -4165,25 +4654,349 @@ async markPayoutPaid(
         );
       }
 
-      /*
-       * Recheck status while holding
-       * the database row lock.
-       */
-      if (
-        payout.status ===
-        SolarMitraPayoutStatus.PAID
-      ) {
+      if (payout.payrollId != null) {
         throw new BadRequestException(
-          'Solar Mitra payout is already paid',
+          `Solar Mitra payout is linked to Payroll #${payout.payrollId} and cannot be paid manually`,
         );
       }
 
       if (
         payout.status !==
-        SolarMitraPayoutStatus.ELIGIBLE
+          SolarMitraPayoutStatus.ELIGIBLE ||
+        payout.paidAt
       ) {
         throw new BadRequestException(
-          'Only an eligible Solar Mitra payout can be marked as paid',
+          'Only an unpaid and eligible Solar Mitra payout can be settled',
+        );
+      }
+
+      if (!payout.projectId) {
+        throw new BadRequestException(
+          'Solar Mitra payout has no associated Project',
+        );
+      }
+
+      const projectRows = await manager.query(
+        `
+          SELECT
+            id,
+            status,
+            "ownerApprovalStatus"
+          FROM public.project
+          WHERE id = $1
+        `,
+        [payout.projectId],
+      );
+
+      const project = projectRows[0];
+
+      if (
+        !project ||
+        project.ownerApprovalStatus !== 'APPROVED' ||
+        ['CANCELLED', 'REJECTED'].includes(
+          project.status,
+        )
+      ) {
+        throw new BadRequestException(
+          'Associated Project is not eligible for incentive settlement',
+        );
+      }
+
+      const solarMitra = await manager.findOne(
+        SolarMitra,
+        {
+          where: {
+            id: payout.solarMitraId,
+          },
+        },
+      );
+
+      const beneficiaryUserId = Number(
+        solarMitra?.linkedUserId || 0,
+      );
+
+      if (
+        !solarMitra ||
+        !Number.isSafeInteger(beneficiaryUserId) ||
+        beneficiaryUserId <= 0
+      ) {
+        throw new BadRequestException(
+          'Solar Mitra payout has no valid linked beneficiary',
+        );
+      }
+
+      await this.solarMitraNetworkService
+  .assertManualIncentiveSettlementAllowed(
+    manager,
+    beneficiaryUserId,
+  );
+
+      const settlement =
+        await this.solarMitraNetworkService
+          .calculateIncentiveSettlementPreview(
+            manager,
+            beneficiaryUserId,
+            payout.payoutAmount,
+          );
+
+      return {
+        category: 'PROJECT',
+
+        payoutId:
+          payout.id,
+
+        projectId:
+          payout.projectId,
+
+        solarMitraId:
+          payout.solarMitraId,
+
+        solarMitraName:
+          payout.solarMitraName,
+
+        beneficiaryUserId,
+
+        beneficiaryName:
+          solarMitra.name,
+
+        ...settlement,
+      };
+    },
+  );
+}
+
+async markPayoutPaid(
+  id: number,
+  body: any,
+  user: any,
+) {
+
+    if (
+    process.env.SOLAR_MITRA_NETWORK_ENABLED !== 'true'
+  ) {
+    throw new BadRequestException(
+      'Incentive settlements are temporarily unavailable during system activation.',
+    );
+  }
+  
+  const roles: UserRole[] =
+    Array.isArray(user?.roles) ? user.roles : [];
+
+  if (
+    !roles.includes(UserRole.OWNER) &&
+    !roles.includes(UserRole.ACCOUNT_MANAGER)
+  ) {
+    throw new UnauthorizedException(
+      'Only Owner or Account Manager can pay Solar Mitra payouts',
+    );
+  }
+
+  const payoutId = Number(id);
+
+  if (
+    !Number.isSafeInteger(payoutId) ||
+    payoutId <= 0 ||
+    payoutId > 2147483647
+  ) {
+    throw new BadRequestException(
+      'Valid Solar Mitra payout ID is required',
+    );
+  }
+
+  const expectedNetPayableAmount = String(
+    body?.expectedNetPayableAmount ?? '',
+  ).trim();
+
+  if (
+    !/^\d{1,10}(\.\d{1,2})?$/.test(
+      expectedNetPayableAmount,
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid expected net payable amount is required',
+    );
+  }
+
+  const expectedNetPaise = Math.round(
+    Number(expectedNetPayableAmount) * 100,
+  );
+
+  const paymentMode = String(
+    body?.paymentMode || '',
+  ).trim();
+
+  const paymentReference = String(
+    body?.paymentReference || '',
+  ).trim();
+
+  const paymentRemarks = String(
+    body?.paymentRemarks || '',
+  ).trim();
+
+  return this.dataSource.transaction(
+    async (manager) => {
+      await this.solarMitraNetworkService
+        .lockNetworkFinancialOperations(manager);
+
+      const payoutRepo =
+        manager.getRepository(
+          SolarMitraPayout,
+        );
+
+      const referralRepo =
+        manager.getRepository(
+          SolarMitraReferral,
+        );
+
+      const payout = await payoutRepo.findOne({
+        where: { id: payoutId },
+        lock: {
+          mode: 'pessimistic_write',
+        },
+      });
+
+      if (!payout) {
+        throw new NotFoundException(
+          'Solar Mitra payout not found',
+        );
+      }
+
+      if (payout.payrollId != null) {
+        throw new BadRequestException(
+          `Solar Mitra payout is linked to Payroll #${payout.payrollId} and cannot be paid manually`,
+        );
+      }
+
+      if (
+        payout.status !==
+          SolarMitraPayoutStatus.ELIGIBLE ||
+        payout.paidAt
+      ) {
+        throw new BadRequestException(
+          'Only an unpaid and eligible Solar Mitra payout can be marked as paid',
+        );
+      }
+
+      /*
+       * Verify that the associated Project
+       * is still valid and Owner-approved.
+       */
+
+      if (!payout.projectId) {
+        throw new BadRequestException(
+          'Solar Mitra payout has no associated Project',
+        );
+      }
+
+      const projectRows = await manager.query(
+        `
+          SELECT
+            id,
+            status,
+            "ownerApprovalStatus"
+          FROM public.project
+          WHERE id = $1
+        `,
+        [payout.projectId],
+      );
+
+      const project = projectRows[0];
+
+      if (
+        !project ||
+        project.ownerApprovalStatus !== 'APPROVED' ||
+        ['CANCELLED', 'REJECTED'].includes(
+          project.status,
+        )
+      ) {
+        throw new BadRequestException(
+          'Associated Project is not eligible for incentive settlement',
+        );
+      }
+
+      /*
+       * Resolve the actual incentive beneficiary
+       * from the linked Solar Mitra user.
+       */
+
+      const solarMitra = await manager.findOne(
+        SolarMitra,
+        {
+          where: {
+            id: payout.solarMitraId,
+          },
+        },
+      );
+
+      const beneficiaryUserId = Number(
+        solarMitra?.linkedUserId || 0,
+      );
+
+      if (
+        !solarMitra ||
+        !Number.isSafeInteger(beneficiaryUserId) ||
+        beneficiaryUserId <= 0
+      ) {
+        throw new BadRequestException(
+          'Solar Mitra payout has no valid linked beneficiary',
+        );
+      }
+
+      /*
+       * Preserve network pool generation
+       * before marking the direct payout PAID.
+       */
+
+      await this.solarMitraNetworkService
+  .assertManualIncentiveSettlementAllowed(
+    manager,
+    beneficiaryUserId,
+  );
+
+      await this.solarMitraNetworkService
+        .generateForProject(
+          Number(payout.projectId),
+          manager,
+        );
+
+      const settlement =
+        await this.solarMitraNetworkService
+          .applyIncentiveRecovery(
+            manager,
+            {
+              category: 'PROJECT',
+              payoutId: payout.id,
+              beneficiaryUserId,
+              payoutAmount:
+                payout.payoutAmount,
+            },
+            'MANUAL',
+            user,
+          );
+
+      const actualNetPaise = Math.round(
+        Number(settlement.netPayableAmount) * 100,
+      );
+
+      if (
+        actualNetPaise !== expectedNetPaise
+      ) {
+        throw new BadRequestException(
+          'Net payable amount has changed. Refresh the settlement preview before proceeding.',
+        );
+      }
+
+      if (
+        actualNetPaise > 0 &&
+        (
+          !paymentMode ||
+          !paymentReference ||
+          ['RECOVERY_ADJUSTMENT', 'PAYROLL']
+            .includes(paymentMode.toUpperCase())
+        )
+      ) {
+        throw new BadRequestException(
+          'Valid payment mode and transaction reference are required',
         );
       }
 
@@ -4205,9 +5018,26 @@ async markPayoutPaid(
         '',
       ).trim();
 
-      payout.paymentMode = paymentMode;
+      payout.recoveryDeductedAmount =
+        Number(
+          settlement.recoveryDeductedAmount,
+        );
+
+      payout.netPaidAmount =
+        Number(
+          settlement.netPayableAmount,
+        );
+
+      payout.paymentMode =
+        actualNetPaise > 0
+          ? paymentMode
+          : 'RECOVERY_ADJUSTMENT';
+
       payout.paymentReference =
-        paymentReference;
+        actualNetPaise > 0
+          ? paymentReference
+          : `RECOVERY-PROJECT-${payout.id}`;
+
       payout.paymentRemarks =
         paymentRemarks;
 
@@ -4216,25 +5046,19 @@ async markPayoutPaid(
 
       /*
        * Preserve existing referral-level
-       * status behavior.
-       *
-       * Other Project payouts are not
-       * modified.
+       * status behaviour.
        */
-      const referral =
-        await referralRepo.findOne({
-          where: {
-            id: payout.referralId,
-            isHidden: false,
-          },
-        });
 
-      if (referral) {
-        referral.status =
-          SolarMitraReferralStatus.PAYOUT_PAID;
-
-        await referralRepo.save(referral);
-      }
+      await referralRepo.update(
+        {
+          id: payout.referralId,
+          isHidden: false,
+        },
+        {
+          status:
+            SolarMitraReferralStatus.PAYOUT_PAID,
+        },
+      );
 
       return savedPayout;
     },
@@ -5291,84 +6115,171 @@ async getOrCreateSettings(
 
 
   async updateSettings(
-    body: any,
-    user: any,
-  ) {
-    const setting =
-      await this.getOrCreateSettings();
-
-    const payoutAmount =
-      Number(body?.defaultPayoutAmount);
-
-    const requiredPercentage =
-      Number(
-        body?.requiredProjectPaymentPercentage,
+  body: any,
+  user: any,
+) {
+  return this.dataSource.transaction(
+    async (manager) => {
+      await manager.query(
+        'SELECT pg_advisory_xact_lock($1)',
+        [72611001],
       );
 
-          const creatorPayoutAmount =
-      body?.creatorPayoutAmount === undefined
-        ? Number(setting.creatorPayoutAmount ?? 0)
-        : Number(body.creatorPayoutAmount);
+      const setting =
+        await this.getOrCreateSettings(
+          manager,
+        );
 
-    if (
-      body?.creatorPayoutAmount !== undefined &&
-      (
-        body.creatorPayoutAmount === null ||
-        String(body.creatorPayoutAmount).trim() === ''
-      )
-    ) {
-      throw new BadRequestException(
-        'Valid creator payout amount is required',
+      const payoutAmount =
+        Number(body?.defaultPayoutAmount);
+
+      const requiredPercentage =
+        Number(
+          body?.requiredProjectPaymentPercentage,
+        );
+
+      const creatorPayoutAmount =
+        body?.creatorPayoutAmount === undefined
+          ? Number(setting.creatorPayoutAmount ?? 0)
+          : Number(body.creatorPayoutAmount);
+
+      const previousNetworkPoolAmount =
+        Number(setting.networkPoolAmount ?? 1000);
+
+      const networkPoolAmount =
+        body?.networkPoolAmount === undefined
+          ? previousNetworkPoolAmount
+          : Number(body.networkPoolAmount);
+
+      if (
+        body?.creatorPayoutAmount !== undefined &&
+        (
+          body.creatorPayoutAmount === null ||
+          String(body.creatorPayoutAmount).trim() === ''
+        )
+      ) {
+        throw new BadRequestException(
+          'Valid creator payout amount is required',
+        );
+      }
+
+      if (
+        !Number.isFinite(creatorPayoutAmount) ||
+        creatorPayoutAmount < 0
+      ) {
+        throw new BadRequestException(
+          'Creator payout amount must be zero or greater',
+        );
+      }
+
+      if (
+        !Number.isFinite(payoutAmount) ||
+        payoutAmount < 0
+      ) {
+        throw new BadRequestException(
+          'Valid payout amount is required',
+        );
+      }
+
+      if (
+        !Number.isFinite(requiredPercentage) ||
+        requiredPercentage < 0 ||
+        requiredPercentage > 100
+      ) {
+        throw new BadRequestException(
+          'Project payment percentage must be between 0 and 100',
+        );
+      }
+
+      if (
+        body?.networkPoolAmount !== undefined &&
+        (
+          body.networkPoolAmount === null ||
+          String(body.networkPoolAmount).trim() === '' ||
+          !['string', 'number'].includes(
+            typeof body.networkPoolAmount,
+          )
+        )
+      ) {
+        throw new BadRequestException(
+          'Valid network pool amount is required',
+        );
+      }
+
+      if (
+        !Number.isFinite(networkPoolAmount) ||
+        networkPoolAmount < 0 ||
+        networkPoolAmount > 9999999999.99 ||
+        Math.abs(
+          networkPoolAmount -
+          Number(networkPoolAmount.toFixed(2)),
+        ) > 0.00000001
+      ) {
+        throw new BadRequestException(
+          'Network pool amount must be a valid non-negative amount with up to two decimal places',
+        );
+      }
+
+      const updatedBy =
+        user?.id ? Number(user.id) : null;
+
+      const updatedByName =
+        String(user?.name || '').trim() || null;
+
+      setting.defaultPayoutAmount =
+        payoutAmount;
+
+      setting.creatorPayoutAmount =
+        creatorPayoutAmount;
+
+      setting.requiredProjectPaymentPercentage =
+        requiredPercentage;
+
+      setting.networkPoolAmount =
+        networkPoolAmount.toFixed(2);
+
+      setting.payoutQualificationType =
+        SolarMitraPayoutQualificationType
+          .PROJECT_PAYMENT_PERCENTAGE;
+
+      setting.updatedBy =
+        updatedBy;
+
+      setting.updatedByName =
+        updatedByName;
+
+      if (
+        networkPoolAmount !==
+          previousNetworkPoolAmount
+      ) {
+        const rate = manager.create(
+          SolarMitraNetworkRate,
+          {
+            poolAmount:
+              networkPoolAmount.toFixed(2),
+
+            effectiveFrom:
+              new Date(),
+
+            createdBy:
+              updatedBy,
+
+            createdByName:
+              updatedByName,
+          },
+        );
+
+        await manager.save(
+          SolarMitraNetworkRate,
+          rate,
+        );
+      }
+
+      return manager.save(
+        SolarMitraSetting,
+        setting,
       );
-    }
-
-    if (
-      !Number.isFinite(creatorPayoutAmount) ||
-      creatorPayoutAmount < 0
-    ) {
-      throw new BadRequestException(
-        'Creator payout amount must be zero or greater',
-      );
-    }
-
-    if (
-      !Number.isFinite(payoutAmount) ||
-      payoutAmount < 0
-    ) {
-      throw new BadRequestException(
-        'Valid payout amount is required',
-      );
-    }
-
-    if (
-      !Number.isFinite(requiredPercentage) ||
-      requiredPercentage < 0 ||
-      requiredPercentage > 100
-    ) {
-      throw new BadRequestException(
-        'Project payment percentage must be between 0 and 100',
-      );
-    }
-
-    setting.defaultPayoutAmount =
-      payoutAmount;
-
-    setting.creatorPayoutAmount =
-      creatorPayoutAmount;
-
-    setting.requiredProjectPaymentPercentage =
-      requiredPercentage;
-
-    setting.payoutQualificationType =
-      SolarMitraPayoutQualificationType
-        .PROJECT_PAYMENT_PERCENTAGE;
-
-    setting.updatedBy =
-      user?.id ? Number(user.id) : null;
-
-    setting.updatedByName =
-      String(user?.name || '').trim() || null;
-
-    return this.settingRepository.save(setting);
-  }
+    },
+  );
+}
 }

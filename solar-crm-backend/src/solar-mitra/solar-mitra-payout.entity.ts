@@ -12,6 +12,8 @@ export enum SolarMitraPayoutStatus {
   ELIGIBLE = 'ELIGIBLE',
   PAID = 'PAID',
   CANCELLED = 'CANCELLED',
+  RECOVERY_PENDING = 'RECOVERY_PENDING',
+  RECOVERED = 'RECOVERED',
 }
 
 @Entity('solar_mitra_payout')
@@ -120,13 +122,58 @@ projectId: number;
   cancelledAt: Date;
 
   @Column({ nullable: true })
-  cancelledBy: number;
+  cancelledBy: number | null;
 
   @Column({ type: 'text', nullable: true })
   cancelledByName: string;
 
   @Column({ type: 'text', nullable: true })
   cancellationReason: string;
+
+  @Index()
+@Column({ type: 'int', nullable: true })
+payrollId: number | null;
+
+@Column({ type: 'timestamp', nullable: true })
+payrollReservedAt: Date | null;
+
+@Column({
+  type: 'numeric',
+  precision: 12,
+  scale: 2,
+  default: 0,
+})
+recoveryAmount: number;
+
+@Column({
+  type: 'numeric',
+  precision: 12,
+  scale: 2,
+  default: 0,
+})
+recoveredAmount: number;
+
+@Column({
+  type: 'timestamp',
+  nullable: true,
+})
+recoveredAt: Date | null;
+
+@Column({
+  type: 'numeric',
+  precision: 12,
+  scale: 2,
+  default: 0,
+})
+recoveryDeductedAmount: number;
+
+@Column({
+  type: 'numeric',
+  precision: 12,
+  scale: 2,
+  nullable: true,
+})
+netPaidAmount: number | null;
 
   @CreateDateColumn()
   createdAt: Date;

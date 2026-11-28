@@ -82,6 +82,29 @@ export class SolarMitraCreatorPayout {
   @Column({ type: 'text', nullable: true })
   cancellationReason: string | null;
 
+  @Index()
+@Column({ type: 'int', nullable: true })
+payrollId: number | null;
+
+@Column({ type: 'timestamp', nullable: true })
+payrollReservedAt: Date | null;
+
+@Column({
+  type: 'numeric',
+  precision: 12,
+  scale: 2,
+  default: 0,
+})
+recoveryDeductedAmount: number;
+
+@Column({
+  type: 'numeric',
+  precision: 12,
+  scale: 2,
+  nullable: true,
+})
+netPaidAmount: number | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

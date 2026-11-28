@@ -117,6 +117,38 @@ attendanceDeduction: number;
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   incentiveAmount: number;
 
+  @Column({
+  type: 'decimal',
+  precision: 12,
+  scale: 2,
+  default: 0,
+})
+solarMitraCreatorIncentiveAmount: number;
+
+@Column({
+  type: 'decimal',
+  precision: 12,
+  scale: 2,
+  default: 0,
+})
+solarMitraProjectIncentiveAmount: number;
+
+@Column({
+  type: 'decimal',
+  precision: 12,
+  scale: 2,
+  default: 0,
+})
+solarMitraNetworkIncentiveAmount: number;
+
+@Column({
+  type: 'decimal',
+  precision: 12,
+  scale: 2,
+  default: 0,
+})
+solarMitraRecoveryDeduction: number;
+
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   otherAllowance: number;
 

@@ -388,6 +388,8 @@ import {
   ProjectCustomerConfirmationEventType,
 } from './project-customer-confirmation-history.entity';
 
+import { SolarMitraNetworkService } from '../solar-mitra/solar-mitra-network.service';
+
 @Injectable()
 export class ProjectService {
 
@@ -2872,6 +2874,9 @@ private readonly solarMitraReferralRepository:
   @InjectRepository(SolarMitraPayout)
 private readonly solarMitraPayoutRepository:
   Repository<SolarMitraPayout>,
+
+  private readonly solarMitraNetworkService:
+  SolarMitraNetworkService,
 
 @InjectRepository(CallLog)
 private readonly callLogRepository: Repository<CallLog>,
@@ -11760,8 +11765,29 @@ return savedProject;
   }
 
   const savedProject =
-  await this.projectRepository.save(
-    project,
+  await this.projectRepository.manager.transaction(
+    async (manager) => {
+      await this.solarMitraNetworkService
+        .lockNetworkFinancialOperations(manager);
+
+      if (
+        approvalStatus ===
+        ProjectApprovalStatus.REJECTED
+      ) {
+        await this.solarMitraNetworkService.cancelForProject(
+          Number(project.id),
+          String(body?.note || '').trim() ||
+            'Project rejected during Marketing Head approval',
+          user,
+          manager,
+        );
+      }
+
+      return manager.save(
+        Project,
+        project,
+      );
+    },
   );
 
 const approvalNote =
@@ -29903,9 +29929,21 @@ async cancelProject(
     : `[PROJECT ${project.status}]\n${reason}`;
 
   const savedProject =
-    await this.projectRepository.save(
-      project,
-    );
+  await this.projectRepository.manager.transaction(
+    async (manager) => {
+      await this.solarMitraNetworkService.cancelForProject(
+        Number(project.id),
+        reason,
+        currentUser,
+        manager,
+      );
+
+      return manager.save(
+        Project,
+        project,
+      );
+    },
+  );
 
   await this.deactivateAutomaticProjectProcurement(
     savedProject.id,
@@ -32416,9 +32454,30 @@ private async deactivateAutomaticProjectProcurement(
   }
 
   const savedProject =
-    await this.projectRepository.save(
-      project,
-    );
+  await this.projectRepository.manager.transaction(
+    async (manager) => {
+      await this.solarMitraNetworkService
+        .lockNetworkFinancialOperations(manager);
+
+      if (
+        approvalStatus ===
+        ProjectApprovalStatus.REJECTED
+      ) {
+        await this.solarMitraNetworkService.cancelForProject(
+          Number(project.id),
+          String(body?.note || '').trim() ||
+            'Project rejected during Owner approval',
+          user,
+          manager,
+        );
+      }
+
+      return manager.save(
+        Project,
+        project,
+      );
+    },
+  );
 
     /*
  * Create Solar Mitra payout only after
@@ -43252,20 +43311,31 @@ private async syncSolarMitraPayoutEligibility(
   }
 
   /*
-   * Once earned or paid, do not make the
-   * Solar Mitra payout reversible because
-   * of later payment edits.
-   */
-  if (
-    payout.status ===
-      SolarMitraPayoutStatus.ELIGIBLE ||
-    payout.status ===
-      SolarMitraPayoutStatus.PAID ||
-    payout.status ===
-      SolarMitraPayoutStatus.CANCELLED
-  ) {
-    return;
-  }
+ * Existing eligible payouts may generate
+ * their network pool if not already generated.
+ */
+if (
+  payout.status ===
+    SolarMitraPayoutStatus.ELIGIBLE
+) {
+  await this.tryGenerateSolarMitraNetworkPool(
+    normalizedProjectId,
+  );
+
+  return;
+}
+
+/*
+ * Only WAITING payouts can become ELIGIBLE.
+ * Paid, cancelled and recovery-related payouts
+ * must never be reactivated by payment updates.
+ */
+if (
+  payout.status !==
+    SolarMitraPayoutStatus.WAITING
+) {
+  return;
+}
 
   const requiredPercentage =
     Number(
@@ -43295,19 +43365,27 @@ private async syncSolarMitraPayoutEligibility(
     return;
   }
 
-  payout.status =
-    SolarMitraPayoutStatus.ELIGIBLE;
+  const eligibilityUpdate =
+  await this.solarMitraPayoutRepository.update(
+    {
+      id: payout.id,
+      status: SolarMitraPayoutStatus.WAITING,
+    },
+    {
+      status: SolarMitraPayoutStatus.ELIGIBLE,
 
-  payout.eligibleAt =
-    paymentResult.reachedAt ||
-    new Date();
+      eligibleAt:
+        paymentResult.reachedAt ||
+        new Date(),
 
-  payout.qualifyingPaymentPercentage =
-    requiredPercentage;
-
-  await this.solarMitraPayoutRepository.save(
-    payout,
+      qualifyingPaymentPercentage:
+        requiredPercentage,
+    },
   );
+
+if (eligibilityUpdate.affected !== 1) {
+  return;
+}
 
   const referral =
     await this.solarMitraReferralRepository.findOne({
@@ -43326,8 +43404,26 @@ private async syncSolarMitraPayoutEligibility(
       SolarMitraReferralStatus
         .PAYOUT_ELIGIBLE;
 
-    await this.solarMitraReferralRepository.save(
+        await this.solarMitraReferralRepository.save(
       referral,
+    );
+  }
+
+  await this.tryGenerateSolarMitraNetworkPool(
+    normalizedProjectId,
+  );
+}
+
+private async tryGenerateSolarMitraNetworkPool(
+  projectId: number,
+): Promise<void> {
+  try {
+    await this.solarMitraNetworkService
+      .generateForProject(projectId);
+  } catch (error) {
+    console.error(
+      `[Solar Mitra Network] Generation failed for Project ${projectId}`,
+      error,
     );
   }
 }

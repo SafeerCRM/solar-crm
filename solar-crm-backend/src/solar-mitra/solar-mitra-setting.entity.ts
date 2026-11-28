@@ -43,6 +43,14 @@ export class SolarMitraSetting {
   })
   creatorPayoutAmount: number;
 
+    @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 1000,
+  })
+  networkPoolAmount: string;
+
   /*
    * Kept as an enum so additional qualification methods
    * can be introduced later without redesigning this table.

@@ -14,7 +14,10 @@ import { StaffAttendance } from './staff-attendance.entity';
 import { StaffLeave } from './staff-leave.entity';
 import { EmployeePolicy } from './employee-policy.entity';
 import { HrPolicy, HrPolicyType } from './hr-policy.entity';
-import { StaffPayroll } from './staff-payroll.entity';
+import {
+  StaffPayroll,
+  StaffPayrollStatus,
+} from './staff-payroll.entity';
 import {
   StaffPayrollConditionFailureAction,
   StaffPayrollConditionOperator,
@@ -71,6 +74,9 @@ import {
 import {
   StaffPayrollCalculatorService,
 } from './staff-payroll-calculator.service';
+import {
+  SolarMitraNetworkService,
+} from '../solar-mitra/solar-mitra-network.service';
 
 @Injectable()
 export class StaffService {
@@ -156,6 +162,9 @@ private readonly payrollCalculator:
 
 private readonly payrollMetricResolverService:
   StaffPayrollMetricResolverService,
+
+private readonly solarMitraNetworkService:
+  SolarMitraNetworkService,
 ) {}
 
 private normalizeBloodGroup(value: unknown): string | null {
@@ -5118,11 +5127,129 @@ const incentiveAmount =
    * neither change is committed.
    */
   return this.payrollRepo.manager.transaction(
-    async (manager) => {
-      const savedPayroll =
-        await manager.save(
-          payroll,
+  async (manager) => {
+    await this.solarMitraNetworkService
+      .lockNetworkFinancialOperations(manager);
+
+    /*
+     * Recheck payroll duplication inside
+     * the financial transaction.
+     */
+    const existingPayroll =
+      await manager.findOne(
+        StaffPayroll,
+        {
+          where: {
+            staffId: staff.id,
+            payrollMonth: body.payrollMonth,
+            isHidden: false,
+          },
+        },
+      );
+
+    if (existingPayroll) {
+      throw new BadRequestException(
+        'Payroll already exists for this staff and month',
+      );
+    }
+
+    const savedPayroll =
+      await manager.save(
+        payroll,
+      );
+
+    const solarMitraIncentives =
+      await this.solarMitraNetworkService
+        .reservePayrollIncentives(
+          manager,
+          savedPayroll,
         );
+
+    savedPayroll.solarMitraCreatorIncentiveAmount =
+      Number(solarMitraIncentives.creatorAmount);
+
+    savedPayroll.solarMitraProjectIncentiveAmount =
+      Number(solarMitraIncentives.projectAmount);
+
+    savedPayroll.solarMitraNetworkIncentiveAmount =
+      Number(solarMitraIncentives.networkAmount);
+
+    const solarMitraRecovery =
+  await this.solarMitraNetworkService
+    .calculatePayrollNetworkRecovery(
+      manager,
+      savedPayroll,
+    );
+
+savedPayroll.solarMitraRecoveryDeduction =
+  Number(solarMitraRecovery.recoveryDeduction);
+
+    const totalSolarMitraIncentive =
+      savedPayroll.solarMitraCreatorIncentiveAmount +
+      savedPayroll.solarMitraProjectIncentiveAmount +
+      savedPayroll.solarMitraNetworkIncentiveAmount;
+
+    savedPayroll.grossSalary = Number(
+      (
+        Number(savedPayroll.grossSalary || 0) +
+        totalSolarMitraIncentive
+      ).toFixed(2),
+    );
+
+    savedPayroll.netSalary = Number(
+  (
+    Number(savedPayroll.netSalary || 0) +
+    totalSolarMitraIncentive -
+    Number(
+      savedPayroll.solarMitraRecoveryDeduction || 0,
+    )
+  ).toFixed(2),
+);
+
+    savedPayroll.calculationSnapshot = {
+      ...(savedPayroll.calculationSnapshot || {}),
+
+      solarMitraIncentives: {
+        ...solarMitraIncentives,
+
+        totalIncentiveAmount:
+          totalSolarMitraIncentive.toFixed(2),
+
+        recoveryDeduction:
+  solarMitraRecovery.recoveryDeduction,
+
+outstandingRecovery:
+  solarMitraRecovery.outstandingRecovery,
+
+remainingRecovery:
+  solarMitraRecovery.remainingRecovery,
+
+creatorRecoveryDeduction:
+  solarMitraRecovery.creatorRecoveryDeduction,
+
+projectRecoveryDeduction:
+  solarMitraRecovery.projectRecoveryDeduction,
+
+networkRecoveryDeduction:
+  solarMitraRecovery.networkRecoveryDeduction,
+
+netCreatorIncentive:
+  solarMitraRecovery.netCreatorIncentive,
+
+netProjectIncentive:
+  solarMitraRecovery.netProjectIncentive,
+
+netNetworkIncentive:
+  solarMitraRecovery.netNetworkIncentive,
+
+netTotalIncentive:
+  solarMitraRecovery.netTotalIncentive,
+
+        reservedAt: new Date().toISOString(),
+      },
+    };
+
+    await manager.save(savedPayroll);
 
       if (
         penaltyResult.approved
@@ -5822,11 +5949,32 @@ async generatePayrollSalarySlipPdf(
   );
 
   drawKeyValue(
-    'Incentive',
-    formatMoney(
-      payroll.incentiveAmount,
-    ),
-  );
+  'Staff Incentive',
+  formatMoney(
+    payroll.incentiveAmount,
+  ),
+);
+
+drawKeyValue(
+  'Solar Mitra Creator Incentive',
+  formatMoney(
+    payroll.solarMitraCreatorIncentiveAmount,
+  ),
+);
+
+drawKeyValue(
+  'Solar Mitra Direct Project Incentive',
+  formatMoney(
+    payroll.solarMitraProjectIncentiveAmount,
+  ),
+);
+
+drawKeyValue(
+  'Solar Mitra Network Incentive',
+  formatMoney(
+    payroll.solarMitraNetworkIncentiveAmount,
+  ),
+);
 
   drawKeyValue(
     'Other Allowance',
@@ -5870,15 +6018,23 @@ async generatePayrollSalarySlipPdf(
     ),
   );
 
+  drawKeyValue(
+  'Solar Mitra Recovery Deduction',
+  formatMoney(
+    payroll.solarMitraRecoveryDeduction,
+  ),
+);
+
   if (
     payroll.ownerOverrideApplied
   ) {
     drawKeyValue(
-      'Owner Override',
-      formatMoney(
-        payroll.ownerOverrideNetSalary,
-      ),
-    );
+  'Owner Override (Excl. Solar Mitra)',
+  formatMoney(
+    payroll.ownerOverrideNetSalary,
+  ),
+);
+
 
     drawKeyValue(
       'Override Reason',
@@ -5964,7 +6120,20 @@ async generatePayrollSalarySlipPdf(
 }
 
 async updatePayroll(id: number, body: any) {
-  const payroll = await this.payrollRepo.findOne({ where: { id } });
+  return this.payrollRepo.manager.transaction(
+    async (manager) => {
+      await this.solarMitraNetworkService
+        .lockNetworkFinancialOperations(manager);
+
+      const payroll = await manager.findOne(
+        StaffPayroll,
+        {
+          where: { id },
+          lock: {
+            mode: 'pessimistic_write',
+          },
+        },
+      );
 
   if (!payroll) {
     throw new NotFoundException('Payroll not found');
@@ -5973,6 +6142,21 @@ async updatePayroll(id: number, body: any) {
   if (payroll.status === 'PAID') {
     throw new BadRequestException('Paid payroll cannot be edited');
   }
+
+  if (
+  payroll.isHidden ||
+  payroll.status === 'CANCELLED'
+) {
+  throw new BadRequestException(
+    'Hidden or cancelled payroll cannot be edited',
+  );
+}
+
+if (payroll.status === 'APPROVED') {
+  throw new BadRequestException(
+    'Approved payroll cannot be edited. Payroll must be reopened before making changes.',
+  );
+}
 
   Object.assign(payroll, {
     basicSalary: Number(body.basicSalary ?? payroll.basicSalary),
@@ -5996,58 +6180,189 @@ async updatePayroll(id: number, body: any) {
     Number(payroll.absentDays || 0) * perDaySalary +
     Number(payroll.halfDays || 0) * (perDaySalary / 2);
 
-  payroll.grossSalary =
-    Number(payroll.basicSalary || 0) +
-    Number(payroll.incentiveAmount || 0) +
-    Number(payroll.otherAllowance || 0);
+  const totalSolarMitraIncentive =
+  Number(payroll.solarMitraCreatorIncentiveAmount || 0) +
+  Number(payroll.solarMitraProjectIncentiveAmount || 0) +
+  Number(payroll.solarMitraNetworkIncentiveAmount || 0);
+
+payroll.grossSalary =
+  Number(payroll.basicSalary || 0) +
+  Number(payroll.incentiveAmount || 0) +
+  Number(payroll.otherAllowance || 0) +
+  totalSolarMitraIncentive;
 
   payroll.netSalary =
-    Number(payroll.grossSalary || 0) -
-    Number(payroll.attendanceDeduction || 0) -
-    Number(payroll.leaveDeduction || 0) -
-    Number(payroll.penaltyAmount || 0) -
-    Number(payroll.otherDeduction || 0);
+  Number(payroll.grossSalary || 0) -
+  Number(payroll.attendanceDeduction || 0) -
+  Number(payroll.leaveDeduction || 0) -
+  Number(payroll.penaltyAmount || 0) -
+  Number(payroll.otherDeduction || 0) -
+  Number(payroll.solarMitraRecoveryDeduction || 0);
 
   if (body.ownerOverrideNetSalary !== undefined) {
-    payroll.ownerOverrideApplied = true;
-    payroll.ownerOverrideNetSalary = Number(body.ownerOverrideNetSalary || 0);
-    payroll.ownerOverrideReason = body.ownerOverrideReason || '';
-    payroll.netSalary = payroll.ownerOverrideNetSalary;
-  }
+  payroll.ownerOverrideApplied = true;
 
-  return this.payrollRepo.save(payroll);
+  payroll.ownerOverrideNetSalary =
+    Number(body.ownerOverrideNetSalary || 0);
+
+  payroll.ownerOverrideReason =
+    body.ownerOverrideReason || '';
 }
 
-async approvePayroll(id: number, body: any, user: any) {
-  const payroll = await this.payrollRepo.findOne({ where: { id } });
-
-  if (!payroll) {
-    throw new NotFoundException('Payroll not found');
-  }
-
-  payroll.status = 'APPROVED' as any;
-  payroll.approvedBy = user?.id || null;
-  payroll.approvedByName = user?.name || '';
-  payroll.approvedAt = new Date();
-  payroll.remarks = body?.remarks || payroll.remarks || '';
-
-  return this.payrollRepo.save(payroll);
+if (payroll.ownerOverrideApplied) {
+  payroll.netSalary = Number(
+    (
+      Number(payroll.ownerOverrideNetSalary || 0) +
+      totalSolarMitraIncentive -
+      Number(payroll.solarMitraRecoveryDeduction || 0)
+    ).toFixed(2),
+  );
 }
 
-async markPayrollPaid(id: number, body: any, user: any) {
-  const payroll = await this.payrollRepo.findOne({ where: { id } });
+        return manager.save(payroll);
+    },
+  );
+}
 
-  if (!payroll) {
-    throw new NotFoundException('Payroll not found');
-  }
+async approvePayroll(
+  id: number,
+  body: any,
+  user: any,
+) {
+  return this.payrollRepo.manager.transaction(
+    async (manager) => {
+      await this.solarMitraNetworkService
+        .lockNetworkFinancialOperations(manager);
 
-  payroll.status = 'PAID' as any;
-  payroll.paidAt = new Date();
-  payroll.paidBy = user?.id || null;
-  payroll.paidByName = user?.name || '';
-  payroll.paymentRemarks = body?.paymentRemarks || '';
+      const payroll = await manager.findOne(
+        StaffPayroll,
+        {
+          where: { id },
+          lock: {
+            mode: 'pessimistic_write',
+          },
+        },
+      );
 
-  return this.payrollRepo.save(payroll);
+      if (!payroll) {
+        throw new NotFoundException(
+          'Payroll not found',
+        );
+      }
+
+      if (payroll.isHidden) {
+        throw new BadRequestException(
+          'Hidden payroll cannot be approved',
+        );
+      }
+
+      if (payroll.status !== 'GENERATED') {
+        throw new BadRequestException(
+          'Only generated payroll can be approved',
+        );
+      }
+
+      await this.solarMitraNetworkService
+        .validatePayrollIncentives(
+          manager,
+          payroll,
+        );
+
+      payroll.status = 'APPROVED' as any;
+
+      payroll.approvedBy =
+        user?.id || null;
+
+      payroll.approvedByName =
+        user?.name || '';
+
+      payroll.approvedAt =
+        new Date();
+
+      payroll.remarks =
+        body?.remarks ||
+        payroll.remarks ||
+        '';
+
+      return manager.save(payroll);
+    },
+  );
+}
+
+async markPayrollPaid(
+  id: number,
+  body: any,
+  user: any,
+) {
+  return this.payrollRepo.manager.transaction(
+    async (manager) => {
+      await this.solarMitraNetworkService
+        .lockNetworkFinancialOperations(manager);
+
+      const payroll = await manager.findOne(
+        StaffPayroll,
+        {
+          where: { id },
+          lock: {
+            mode: 'pessimistic_write',
+          },
+        },
+      );
+
+      if (!payroll) {
+        throw new NotFoundException(
+          'Payroll not found',
+        );
+      }
+
+      if (payroll.isHidden) {
+        throw new BadRequestException(
+          'Hidden payroll cannot be paid',
+        );
+      }
+
+      if (
+        payroll.status === StaffPayrollStatus.PAID
+      ) {
+        throw new BadRequestException(
+          'Payroll is already paid',
+        );
+      }
+
+      if (
+        payroll.status !== StaffPayrollStatus.APPROVED
+      ) {
+        throw new BadRequestException(
+          'Only approved payroll can be marked as paid',
+        );
+      }
+
+      const solarMitraSettlement =
+  await this.solarMitraNetworkService
+    .settlePayrollIncentives(
+      manager,
+      payroll,
+      user,
+    );
+
+payroll.calculationSnapshot = {
+  ...(payroll.calculationSnapshot || {}),
+  solarMitraSettlement,
+};
+
+      payroll.status = StaffPayrollStatus.PAID;
+      payroll.paidAt = new Date();
+      payroll.paidBy = user?.id || null;
+      payroll.paidByName = user?.name || '';
+      payroll.paymentRemarks =
+        body?.paymentRemarks || '';
+
+      return manager.save(
+        StaffPayroll,
+        payroll,
+      );
+    },
+  );
 }
 
 async hidePayroll(
@@ -6055,29 +6370,44 @@ async hidePayroll(
   body: any,
   user: any,
 ) {
-  const payroll =
-    await this.payrollRepo.findOne({
-      where: {
-        id,
-      },
-    });
-
-  if (!payroll) {
-    throw new NotFoundException(
-      'Payroll not found',
-    );
-  }
-
-  if (
-    payroll.status === 'PAID'
-  ) {
-    throw new BadRequestException(
-      'Paid payroll cannot be hidden',
-    );
-  }
-
   return this.payrollRepo.manager.transaction(
     async (manager) => {
+      await this.solarMitraNetworkService
+        .lockNetworkFinancialOperations(manager);
+
+      const payroll = await manager.findOne(
+        StaffPayroll,
+        {
+          where: { id },
+          lock: {
+            mode: 'pessimistic_write',
+          },
+        },
+      );
+
+      if (!payroll) {
+        throw new NotFoundException(
+          'Payroll not found',
+        );
+      }
+
+      if (payroll.status === 'PAID') {
+        throw new BadRequestException(
+          'Paid payroll cannot be hidden',
+        );
+      }
+
+      if (payroll.isHidden) {
+        throw new BadRequestException(
+          'Payroll is already hidden',
+        );
+      }
+
+      await this.solarMitraNetworkService
+        .releasePayrollIncentives(
+          manager,
+          payroll,
+        );
       payroll.isHidden = true;
 
       payroll.hiddenAt =
@@ -6151,27 +6481,47 @@ async restorePayroll(
   body: any,
   user: any,
 ) {
-  const payroll =
-    await this.payrollRepo.findOne({
-      where: {
-        id,
-      },
-    });
-
-  if (!payroll) {
-    throw new NotFoundException(
-      'Payroll not found',
-    );
-  }
-
-  if (!payroll.isHidden) {
-    throw new BadRequestException(
-      'Payroll is already active',
-    );
-  }
-
   return this.payrollRepo.manager.transaction(
     async (manager) => {
+      await this.solarMitraNetworkService
+        .lockNetworkFinancialOperations(manager);
+
+      const payroll = await manager.findOne(
+        StaffPayroll,
+        {
+          where: { id },
+          lock: {
+            mode: 'pessimistic_write',
+          },
+        },
+      );
+
+      if (!payroll) {
+        throw new NotFoundException(
+          'Payroll not found',
+        );
+      }
+
+      if (!payroll.isHidden) {
+        throw new BadRequestException(
+          'Payroll is already active',
+        );
+      }
+
+      const hasSolarMitraIncentives = [
+        payroll.solarMitraCreatorIncentiveAmount,
+        payroll.solarMitraProjectIncentiveAmount,
+        payroll.solarMitraNetworkIncentiveAmount,
+        payroll.solarMitraRecoveryDeduction,
+      ].some(
+        (amount) => Number(amount || 0) !== 0,
+      );
+
+      if (hasSolarMitraIncentives) {
+        throw new BadRequestException(
+          'Payroll containing Solar Mitra incentives cannot be restored. Generate a fresh payroll to recalculate incentives and recovery deductions.',
+        );
+      }
       /*
        * Never restore an old payroll if a
        * replacement payroll already exists

@@ -33,6 +33,9 @@ import {
   SolarMitraMeetingDocument,
 } from './solar-mitra-meeting-document.entity';
 
+import { SolarMitraNetworkModule } from './solar-mitra-network.module';
+
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -46,6 +49,7 @@ SolarMitraMeetingDocument,
   User,
 ]),
     LeadsModule,
+    SolarMitraNetworkModule,
 
   ],
   controllers: [

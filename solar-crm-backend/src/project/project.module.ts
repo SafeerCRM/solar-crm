@@ -148,9 +148,11 @@ import { ProjectContractorPaymentSettlement } from './project-contractor-payment
 import { ProjectContractorPenaltyAllocation } from './project-contractor-penalty-allocation.entity';
 import { ProjectCustomerConfirmation } from './project-customer-confirmation.entity';
 import { ProjectCustomerConfirmationHistory } from './project-customer-confirmation-history.entity';
+import { SolarMitraNetworkModule } from '../solar-mitra/solar-mitra-network.module';
 
 @Module({
-  imports: [
+    imports: [
+    SolarMitraNetworkModule,
     TypeOrmModule.forFeature([Project, 
      ProjectInspection,
 ProjectInspectionDefect,

@@ -69,10 +69,13 @@ import {
 
 import { CallLog } from '../telecalling/call-log.entity';
 
-
+import {
+  SolarMitraNetworkModule,
+} from '../solar-mitra/solar-mitra-network.module';
 
 @Module({
   imports: [
+    SolarMitraNetworkModule,
     TypeOrmModule.forFeature([
   Project,
   ProjectPaymentReceipt,

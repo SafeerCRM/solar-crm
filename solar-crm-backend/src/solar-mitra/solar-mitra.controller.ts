@@ -26,13 +26,81 @@ import { AuthGuard } from '@nestjs/passport';
 import { SolarMitraService } from './solar-mitra.service';
 import { UserRole } from '../users/user.entity';
 import { SolarMitraReferralSourceType } from './solar-mitra-referral.entity';
+import { SolarMitraNetworkService } from './solar-mitra-network.service';
 
 @Controller('solar-mitra')
 @UseGuards(AuthGuard('jwt'))
 export class SolarMitraController {
   constructor(
     private readonly service: SolarMitraService,
+
+    private readonly solarMitraNetworkService: SolarMitraNetworkService,
   ) {}
+
+  private isSolarMitraOnly(user: any): boolean {
+  const roles: string[] =
+    Array.isArray(user?.roles)
+      ? user.roles
+      : [];
+
+  return (
+    roles.includes(UserRole.SOLAR_MITRA) &&
+    roles.every(
+      (role) => role === UserRole.SOLAR_MITRA,
+    )
+  );
+}
+
+private assertStaffManagementAccess(user: any): void {
+  this.assertManagementAccess(user);
+
+  if (this.isSolarMitraOnly(user)) {
+    throw new ForbiddenException(
+      'This operation is restricted to CRM staff',
+    );
+  }
+}
+
+private sanitizeMitraForNetworkMember(mitra: any) {
+  const allowedFields = [
+    'id',
+    'name',
+    'businessName',
+    'primaryPhone',
+    'secondaryPhone',
+    'address',
+    'area',
+    'city',
+    'state',
+    'gpsLatitude',
+    'gpsLongitude',
+    'gpsAddress',
+    'shopPhotoUrl',
+    'shopStatus',
+    'status',
+    'interestStatus',
+    'approvalStatus',
+    'printingStatus',
+    'standeePrintingStatus',
+    'posterPrintingStatus',
+    'posterVerificationStatus',
+    'posterVerificationRemarks',
+    'qrPosterInstallationPhotoUrl',
+    'qrPosterInstallationPhotoUrl2',
+    'createdBy',
+    'createdByName',
+    'createdByRole',
+    'createdAt',
+    'updatedAt',
+    'isHidden',
+  ];
+
+  return Object.fromEntries(
+    Object.entries(mitra || {}).filter(
+      ([key]) => allowedFields.includes(key),
+    ),
+  );
+}
 
   private assertManagementAccess(user: any) {
   const roles: string[] =
@@ -149,8 +217,83 @@ private hasFullSolarMitraVisibility(
     }
   }
 
+  private assertNetworkManagementAccess(
+  user: any,
+) {
+  const roles: string[] =
+    Array.isArray(user?.roles)
+      ? user.roles
+      : [];
+
+  const allowedRoles = [
+    UserRole.OWNER,
+    UserRole.FRANCHISE_HEAD,
+    UserRole.MARKETING_HEAD,
+    UserRole.ACCOUNT_MANAGER,
+  ];
+
+  if (
+    !allowedRoles.some(
+      (role) => roles.includes(role),
+    )
+  ) {
+    throw new ForbiddenException(
+      'Solar Mitra network management access denied',
+    );
+  }
+}
+
+private assertNetworkApprovalAccess(
+  user: any,
+) {
+  const roles: string[] =
+    Array.isArray(user?.roles)
+      ? user.roles
+      : [];
+
+  const allowedRoles = [
+    UserRole.OWNER,
+    UserRole.MARKETING_HEAD,
+    UserRole.ACCOUNT_MANAGER,
+  ];
+
+  if (
+    !allowedRoles.some(
+      (role) => roles.includes(role),
+    )
+  ) {
+    throw new ForbiddenException(
+      'Solar Mitra network incentive approval access denied',
+    );
+  }
+}
+
+private assertNetworkPaymentAccess(
+  user: any,
+) {
+  const roles: string[] =
+    Array.isArray(user?.roles)
+      ? user.roles
+      : [];
+
+  const allowedRoles = [
+    UserRole.OWNER,
+    UserRole.ACCOUNT_MANAGER,
+  ];
+
+  if (
+    !allowedRoles.some(
+      (role) => roles.includes(role),
+    )
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Account Manager can settle network incentives',
+    );
+  }
+}
+
   @Post()
-  create(
+async create(
     @Req() req: any,
     @Body() body: any,
   ) {
@@ -161,6 +304,16 @@ private hasFullSolarMitraVisibility(
     const createBody = {
   ...body,
 };
+
+if (
+  !this.isOwner(req.user) &&
+  !this.isFranchiseHead(req.user)
+) {
+  delete createBody.payoutAmountOverride;
+  delete createBody.requiredPaymentPercentageOverride;
+  delete createBody.franchiseManagerId;
+  delete createBody.franchiseManagerName;
+}
 
 if (
   this.isFranchiseManager(req.user) &&
@@ -175,14 +328,23 @@ if (
     ).trim();
 }
 
-return this.service.createSolarMitra(
-  createBody,
-  req.user,
-);
+const createdMitra =
+  await this.service.createSolarMitra(
+    createBody,
+    req.user,
+  );
+
+if (this.isSolarMitraOnly(req.user)) {
+  return this.sanitizeMitraForNetworkMember(
+    createdMitra,
+  );
+}
+
+return createdMitra;
   }
 
   @Get()
-list(
+async list(
   @Req() req: any,
   @Query() query: any,
 ) {
@@ -207,9 +369,18 @@ list(
       Number(req.user.id);
   }
 
-  return this.service.listSolarMitras(
+  const mitras =
+  await this.service.listSolarMitras(
     scopedQuery,
   );
+
+if (this.isSolarMitraOnly(req.user)) {
+  return mitras.map((mitra) =>
+    this.sanitizeMitraForNetworkMember(mitra),
+  );
+}
+
+return mitras;
 }
 
   @Get('referrals/list')
@@ -218,6 +389,13 @@ async listReferrals(
   @Query() query: any,
 ) {
   this.assertManagementAccess(req.user);
+
+  if (this.isSolarMitraOnly(req.user)) {
+  return this.service.listMyReferrals(
+    Number(req.user.id),
+    query,
+  );
+}
 
   if (
     this.hasFullSolarMitraVisibility(
@@ -273,6 +451,13 @@ async referralDetail(
 ) {
   this.assertManagementAccess(req.user);
 
+  if (this.isSolarMitraOnly(req.user)) {
+  return this.service.getMyReferral(
+    Number(req.user.id),
+    id,
+  );
+}
+
   const referral =
     await this.service.getReferral(id);
 
@@ -310,7 +495,7 @@ async referralDetail(
 
   @Get('settings')
   settings(@Req() req: any) {
-    this.assertManagementAccess(req.user);
+    this.assertStaffManagementAccess(req.user);
 
     return this.service.getOrCreateSettings();
   }
@@ -377,6 +562,16 @@ async listCreatorPayouts(
 ) {
   this.assertManagementAccess(req.user);
 
+  if (this.isSolarMitraOnly(req.user)) {
+  const payouts =
+    await this.service.listCreatorPayouts(query);
+
+  return payouts.filter(
+    (item) =>
+      Number(item.creatorId) === Number(req.user.id),
+  );
+}
+
   const roles: string[] =
     Array.isArray(req.user?.roles)
       ? req.user.roles
@@ -420,6 +615,13 @@ async listPayouts(
   this.assertManagementAccess(
     req.user,
   );
+
+  if (this.isSolarMitraOnly(req.user)) {
+  return this.service.listMyPayouts(
+    Number(req.user.id),
+    query,
+  );
+}
 
   const roles: string[] =
   Array.isArray(req.user?.roles)
@@ -473,6 +675,9 @@ getPayoutPaymentDetails(
   @Param('id', ParseIntPipe)
   id: number,
 ) {
+
+  this.assertStaffManagementAccess(req.user);
+
   const roles: string[] =
     Array.isArray(req.user?.roles)
       ? req.user.roles
@@ -502,6 +707,12 @@ async payoutDetail(
   this.assertManagementAccess(
     req.user,
   );
+
+  if (this.isSolarMitraOnly(req.user)) {
+  throw new ForbiddenException(
+    'Please access your personal payouts through My Profile',
+  );
+}
 
   const payout =
     await this.service.getPayout(
@@ -540,6 +751,40 @@ if (
   }
 
   return payout;
+}
+
+@Get('creator-payouts/:id/settlement-preview')
+async previewCreatorSettlement(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Req() req: any,
+) {
+  this.assertNetworkPaymentAccess(
+    req.user,
+  );
+
+  return this.service.previewCreatorSettlement(
+    id,
+    req.user,
+  );
+}
+
+@Get('payouts/:id/settlement-preview')
+async previewProjectSettlement(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Req() req: any,
+) {
+  this.assertNetworkPaymentAccess(
+    req.user,
+  );
+
+  return this.service.previewProjectSettlement(
+    id,
+    req.user,
+  );
 }
 
 @Patch('creator-payouts/:id/paid')
@@ -634,9 +879,7 @@ createMeeting(
   @Req() req: any,
   @Body() body: any,
 ) {
-  this.assertManagementAccess(
-    req.user,
-  );
+  this.assertStaffManagementAccess(req.user);
 
   return this.service.createMeeting(
     body,
@@ -650,9 +893,7 @@ listMeetings(
   @Req() req: any,
   @Query() query: any,
 ) {
-  this.assertManagementAccess(
-    req.user,
-  );
+  this.assertStaffManagementAccess(req.user);
 
   let managerId:
     number | undefined;
@@ -695,9 +936,7 @@ async meetingDetail(
   )
   id: number,
 ) {
-  this.assertManagementAccess(
-    req.user,
-  );
+  this.assertStaffManagementAccess(req.user);
 
   const meeting =
     await this.service.getMeeting(
@@ -742,9 +981,7 @@ async updateMeeting(
   @Body()
   body: any,
 ) {
-  this.assertManagementAccess(
-    req.user,
-  );
+  this.assertStaffManagementAccess(req.user);
 
   const meeting =
     await this.service.getMeeting(
@@ -794,9 +1031,7 @@ async convertMeetingToSolarMitra(
   @Body()
   body: any,
 ) {
-  this.assertManagementAccess(
-    req.user,
-  );
+  this.assertStaffManagementAccess(req.user);
 
   const meeting =
     await this.service.getMeeting(
@@ -823,6 +1058,23 @@ async convertMeetingToSolarMitra(
       );
     }
   }
+
+  body = { ...body };
+
+delete body.createdBy;
+delete body.createdByName;
+delete body.createdByRole;
+delete body.linkedUserId;
+
+if (
+  !this.isOwner(req.user) &&
+  !this.isFranchiseHead(req.user)
+) {
+  delete body.payoutAmountOverride;
+  delete body.requiredPaymentPercentageOverride;
+  delete body.franchiseManagerId;
+  delete body.franchiseManagerName;
+}
 
   return this.service
     .convertMeetingToSolarMitra(
@@ -970,6 +1222,9 @@ async updatePosterVerification(
   @Param('id', ParseIntPipe) id: number,
   @Body() body: any,
 ) {
+
+  this.assertStaffManagementAccess(req.user);
+
   const roles: string[] =
     Array.isArray(req.user?.roles)
       ? req.user.roles
@@ -998,6 +1253,9 @@ async updateBulkPrintingStatus(
   @Req() req: any,
   @Body() body: any,
 ) {
+
+  this.assertStaffManagementAccess(req.user);
+
   const roles: string[] =
     Array.isArray(req.user?.roles)
       ? req.user.roles
@@ -1026,6 +1284,9 @@ async updatePrintingStatus(
   @Param('id', ParseIntPipe) id: number,
   @Body() body: any,
 ) {
+
+  this.assertStaffManagementAccess(req.user);
+
   const roles: string[] =
     Array.isArray(req.user?.roles)
       ? req.user.roles
@@ -1054,7 +1315,7 @@ async updateShopStatus(
   @Param('id', ParseIntPipe) id: number,
   @Body() body: any,
 ) {
-  this.assertManagementAccess(req.user);
+  this.assertStaffManagementAccess(req.user);
 
   const roles: UserRole[] =
     Array.isArray(req.user?.roles)
@@ -1133,7 +1394,7 @@ async updateApprovalStatus(
   @Param('id', ParseIntPipe) id: number,
   @Body() body: any,
 ) {
-  this.assertManagementAccess(req.user);
+  this.assertStaffManagementAccess(req.user);
 
   const roles: UserRole[] =
     Array.isArray(req.user?.roles)
@@ -1207,12 +1468,24 @@ if (
   );
 }
 
-return this.service.uploadPosterInstallationPhoto(
-  id,
-  file,
-  req.user.id,
-  slot,
-);
+const uploadResult =
+  await this.service.uploadPosterInstallationPhoto(
+    id,
+    file,
+    req.user.id,
+    slot,
+  );
+
+if (this.isSolarMitraOnly(req.user)) {
+  const updatedMitra =
+    await this.service.getSolarMitra(id);
+
+  return this.sanitizeMitraForNetworkMember(
+    updatedMitra,
+  );
+}
+
+return uploadResult;
 }
 
 @Patch(':id')
@@ -1236,6 +1509,23 @@ async update(
     await this.service.getSolarMitra(
       id,
     );
+
+    body = { ...body };
+
+delete body.createdBy;
+delete body.createdByName;
+delete body.createdByRole;
+delete body.linkedUserId;
+
+if (
+  !this.isOwner(req.user) &&
+  !this.isFranchiseHead(req.user)
+) {
+  delete body.payoutAmountOverride;
+  delete body.requiredPaymentPercentageOverride;
+  delete body.franchiseManagerId;
+  delete body.franchiseManagerName;
+}
 
   if (
     !this.hasFullSolarMitraVisibility(
@@ -1279,10 +1569,266 @@ async update(
     }
   }
 
-  return this.service.updateSolarMitra(
+  const updatedMitra =
+  await this.service.updateSolarMitra(
     id,
     body,
     req.user,
+  );
+
+if (this.isSolarMitraOnly(req.user)) {
+  return this.sanitizeMitraForNetworkMember(
+    updatedMitra,
+  );
+}
+
+return updatedMitra;
+}
+
+@Get('network/mitras/creator-options')
+async searchHistoricalCreatorOptions(
+  @Req() req: any,
+  @Query('search') search: string,
+) {
+  if (!this.isOwner(req.user)) {
+    throw new ForbiddenException(
+      'Only Owner can search historical creator options',
+    );
+  }
+
+  return this.solarMitraNetworkService
+    .searchHistoricalCreatorOptions(
+      req.user,
+      search,
+    );
+}
+
+@Get('network/mitras/missing-creators')
+async getMissingCreatorMitras(
+  @Req() req: any,
+) {
+  if (!this.isOwner(req.user)) {
+    throw new ForbiddenException(
+      'Only Owner can view Solar Mitras with missing creators',
+    );
+  }
+
+  return this.solarMitraNetworkService
+    .getMissingCreatorMitras(req.user);
+}
+
+@Patch('network/mitras/:id/assign-creator')
+async assignHistoricalCreator(
+  @Req() req: any,
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  if (!this.isOwner(req.user)) {
+    throw new ForbiddenException(
+      'Only Owner can assign a missing Solar Mitra creator',
+    );
+  }
+
+  return this.solarMitraNetworkService
+    .assignHistoricalCreator(
+      id,
+      Number(body?.creatorUserId),
+      req.user,
+    );
+}
+
+@Get('network/reconciliation/preview')
+async previewHistoricalNetworkPools(
+  @Req() req: any,
+) {
+  const roles: string[] =
+    Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+
+  if (!roles.includes(UserRole.OWNER)) {
+    throw new ForbiddenException(
+      'Only Owner can preview historical network reconciliation',
+    );
+  }
+
+  return this.solarMitraNetworkService
+    .reconcileHistoricalNetworkPools(true);
+}
+
+@Post('network/reconciliation/execute')
+async executeHistoricalNetworkPools(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  const roles: string[] =
+    Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+
+  if (!roles.includes(UserRole.OWNER)) {
+    throw new ForbiddenException(
+      'Only Owner can execute historical network reconciliation',
+    );
+  }
+
+  if (
+    body?.confirmation !==
+    'GENERATE_HISTORICAL_NETWORK_POOLS'
+  ) {
+    throw new BadRequestException(
+      'Explicit historical reconciliation confirmation is required',
+    );
+  }
+
+  return this.solarMitraNetworkService
+  .reconcileHistoricalNetworkPools(
+    false,
+    body?.previewFingerprint,
+  );
+}
+
+@Get('network/management/summary')
+async getNetworkManagementSummary(
+  @Req() req: any,
+) {
+  this.assertNetworkManagementAccess(
+    req.user,
+  );
+
+  return this.solarMitraNetworkService
+    .getNetworkManagementSummary();
+}
+
+@Get('network/management/payouts')
+async getNetworkManagementPayouts(
+  @Req() req: any,
+  @Query() query: any,
+) {
+  this.assertNetworkManagementAccess(
+    req.user,
+  );
+
+  return this.solarMitraNetworkService
+    .getNetworkManagementPayouts(query);
+}
+
+@Get('network/payouts/:id/settlement-preview')
+async previewNetworkSettlement(
+  @Param('id', ParseIntPipe) id: number,
+  @Req() req: any,
+) {
+  this.assertNetworkPaymentAccess(
+    req.user,
+  );
+
+  return this.solarMitraNetworkService
+    .previewNetworkSettlement(id);
+}
+
+@Patch('network/payouts/:id/paid')
+async markNetworkPayoutPaid(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @Req() req: any,
+) {
+  this.assertNetworkPaymentAccess(
+    req.user,
+  );
+
+  return this.solarMitraNetworkService
+    .markNetworkPayoutPaid(
+      id,
+      body,
+      req.user,
+    );
+}
+
+@Patch('network/payouts/bulk-approve')
+async bulkApproveNetworkPayouts(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  this.assertNetworkApprovalAccess(
+    req.user,
+  );
+
+  return this.solarMitraNetworkService
+    .bulkApproveNetworkPayouts(
+      body?.payoutIds,
+      req.user,
+    );
+}
+
+@Patch('network/payouts/:id/approve')
+async approveNetworkPayout(
+  @Param('id', ParseIntPipe) id: number,
+  @Req() req: any,
+) {
+  this.assertNetworkApprovalAccess(
+    req.user,
+  );
+
+  return this.solarMitraNetworkService
+    .approveNetworkPayout(
+      id,
+      req.user,
+    );
+}
+
+@Get('me/network')
+async getMyNetwork(
+  @Req() req: any,
+) {
+  this.assertManagementAccess(req.user);
+
+  const userId = Number(
+    req.user?.id ||
+    req.user?.userId ||
+    req.user?.sub ||
+    0,
+  );
+
+  return this.solarMitraNetworkService.getMyNetwork(
+    userId,
+  );
+}
+
+@Get('me/earnings')
+async getMyEarnings(
+  @Req() req: any,
+) {
+  this.assertManagementAccess(req.user);
+
+  const userId = Number(
+    req.user?.id ||
+    req.user?.userId ||
+    req.user?.sub ||
+    0,
+  );
+
+  return this.solarMitraNetworkService.getMyEarnings(
+    userId,
+  );
+}
+
+@Get('me/network-payouts')
+async getMyNetworkPayouts(
+  @Req() req: any,
+  @Query() query: any,
+) {
+  this.assertManagementAccess(req.user);
+
+  const userId = Number(
+    req.user?.id ||
+    req.user?.userId ||
+    req.user?.sub ||
+    0,
+  );
+
+  return this.solarMitraNetworkService.getMyNetworkPayouts(
+    userId,
+    query,
   );
 }
 
@@ -1440,6 +1986,12 @@ async createReferralByStaff(
 ) {
   this.assertManagementAccess(req.user);
 
+  if (this.isSolarMitraOnly(req.user)) {
+  throw new ForbiddenException(
+    'Please create referrals through your own Solar Mitra account',
+  );
+}
+
   if (
     !this.hasFullSolarMitraVisibility(
       req.user,
@@ -1508,7 +2060,11 @@ async detail(
     }
   }
 
-  return mitra;
+  if (this.isSolarMitraOnly(req.user)) {
+  return this.sanitizeMitraForNetworkMember(mitra);
+}
+
+return mitra;
 }
 }
 
