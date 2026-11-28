@@ -121,8 +121,8 @@ projectId: number;
   @Column({ type: 'timestamp', nullable: true })
   cancelledAt: Date;
 
-  @Column({ nullable: true })
-  cancelledBy: number | null;
+  @Column({ type: 'integer', nullable: true })
+cancelledBy: number | null;
 
   @Column({ type: 'text', nullable: true })
   cancelledByName: string;
