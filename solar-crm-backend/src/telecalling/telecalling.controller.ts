@@ -837,13 +837,14 @@ assignContactForReview(
   );
 }
 
-  @Post('contacts/:id/convert')
+    @Post('contacts/:id/convert')
 convertContactToLead(
   @Param('id', ParseIntPipe) id: number,
   @Body('leadManagerId') leadManagerId: number,
   @Body('assignedTo') assignedTo: number,
   @Body('potentialPercentage') potentialPercentage: number,
   @Body('note') note: string,
+  @Body('leadRating') leadRating: number | null,
   @CurrentUser() user: any,
 ) {
   return this.telecallingService.convertContactToLead(
@@ -852,6 +853,7 @@ convertContactToLead(
     Number(potentialPercentage || 50),
     user,
     note,
+    leadRating,
   );
 }
 

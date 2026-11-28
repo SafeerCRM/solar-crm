@@ -133,8 +133,17 @@ leadManagerRole: string;
   @Column({ type: 'timestamp', nullable: true })
   nextFollowUpDate: Date;
 
-  @Column({ type: 'int', nullable: true, default: 15 })
+    @Column({ type: 'int', nullable: true, default: 15 })
   potentialPercentage: number;
+
+  @Column({ type: 'integer', nullable: true })
+  leadRating: number | null;
+
+  @Column({ type: 'integer', nullable: true })
+  leadRatedBy: number | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  leadRatedAt: Date | null;
 
     @Column({ type: 'float', nullable: true })
   electricityBill?: number;

@@ -19,6 +19,10 @@ type LeadSummary = {
   zone?: string;
   status?: string;
   potentialPercentage?: number;
+  leadRating?: number | null;
+  leadRatedBy?: number | null;
+  leadRatedAt?: string | null;
+  leadRatedByName?: string | null;
   leadOwnerName?: string;
   assignedTo?: number | null;
   remarks?: string;
@@ -52,13 +56,53 @@ export default function LeadHistoryPage() {
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [editingText, setEditingText] = useState('');
   const [saving, setSaving] = useState(false);
-  const [updatingPotential, setUpdatingPotential] = useState(false);
+    const [updatingPotential, setUpdatingPotential] = useState(false);
+
+  const [updatingLeadRating, setUpdatingLeadRating] =
+    useState(false);
+
+  const [currentRoles, setCurrentRoles] =
+    useState<string[]>([]);
+
+  const canManageLeadOperations = currentRoles.some((role) =>
+    [
+      'OWNER',
+      'LEAD_MANAGER',
+      'MARKETING_HEAD',
+      'TELECALLING_MANAGER',
+      'TELECALLER',
+      'LEAD_EXECUTIVE',
+      'MEETING_MANAGER',
+      'PROJECT_EXECUTIVE',
+      'PROJECT_MANAGER',
+      'TELECALLING_ASSISTANT',
+      'SOLAR_STORE',
+    ].includes(role),
+  );
   const [followUpNote, setFollowUpNote] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
   const followUpDateValue = followUpDate
   ? dayjs(followUpDate)
   : null;
   const [creatingFollowUp, setCreatingFollowUp] = useState(false);
+
+    useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+
+    if (storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+
+        setCurrentRoles(
+          Array.isArray(parsedUser.roles)
+            ? parsedUser.roles
+            : [],
+        );
+      } catch {
+        setCurrentRoles([]);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (id) {
@@ -157,6 +201,38 @@ export default function LeadHistoryPage() {
       );
     } finally {
       setUpdatingPotential(false);
+    }
+  };
+
+    const updateLeadRating = async (
+    leadRating: number | null,
+  ) => {
+    if (!data?.lead?.id || !canManageLeadOperations) {
+      return;
+    }
+
+    try {
+      setUpdatingLeadRating(true);
+      setMessage('');
+
+      await axios.patch(
+        `${backendUrl}/leads/${data.lead.id}`,
+        { leadRating },
+        { headers: getAuthHeaders() },
+      );
+
+      setMessage('Lead rating updated successfully');
+
+      await fetchHistory();
+    } catch (error: any) {
+      console.error(error);
+
+      setMessage(
+        error?.response?.data?.message ||
+          'Failed to update lead rating',
+      );
+    } finally {
+      setUpdatingLeadRating(false);
     }
   };
 
@@ -351,11 +427,81 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
             <option value={75}>High Potential (75%)</option>
           </select>
 
-          <span
+                    <span
             className={`inline-block rounded-full px-3 py-2 text-xs font-medium ${potentialMeta.className}`}
           >
             {updatingPotential ? 'Updating...' : potentialMeta.label}
           </span>
+        </div>
+
+        <div className="mb-4 rounded-xl border border-gray-300 bg-gray-50 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <label
+              htmlFor="detailLeadRating"
+              className="text-sm font-semibold text-gray-800"
+            >
+              Lead Rating (1–10)
+            </label>
+
+            {canManageLeadOperations ? (
+              <select
+                id="detailLeadRating"
+                value={data.lead.leadRating ?? ''}
+                disabled={updatingLeadRating}
+                onChange={(e) =>
+                  updateLeadRating(
+                    e.target.value === ''
+                      ? null
+                      : Number(e.target.value),
+                  )
+                }
+                className="rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm font-semibold text-gray-800 disabled:opacity-50"
+              >
+                <option value="">Not Rated</option>
+
+                {Array.from(
+                  { length: 10 },
+                  (_, i) => i + 1,
+                ).map((rating) => (
+                  <option key={rating} value={rating}>
+                    {rating}/10
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800">
+                {data.lead.leadRating != null
+                  ? `${data.lead.leadRating}/10`
+                  : 'Not Rated'}
+              </span>
+            )}
+
+            {updatingLeadRating && (
+              <span className="text-xs text-gray-500">
+                Saving...
+              </span>
+            )}
+          </div>
+
+          {data.lead.leadRatedAt && (
+            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-600">
+              <p>
+                <span className="font-semibold">
+                  Last updated by:
+                </span>{' '}
+                {data.lead.leadRatedByName || '-'}
+              </p>
+
+              <p>
+                <span className="font-semibold">
+                  Last updated at:
+                </span>{' '}
+                {dayjs(data.lead.leadRatedAt).format(
+                  'DD MMM YYYY, hh:mm A',
+                )}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="grid gap-3 text-sm text-gray-700 md:grid-cols-2">

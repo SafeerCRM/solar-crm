@@ -74,6 +74,7 @@ export default function TelecallingContactDetailPage() {
  const [selectedMeetingManagerId, setSelectedMeetingManagerId] = useState('');
  const [leadManagers, setLeadManagers] = useState<User[]>([]);
 const [selectedLeadManagerId, setSelectedLeadManagerId] = useState('');
+const [leadRating, setLeadRating] = useState('');
 const [leadPotential, setLeadPotential] = useState('50'); // default MEDIUM
  const [assigningAssistant, setAssigningAssistant] = useState(false);
 
@@ -248,6 +249,7 @@ const fetchLeadManagers = async () => {
       setData(res.data);
 setSelectedMeetingManagerId('');
 setSelectedLeadManagerId('');
+setLeadRating('');
 
 const reviewAssignedTo = res.data?.contact?.reviewAssignedTo;
 setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
@@ -761,6 +763,32 @@ await axios.post(
   <option value="75">HIGH Potential</option>
 </select>
 
+<div>
+  <label
+    htmlFor="conversionLeadRating"
+    className="mb-1 block text-sm font-medium text-gray-700"
+  >
+    Lead Rating (1–10)
+  </label>
+
+  <select
+    id="conversionLeadRating"
+    value={leadRating}
+    onChange={(e) => setLeadRating(e.target.value)}
+    className="w-full rounded border border-gray-300 bg-white p-2"
+  >
+    <option value="">Not Rated</option>
+
+    {Array.from({ length: 10 }, (_, i) => i + 1).map(
+      (rating) => (
+        <option key={rating} value={rating}>
+          {rating}/10
+        </option>
+      ),
+    )}
+  </select>
+</div>
+
 <textarea
   value={leadConvertNote}
   onChange={(e) => setLeadConvertNote(e.target.value)}
@@ -808,17 +836,19 @@ if (!leadConvertNote.trim()) {
     await axios.post(
   `${backendUrl}/telecalling/contacts/${id}/convert`,
   {
-  leadManagerId: Number(selectedLeadManagerId),
+    leadManagerId: Number(selectedLeadManagerId),
   potentialPercentage: Number(leadPotential),
+  leadRating: leadRating ? Number(leadRating) : null,
   note: leadConvertNote.trim(),
 },
       { headers: getAuthHeaders() }
     );
 
-    setFlashMessage('Converted to lead successfully');
+     setFlashMessage('Converted to lead successfully');
     setLeadSlider(0);
     setPendingLeadSave(false);
     setLeadConvertNote('');
+    setLeadRating('');
 
     setTimeout(() => {
       if (searchParams?.get('from') === 'review-queue') {

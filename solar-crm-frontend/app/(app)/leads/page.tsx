@@ -29,6 +29,9 @@ type Lead = {
   createdByName?: string;
   assignedTo?: number | null;
   potentialPercentage?: number | null;
+  leadRating?: number | null;
+  leadRatedBy?: number | null;
+  leadRatedAt?: string | null;
   status?: string;
   nextFollowUpDate?: string;
   remarks?: string;
@@ -125,7 +128,12 @@ const [editingLeadName, setEditingLeadName] = useState('');
   const [searchName, setSearchName] = useState('');
   const [searchPhone, setSearchPhone] = useState('');
   const [searchCity, setSearchCity] = useState('');
-  const [potentialFilter, setPotentialFilter] = useState('');
+    const [potentialFilter, setPotentialFilter] = useState('');
+
+  const [ratingFrom, setRatingFrom] = useState('');
+  const [ratingTo, setRatingTo] = useState('');
+  const [ratingStatus, setRatingStatus] = useState('ALL');
+  const [ratingSort, setRatingSort] = useState('');
 
   const [showStorage, setShowStorage] = useState(false);
 const [storageLeads, setStorageLeads] = useState<any[]>([]);
@@ -169,6 +177,9 @@ const [solarMitraSearch, setSolarMitraSearch] =
 
 const [exportingLeads, setExportingLeads] =
   useState(false);
+
+const [savingLeadRating, setSavingLeadRating] =
+  useState<number | null>(null);
 
   const currentRoles = currentUser?.roles || [];
 const isOwner = currentRoles.includes('OWNER');
@@ -218,6 +229,12 @@ const canManageLeadOperations = currentRoles.some((role) =>
       setSearchPhone(parsed.searchPhone || '');
       setSearchCity(parsed.searchCity || '');
       setPotentialFilter(parsed.potentialFilter || '');
+
+      setRatingFrom(parsed.ratingFrom || '');
+      setRatingTo(parsed.ratingTo || '');
+      setRatingStatus(parsed.ratingStatus || 'ALL');
+      setRatingSort(parsed.ratingSort || '');
+
       setContactedStatusFilter(parsed.contactedStatusFilter || '');
       setLeadManagerFilter(
   parsed.leadManagerFilter || '',
@@ -446,10 +463,14 @@ setFollowUpFilter(
   sessionStorage.setItem(
     LEAD_FILTER_STORAGE_KEY,
     JSON.stringify({
-  searchName,
+    searchName,
   searchPhone,
   searchCity,
   potentialFilter,
+  ratingFrom,
+  ratingTo,
+  ratingStatus,
+  ratingSort,
   contactedStatusFilter,
   leadManagerFilter,
   followUpFilter,
@@ -469,17 +490,35 @@ setFollowUpFilter(
   try {
     setLoadingLeads(true);
 
-    const activeFilters = overrideFilters || {
-  searchName,
-  searchPhone,
-  searchCity,
-  potentialFilter,
-  contactedStatusFilter,
-  leadManagerFilter,
-  followUpFilter,
-  leadSourceTab,
-  solarMitraFilter,
-};
+       const activeFilters = {
+      searchName,
+      searchPhone,
+      searchCity,
+      potentialFilter,
+      ratingFrom,
+      ratingTo,
+      ratingStatus,
+      ratingSort,
+      contactedStatusFilter,
+      leadManagerFilter,
+      followUpFilter,
+      leadSourceTab,
+      solarMitraFilter,
+      ...(overrideFilters || {}),
+    };
+
+        if (
+      activeFilters.ratingStatus !== 'UNRATED' &&
+      activeFilters.ratingFrom &&
+      activeFilters.ratingTo &&
+      Number(activeFilters.ratingFrom) >
+        Number(activeFilters.ratingTo)
+    ) {
+      setMessage(
+        'Rating From cannot be greater than Rating To',
+      );
+      return;
+    }
 
     const res = await axios.get(`${backendUrl}/leads`, {
       headers: getAuthHeaders(),
@@ -489,8 +528,25 @@ setFollowUpFilter(
         search: String(activeFilters.searchName || '').trim() || undefined,
         phone: String(activeFilters.searchPhone || '').trim() || undefined,
         city: String(activeFilters.searchCity || '').trim() || undefined,
-        potentialPercentage:
+                potentialPercentage:
           String(activeFilters.potentialFilter || '').trim() || undefined,
+
+        ratingFrom:
+          activeFilters.ratingStatus === 'UNRATED'
+            ? undefined
+            : activeFilters.ratingFrom || undefined,
+
+        ratingTo:
+          activeFilters.ratingStatus === 'UNRATED'
+            ? undefined
+            : activeFilters.ratingTo || undefined,
+
+        ratingStatus:
+          activeFilters.ratingStatus || 'ALL',
+
+        ratingSort:
+          activeFilters.ratingSort || undefined,
+
         contactedStatus:
           String(activeFilters.contactedStatusFilter || '').trim() || undefined,
         assignedTo:
@@ -595,8 +651,23 @@ const exportFilteredLeads = async () => {
           city:
             searchCity.trim() || undefined,
 
-          potentialPercentage:
+                    potentialPercentage:
             potentialFilter || undefined,
+
+          ratingFrom:
+            ratingStatus === 'UNRATED'
+              ? undefined
+              : ratingFrom || undefined,
+
+          ratingTo:
+            ratingStatus === 'UNRATED'
+              ? undefined
+              : ratingTo || undefined,
+
+          ratingStatus,
+
+          ratingSort:
+            ratingSort || undefined,
 
           contactedStatus:
             contactedStatusFilter ||
@@ -1098,6 +1169,35 @@ const handleSelectAllFilteredStorage = async () => {
     }
   };
 
+    const updateLeadRating = async (
+    leadId: number,
+    leadRating: number | null,
+  ) => {
+    try {
+      setSavingLeadRating(leadId);
+      setMessage('');
+
+      await axios.patch(
+        `${backendUrl}/leads/${leadId}`,
+        { leadRating },
+        { headers: getAuthHeaders() },
+      );
+
+      setMessage('Lead rating updated successfully');
+
+      await fetchLeads();
+    } catch (err: any) {
+      console.error(err);
+
+      setMessage(
+        err?.response?.data?.message ||
+          'Failed to update lead rating',
+      );
+    } finally {
+      setSavingLeadRating(null);
+    }
+  };
+
   const getAssignedName = (assignedTo?: number | null) => {
     if (!assignedTo) return 'Unassigned';
     const user = users.find((u) => u.id === assignedTo);
@@ -1112,7 +1212,13 @@ const handleSelectAllFilteredStorage = async () => {
   setSearchName('');
   setSearchPhone('');
   setSearchCity('');
-  setPotentialFilter('');
+    setPotentialFilter('');
+
+  setRatingFrom('');
+  setRatingTo('');
+  setRatingStatus('ALL');
+  setRatingSort('');
+
   setContactedStatusFilter('');
   setLeadManagerFilter('');
   setFollowUpFilter('WITHOUT');
@@ -1126,7 +1232,11 @@ setSolarMitraSearch('');
     searchName: '',
     searchPhone: '',
     searchCity: '',
-    potentialFilter: '',
+        potentialFilter: '',
+    ratingFrom: '',
+    ratingTo: '',
+    ratingStatus: 'ALL',
+    ratingSort: '',
     contactedStatusFilter: '',
     leadManagerFilter: '',
     followUpFilter: 'WITHOUT',
@@ -1832,7 +1942,7 @@ disabled={isAutoCalling}
   <option value="CONTACTED">Contacted</option>
 </select>
 
-        <select
+                <select
           value={potentialFilter}
           onChange={(e) => setPotentialFilter(e.target.value)}
           className="rounded border p-2"
@@ -1841,6 +1951,89 @@ disabled={isAutoCalling}
           <option value="15">Not Likely (15%)</option>
           <option value="50">Likely (50%)</option>
           <option value="75">High Potential (75%)</option>
+        </select>
+
+        <select
+          value={ratingFrom}
+          onChange={(e) => {
+            const value = e.target.value;
+
+            setRatingFrom(value);
+
+            if (
+              value &&
+              ratingTo &&
+              Number(value) > Number(ratingTo)
+            ) {
+              setRatingTo('');
+            }
+          }}
+          disabled={ratingStatus === 'UNRATED'}
+          className="rounded border border-gray-400 bg-white p-2 disabled:bg-gray-100 disabled:opacity-50"
+        >
+          <option value="">Rating From: Any</option>
+
+          {Array.from(
+            { length: 10 },
+            (_, i) => i + 1,
+          ).map((rating) => (
+            <option key={rating} value={rating}>
+              Rating From: {rating}/10
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={ratingTo}
+          onChange={(e) => setRatingTo(e.target.value)}
+          disabled={ratingStatus === 'UNRATED'}
+          className="rounded border border-gray-400 bg-white p-2 disabled:bg-gray-100 disabled:opacity-50"
+        >
+          <option value="">Rating To: Any</option>
+
+          {Array.from(
+            { length: 10 },
+            (_, i) => i + 1,
+          )
+            .filter(
+              (rating) =>
+                !ratingFrom ||
+                rating >= Number(ratingFrom),
+            )
+            .map((rating) => (
+              <option key={rating} value={rating}>
+                Rating To: {rating}/10
+              </option>
+            ))}
+        </select>
+
+        <select
+          value={ratingStatus}
+          onChange={(e) => {
+            const value = e.target.value;
+
+            setRatingStatus(value);
+
+            if (value === 'UNRATED') {
+              setRatingFrom('');
+              setRatingTo('');
+            }
+          }}
+          className="rounded border border-gray-400 bg-white p-2"
+        >
+          <option value="ALL">All Rating Status</option>
+          <option value="RATED">Rated Leads Only</option>
+          <option value="UNRATED">Not Rated Only</option>
+        </select>
+
+        <select
+          value={ratingSort}
+          onChange={(e) => setRatingSort(e.target.value)}
+          className="rounded border border-gray-400 bg-white p-2"
+        >
+          <option value="">Rating Sort: Default</option>
+          <option value="DESC">Rating: Highest First</option>
+          <option value="ASC">Rating: Lowest First</option>
         </select>
 
         {isOwner && (
@@ -2660,12 +2853,61 @@ fetchStorageLeads(1);
                   </button>
                 </div>
 
-                <div className="mb-3">
+                                <div className="mb-3 flex flex-wrap items-center gap-2">
                   <span
                     className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${potentialMeta.className}`}
                   >
                     {potentialMeta.label}
                   </span>
+
+                  <div className="flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-2.5 py-1">
+                    <span className="text-xs font-semibold text-gray-700">
+                      Rating:
+                    </span>
+
+                    {canManageLeadOperations ? (
+                      <select
+                        aria-label={`Lead rating for ${lead.name}`}
+                        value={lead.leadRating ?? ''}
+                        disabled={savingLeadRating !== null}
+                        onChange={(e) =>
+                          updateLeadRating(
+                            lead.id,
+                            e.target.value === ''
+                              ? null
+                              : Number(e.target.value),
+                          )
+                        }
+                        className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-800 disabled:opacity-50"
+                      >
+                        <option value="">Not Rated</option>
+
+                        {Array.from(
+                          { length: 10 },
+                          (_, i) => i + 1,
+                        ).map((rating) => (
+                          <option
+                            key={rating}
+                            value={rating}
+                          >
+                            {rating}/10
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-xs font-semibold text-gray-800">
+                        {lead.leadRating != null
+                          ? `${lead.leadRating}/10`
+                          : 'Not Rated'}
+                      </span>
+                    )}
+
+                    {savingLeadRating === lead.id && (
+                      <span className="text-xs text-gray-500">
+                        Saving...
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2 text-sm text-gray-700">

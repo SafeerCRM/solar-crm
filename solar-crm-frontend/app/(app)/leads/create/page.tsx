@@ -12,6 +12,7 @@ export default function CreateLeadPage() {
   const [status, setStatus] = useState('');
   const [electricityBill, setElectricityBill] = useState('');
   const [potential, setPotential] = useState('MEDIUM');
+const [leadRating, setLeadRating] = useState('');
 const [leadManagers, setLeadManagers] = useState<any[]>([]);
 const [assignedTo, setAssignedTo] = useState('');
 const [message, setMessage] = useState('');
@@ -63,7 +64,8 @@ useEffect(() => {
   zone,
   status: status || 'NEW',
   electricityBill: electricityBill ? Number(electricityBill) : undefined,
-  potential,
+    potential,
+  leadRating: leadRating ? Number(leadRating) : null,
   assignedTo: assignedTo ? Number(assignedTo) : undefined,
 }),
       });
@@ -262,6 +264,37 @@ useEffect(() => {
                 </button>
               ))}
             </div>
+          </div>
+
+                    {/* LEAD RATING */}
+          <div>
+            <label
+              htmlFor="leadRating"
+              className="mb-2 block text-sm font-medium text-gray-700"
+            >
+              Lead Rating (1–10)
+            </label>
+
+            <select
+              id="leadRating"
+              value={leadRating}
+              onChange={(e) => setLeadRating(e.target.value)}
+              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3"
+            >
+              <option value="">Not Rated</option>
+
+              {Array.from({ length: 10 }, (_, i) => i + 1).map(
+                (rating) => (
+                  <option key={rating} value={rating}>
+                    {rating}/10
+                  </option>
+                ),
+              )}
+            </select>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Optional — rate the quality or potential of this lead.
+            </p>
           </div>
 
           {message && (

@@ -298,6 +298,39 @@ private async getAuthenticatedSolarStore(
     return numericValue;
   }
 
+    normalizeLeadRating(value: any): number | null {
+    if (
+      value === undefined ||
+      value === null ||
+      value === ''
+    ) {
+      return null;
+    }
+
+    if (
+      typeof value !== 'number' &&
+      typeof value !== 'string'
+    ) {
+      throw new BadRequestException(
+        'Lead rating must be a whole number between 1 and 10',
+      );
+    }
+
+    const numericValue = Number(value);
+
+    if (
+      !Number.isInteger(numericValue) ||
+      numericValue < 1 ||
+      numericValue > 10
+    ) {
+      throw new BadRequestException(
+        'Lead rating must be a whole number between 1 and 10',
+      );
+    }
+
+    return numericValue;
+  }
+
   private getProjectPipelineStatuses() {
     return [
       LeadStatus.INTERESTED,
@@ -427,10 +460,20 @@ if (
   }
 }
 
+const leadRating = this.normalizeLeadRating(
+  data.leadRating,
+);
+
 let leadData: Partial<Lead> = {
   ...data,
 
-    solarStoreId: assignedSolarStore?.id ?? null,
+  leadRating,
+  leadRatedBy:
+    leadRating !== null ? currentUserId : null,
+  leadRatedAt:
+    leadRating !== null ? new Date() : null,
+
+  solarStoreId: assignedSolarStore?.id ?? null,
   solarStoreName: assignedSolarStore?.name ?? null,
 
   createdBy: currentUserId,
@@ -677,6 +720,42 @@ if (potentialPercentage > 0) {
   };
 }
 
+private applyLeadListSorting(
+  query: SelectQueryBuilder<Lead>,
+  filters: any,
+): SelectQueryBuilder<Lead> {
+  const ratingSort = String(
+    filters?.ratingSort || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  if (
+    ratingSort === 'ASC' ||
+    ratingSort === 'DESC'
+  ) {
+    query
+      .orderBy(
+        'lead.leadRating',
+        ratingSort,
+        'NULLS LAST',
+      )
+      .addOrderBy(
+        'lead.createdAt',
+        'DESC',
+      );
+  } else {
+    query.orderBy(
+      'lead.createdAt',
+      'DESC',
+    );
+  }
+
+  query.addOrderBy('lead.id', 'DESC');
+
+  return query;
+}
+
 private buildLeadListQuery(
   filters: any,
   user: any,
@@ -898,6 +977,57 @@ if (this.isSolarStore(user)) {
     );
   }
 
+    // Lead rating filters
+  const ratingFrom = this.normalizeLeadRating(
+    filters?.ratingFrom,
+  );
+
+  const ratingTo = this.normalizeLeadRating(
+    filters?.ratingTo,
+  );
+
+  const ratingStatus = String(
+    filters?.ratingStatus || 'ALL',
+  )
+    .trim()
+    .toUpperCase();
+
+  if (
+    ratingFrom !== null &&
+    ratingTo !== null &&
+    ratingFrom > ratingTo
+  ) {
+    throw new BadRequestException(
+      'Rating From cannot be greater than Rating To',
+    );
+  }
+
+  if (ratingStatus === 'UNRATED') {
+    query.andWhere(
+      'lead.leadRating IS NULL',
+    );
+  } else {
+    if (ratingStatus === 'RATED') {
+      query.andWhere(
+        'lead.leadRating IS NOT NULL',
+      );
+    }
+
+    if (ratingFrom !== null) {
+      query.andWhere(
+        'lead.leadRating >= :ratingFrom',
+        { ratingFrom },
+      );
+    }
+
+    if (ratingTo !== null) {
+      query.andWhere(
+        'lead.leadRating <= :ratingTo',
+        { ratingTo },
+      );
+    }
+  }
+
   if (
     filters?.contactedStatus ===
     'NEVER_CONTACTED'
@@ -1054,11 +1184,11 @@ async getSolarMitraOptions() {
     user,
   );
 
-  const [data, total] = await query
-  .orderBy('lead.createdAt', 'DESC')
-  .skip(skip)
-  .take(limit)
-  .getManyAndCount();
+    const [data, total] = await this
+    .applyLeadListSorting(query, filters)
+    .skip(skip)
+    .take(limit)
+    .getManyAndCount();
 
 const solarMitraLeadIds = data
   .filter(
@@ -1166,13 +1296,23 @@ return {
   async getLeadHistory(id: number, user: any) {
     const lead = await this.getAccessibleLead(id, user);
 
-    const assignedLeadManager = lead.assignedTo
+       const assignedLeadManager = lead.assignedTo
   ? await this.userRepository.findOne({
       where: {
         id: Number(lead.assignedTo),
       },
     })
   : null;
+
+    const leadRatedByUser = lead.leadRatedBy
+      ? Number(lead.leadRatedBy) === Number(lead.assignedTo)
+        ? assignedLeadManager
+        : await this.userRepository.findOne({
+            where: {
+              id: Number(lead.leadRatedBy),
+            },
+          })
+      : null;
 
     const [callLogs, followUps, notes] = await Promise.all([
   this.callLogRepository.find({
@@ -1274,8 +1414,19 @@ leadOwner:
         phone: lead.phone,
         city: lead.city,
         zone: lead.zone,
-        status: lead.status,
+                status: lead.status,
         potentialPercentage: lead.potentialPercentage || 15,
+
+        leadRating: lead.leadRating ?? null,
+        leadRatedBy: lead.leadRatedBy ?? null,
+        leadRatedAt: lead.leadRatedAt ?? null,
+        leadRatedByName:
+          leadRatedByUser?.name ||
+          leadRatedByUser?.email ||
+          (lead.leadRatedBy
+            ? `User ID: ${lead.leadRatedBy}`
+            : null),
+
         createdByName: lead.createdByName || '-',
 
 leadOwnerName:
@@ -1423,6 +1574,22 @@ if (!canManageLead) {
 delete data.solarStoreId;
 delete data.solarStoreName;
 
+// Rating metadata must only be generated by the backend.
+delete data.leadRatedBy;
+delete data.leadRatedAt;
+
+const requestedLeadRating =
+  data.leadRating !== undefined
+    ? this.normalizeLeadRating(data.leadRating)
+    : undefined;
+
+// Handle rating separately from general lead updates.
+delete data.leadRating;
+
+const isRatingOnlyUpdate =
+  requestedLeadRating !== undefined &&
+  Object.keys(data).length === 0;
+
 const currentUserId = this.getCurrentUserId(user);
 const currentUserName = this.getCurrentUserName(user);
 
@@ -1447,9 +1614,31 @@ const currentUserName = this.getCurrentUserName(user);
         delete data.assignedTo;
       }
 
-      if (!lead.assignedTo) {
+            if (!lead.assignedTo && !isRatingOnlyUpdate) {
         lead.assignedTo = currentUserId;
       }
+    }
+
+    // Rating-only updates must not affect other lead operations.
+    if (isRatingOnlyUpdate) {
+      if (requestedLeadRating === lead.leadRating) {
+        return lead;
+      }
+
+      const ratingUpdatedAt = new Date();
+
+      await this.leadRepository.update(id, {
+        leadRating: requestedLeadRating,
+        leadRatedBy: currentUserId,
+        leadRatedAt: ratingUpdatedAt,
+      });
+
+      return {
+        ...lead,
+        leadRating: requestedLeadRating,
+        leadRatedBy: currentUserId,
+        leadRatedAt: ratingUpdatedAt,
+      };
     }
 
     if (this.isMeetingManager(user) || this.isProjectExecutive(user)) {
@@ -1471,9 +1660,18 @@ const currentUserName = this.getCurrentUserName(user);
       Object.assign(lead, data);
     }
 
+        if (
+      requestedLeadRating !== undefined &&
+      requestedLeadRating !== lead.leadRating
+    ) {
+      lead.leadRating = requestedLeadRating;
+      lead.leadRatedBy = currentUserId;
+      lead.leadRatedAt = new Date();
+    }
+
     if (lead.status === LeadStatus.NOT_INTERESTED) {
-  lead.isArchived = true;
-}
+      lead.isArchived = true;
+    }
 
     const updatedLead = await this.leadRepository.save(lead);
 
@@ -1650,15 +1848,18 @@ const currentUserName = this.getCurrentUserName(user);
     );
   }
 
-  const leads = await this
+    const query = this
     .buildLeadListQuery(filters, user)
     .select([
       'lead.id',
       'lead.name',
       'lead.phone',
       'lead.city',
-    ])
-    .orderBy('lead.createdAt', 'DESC')
+      'lead.leadRating',
+    ]);
+
+  const leads = await this
+    .applyLeadListSorting(query, filters)
     .getMany();
 
   const escapeCsv = (value: any) => {
@@ -1675,17 +1876,19 @@ const currentUserName = this.getCurrentUserName(user);
     return `"${stringValue}"`;
   };
 
-  const headers = [
+    const headers = [
     'Name',
     'Phone Number',
     'City',
+    'Lead Rating',
   ];
 
-  const rows = leads.map((lead) =>
+   const rows = leads.map((lead) =>
     [
       lead.name || '',
       lead.phone || '',
       lead.city || '',
+      lead.leadRating ?? 'Not Rated',
     ]
       .map(escapeCsv)
       .join(','),

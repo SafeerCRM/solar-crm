@@ -2727,12 +2727,13 @@ await this.contactRepository.save(contact);
     };
   }
 
- async convertContactToLead(
+  async convertContactToLead(
   id: number,
   leadManagerId: number,
   potentialPercentage: number,
   user: any,
   note?: string,
+  leadRating?: number | null,
 ) {
   const contact = await this.contactRepository.findOne({
     where: { id },
@@ -2792,6 +2793,9 @@ if (!cleanNote) {
     );
   }
 
+   const normalizedLeadRating =
+    this.leadsService.normalizeLeadRating(leadRating);
+
   const latestContext = await this.getLatestContactContext(contact.id);
 const finalLeadRemarks = latestContext
   ? `${latestContext}\n${cleanNote}`
@@ -2809,8 +2813,19 @@ const finalLeadRemarks = latestContext
     originTelecallerId: contact.assignedTo,
     originTelecallerName:
       contact.assignedToName || `User ${contact.assignedTo || ''}`,
-    status: LeadStatus.NEW,
+        status: LeadStatus.NEW,
     potentialPercentage: potentialPercentage || 50,
+
+    leadRating: normalizedLeadRating,
+    leadRatedBy:
+      normalizedLeadRating !== null
+        ? Number(user.id ?? user.sub)
+        : null,
+    leadRatedAt:
+      normalizedLeadRating !== null
+        ? new Date()
+        : null,
+
     remarks: finalLeadRemarks,
   } as Partial<Lead>);
 
