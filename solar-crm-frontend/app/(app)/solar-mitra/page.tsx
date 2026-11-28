@@ -700,6 +700,20 @@ const [
   setMitraShopStatus,
 ] = useState('');
 
+const [mitraPosterOverdueOnly, setMitraPosterOverdueOnly] =
+  useState(false);
+
+  const [posterTrackingNow, setPosterTrackingNow] =
+  useState(() => Date.now());
+
+useEffect(() => {
+  const interval = window.setInterval(() => {
+    setPosterTrackingNow(Date.now());
+  }, 60000);
+
+  return () => window.clearInterval(interval);
+}, []);
+
 const [
   mitraPosterVerificationStatus,
   setMitraPosterVerificationStatus,
@@ -1896,7 +1910,7 @@ try {
     creatorPayoutMitraId,
   ]);
 
-  const posterSummaryMitras = useMemo(() => {
+  const posterTrackingMitras = useMemo(() => {
   const search = mitraSearch.trim().toLowerCase();
 
   return mitras.filter((item) => {
@@ -1926,22 +1940,6 @@ try {
       return false;
     }
 
-
-    if (
-  mitraStandeePrintingStatus &&
-  (item.standeePrintingStatus || 'UNPRINTED') !==
-    mitraStandeePrintingStatus
-) {
-  return false;
-}
-
-if (
-  mitraPosterPrintingStatus &&
-  (item.posterPrintingStatus || 'UNPRINTED') !==
-    mitraPosterPrintingStatus
-) {
-  return false;
-}
 
     if (
   mitraShopStatus &&
@@ -2008,14 +2006,38 @@ if (
   mitraIdTo,
   mitraStatus,
   mitraInterestStatus,
-  mitraStandeePrintingStatus,
-mitraPosterPrintingStatus,
   mitraShopStatus,
   mitraCreatedBy,
   mitraDateFilterType,
   mitraSelectedMonth,
   mitraDateFrom,
   mitraDateTo,
+]);
+
+const posterSummaryMitras = useMemo(() => {
+  return posterTrackingMitras.filter((item) => {
+    if (
+      mitraStandeePrintingStatus &&
+      (item.standeePrintingStatus || 'UNPRINTED') !==
+        mitraStandeePrintingStatus
+    ) {
+      return false;
+    }
+
+    if (
+      mitraPosterPrintingStatus &&
+      (item.posterPrintingStatus || 'UNPRINTED') !==
+        mitraPosterPrintingStatus
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+}, [
+  posterTrackingMitras,
+  mitraStandeePrintingStatus,
+  mitraPosterPrintingStatus,
 ]);
 
 const posterCreatorPerformance = useMemo(() => {
@@ -2137,6 +2159,34 @@ const approvalVerificationCounts = useMemo(() => {
   return counts;
 }, [posterSummaryMitras]);
 
+const isPosterInstallationOverdue = (
+  item: (typeof mitras)[number],
+) => {
+  if (item.posterVerificationStatus === 'ATTACHED') {
+    return false;
+  }
+
+  if (!item.createdAt) {
+    return false;
+  }
+
+  const createdAt = dayjs(item.createdAt);
+
+  if (!createdAt.isValid()) {
+    return false;
+  }
+
+  return dayjs(posterTrackingNow).diff(
+  createdAt,
+  'hour',
+  true,
+) >= 168;
+};
+
+const posterOverdueCount = posterTrackingMitras.filter(
+  isPosterInstallationOverdue,
+).length;
+
 const posterVerificationCounts = useMemo(() => {
   const counts = {
     total: posterSummaryMitras.length,
@@ -2187,6 +2237,14 @@ const posterVerificationCounts = useMemo(() => {
         mitraSearch.trim().toLowerCase();
 
       return mitras.filter((item) => {
+
+        if (
+  mitraPosterOverdueOnly &&
+  !isPosterInstallationOverdue(item)
+) {
+  return false;
+}
+
   if (
     mitraExactId &&
     Number(item.id) !== Number(mitraExactId)
@@ -2349,6 +2407,8 @@ if (mitraDateFilterType !== 'ALL') {
 mitraPosterPrintingStatus,
   mitraShopStatus,
   mitraPosterVerificationStatus,
+  mitraPosterOverdueOnly,
+  posterTrackingNow,
   mitraCreatedBy,
   mitraDateFilterType,
   mitraSelectedMonth,
@@ -6013,6 +6073,7 @@ const exportSolarReferralsCsv = async (
 setMitraPosterPrintingStatus('');
     setMitraShopStatus('');
     setMitraPosterVerificationStatus('');
+    setMitraPosterOverdueOnly(false);
     setMitraDateFilterType('ALL');
     setMitraSelectedMonth(dayjs().format('YYYY-MM'));
     setMitraDateFrom('');
@@ -6213,9 +6274,10 @@ setMitraPosterPrintingStatus('');
     <button
   key={summary.label}
   type="button"
-  onClick={() =>
-    setMitraPosterVerificationStatus(summary.status)
-  }
+  onClick={() => {
+  setMitraPosterOverdueOnly(false);
+  setMitraPosterVerificationStatus(summary.status);
+}}
   aria-pressed={
     mitraPosterVerificationStatus === summary.status
   }
@@ -6234,6 +6296,114 @@ setMitraPosterPrintingStatus('');
       </p>
         </button>
   ))}
+</div>
+
+<div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
+  <button
+    type="button"
+    onClick={() => {
+  setMitraPosterVerificationStatus('');
+  setMitraStandeePrintingStatus('');
+  setMitraPosterPrintingStatus('');
+  setMitraPosterOverdueOnly(
+    !mitraPosterOverdueOnly,
+  );
+}}
+    aria-pressed={mitraPosterOverdueOnly}
+    className={`min-w-0 rounded-xl border border-red-300 bg-red-50 p-4 text-left text-red-800 transition hover:shadow-md ${
+      mitraPosterOverdueOnly
+        ? 'ring-2 ring-red-500 ring-offset-2'
+        : ''
+    }`}
+  >
+    <p className="text-xs font-bold">
+      QR Poster Installation Overdue
+    </p>
+
+    <p className="mt-2 text-2xl font-black">
+      {posterOverdueCount}
+    </p>
+
+    <p className="mt-1 text-xs font-medium">
+      7+ days — Verification incomplete
+    </p>
+  </button>
+
+  <button
+    type="button"
+    onClick={() => {
+      setMitraPosterOverdueOnly(false);
+      setMitraPosterVerificationStatus('');
+      setMitraPosterPrintingStatus('');
+      setMitraStandeePrintingStatus(
+        mitraStandeePrintingStatus === 'UNPRINTED'
+          ? ''
+          : 'UNPRINTED',
+      );
+    }}
+    aria-pressed={
+      mitraStandeePrintingStatus === 'UNPRINTED'
+    }
+    className={`min-w-0 rounded-xl border border-orange-300 bg-orange-50 p-4 text-left text-orange-800 transition hover:shadow-md ${
+      mitraStandeePrintingStatus === 'UNPRINTED'
+        ? 'ring-2 ring-orange-500 ring-offset-2'
+        : ''
+    }`}
+  >
+    <p className="text-xs font-bold">
+      Small Standee Printing Pending
+    </p>
+
+    <p className="mt-2 text-2xl font-black">
+      {posterTrackingMitras.filter(
+        (item) =>
+          (item.standeePrintingStatus || 'UNPRINTED') ===
+          'UNPRINTED',
+      ).length}
+    </p>
+
+    <p className="mt-1 text-xs font-medium">
+      Small Standee (4 × 6)
+    </p>
+  </button>
+
+  <button
+    type="button"
+    onClick={() => {
+      setMitraPosterOverdueOnly(false);
+      setMitraPosterVerificationStatus('');
+      setMitraStandeePrintingStatus('');
+      setMitraPosterPrintingStatus(
+        mitraPosterPrintingStatus === 'UNPRINTED'
+          ? ''
+          : 'UNPRINTED',
+      );
+    }}
+    aria-pressed={
+      mitraPosterPrintingStatus === 'UNPRINTED'
+    }
+    className={`min-w-0 rounded-xl border border-amber-300 bg-amber-50 p-4 text-left text-amber-800 transition hover:shadow-md ${
+      mitraPosterPrintingStatus === 'UNPRINTED'
+        ? 'ring-2 ring-amber-500 ring-offset-2'
+        : ''
+    }`}
+  >
+    <p className="text-xs font-bold">
+      QR Poster Printing Pending
+    </p>
+
+    <p className="mt-2 text-2xl font-black">
+      {posterTrackingMitras.filter(
+        (item) =>
+          (item.posterPrintingStatus || 'UNPRINTED') ===
+          'UNPRINTED',
+      ).length}
+    </p>
+
+    <p className="mt-1 text-xs font-medium">
+      Blank Poster (11 × 17)
+    </p>
+  </button>
 </div>
 
 {canFilterByCreator && mitraCreatedBy !== '' && (
@@ -6592,8 +6762,50 @@ setMitraPosterPrintingStatus('');
     (item) => (
       <div
         key={item.id}
-        className="rounded-2xl border border-gray-200 p-5"
+        className={`rounded-2xl border p-5 ${
+          isPosterInstallationOverdue(item)
+            ? 'border-red-400 bg-red-50/50'
+            : 'border-gray-200'
+        }`}
       >
+
+        {isPosterInstallationOverdue(item) && (
+  <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-300 bg-red-100 px-3 py-3">
+    <div className="flex items-center gap-2">
+      <span className="relative flex h-3 w-3">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+        <span className="relative inline-flex h-3 w-3 rounded-full bg-red-600" />
+      </span>
+
+      <div>
+        <p className="text-sm font-black text-red-800">
+          QR Poster Installation Overdue
+        </p>
+
+        <p className="mt-1 text-xs font-medium text-red-700">
+          Poster verification incomplete
+        </p>
+      </div>
+    </div>
+
+    <div className="text-right">
+      <p className="text-lg font-black text-red-800">
+        {Math.floor(
+          dayjs(posterTrackingNow).diff(
+            dayjs(item.createdAt),
+            'hour',
+            true,
+          ) / 24,
+        )} days
+      </p>
+
+      <p className="text-xs font-semibold text-red-700">
+        Since creation
+      </p>
+    </div>
+  </div>
+)}
+
         <div className="mb-4 grid gap-2 sm:grid-cols-2">
   {/* Small branded standee selection */}
   <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-3 py-3">
